@@ -28,7 +28,10 @@ function makeCode(len = 4) {
 export default function Home() {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
-  const [mode, setMode] = useState<"create" | "join">("create");
+
+  // ✅ Web: default till join och vi kommer dölja create-läget i UI
+  const [mode, setMode] = useState<"create" | "join">(isWeb ? "join" : "create");
+
   const [loading, setLoading] = useState(false);
 
   const trimmedName = useMemo(() => name.trim(), [name]);
@@ -38,6 +41,9 @@ export default function Home() {
   const canJoin = trimmedName.length > 0 && trimmedCode.length > 0 && !loading;
 
   const createRoom = async () => {
+    // ✅ Safety: blockera create på web även om någon skulle trigga funktionen
+    if (isWeb) return Alert.alert("Endast i appen", "Du kan skapa rum i appen. På webben kan du bara gå med.");
+
     const n = trimmedName;
     if (!n) return Alert.alert("Skriv ditt namn");
 
@@ -161,7 +167,7 @@ export default function Home() {
     >
       <View style={{ width: "100%", maxWidth: isWeb ? 420 : undefined }}>
         {/* Header */}
-         <StatusBar style="light" />
+        <StatusBar style="light" />
         <View style={{ alignItems: "center", marginBottom: 18 }}>
           {/* App icon */}
           <View
@@ -190,6 +196,13 @@ export default function Home() {
           <Text style={{ color: "#9CA3AF", marginTop: 10, textAlign: "center", lineHeight: 24, fontSize: 15 }}>
             Välj bilder. Matcha påståendet. Rösta. Skratta.
           </Text>
+
+          {/* ✅ Web hint */}
+          {isWeb && (
+            <Text style={{ color: "#94A3B8", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13 }}>
+              På webben kan du bara gå med i ett rum. Skapa rum görs i appen.
+            </Text>
+          )}
         </View>
 
         {/* Card */}
@@ -203,11 +216,13 @@ export default function Home() {
             gap: 16,
           }}
         >
-          {/* Tabs */}
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <Tab label="Skapa" active={mode === "create"} onPress={() => setMode("create")} />
-            <Tab label="Gå med" active={mode === "join"} onPress={() => setMode("join")} />
-          </View>
+          {/* ✅ Tabs bara i appen (inte på web) */}
+          {!isWeb && (
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Tab label="Skapa" active={mode === "create"} onPress={() => setMode("create")} />
+              <Tab label="Gå med" active={mode === "join"} onPress={() => setMode("join")} />
+            </View>
+          )}
 
           {/* Name */}
           <View style={{ gap: 8 }}>
@@ -240,8 +255,8 @@ export default function Home() {
             />
           </View>
 
-          {/* Join code */}
-          {mode === "join" && (
+          {/* ✅ Join code: alltid på web, annars bara när mode=join */}
+          {(isWeb || mode === "join") && (
             <View style={{ gap: 8 }}>
               <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Rumskod</Text>
               <TextInput
@@ -277,11 +292,21 @@ export default function Home() {
             </View>
           )}
 
-          {/* Button */}
-          {mode === "create" ? (
-            <PrimaryButton title={loading ? "Skapar..." : "Skapa rum 🚀"} onPress={createRoom} disabled={!canCreate} variant="primary" />
+          {/* ✅ Button: web = alltid "Gå med", app = create/join beroende på mode */}
+          {!isWeb && mode === "create" ? (
+            <PrimaryButton
+              title={loading ? "Skapar..." : "Skapa rum 🚀"}
+              onPress={createRoom}
+              disabled={!canCreate}
+              variant="primary"
+            />
           ) : (
-            <PrimaryButton title={loading ? "Går med..." : "Gå med 🎮"} onPress={joinRoom} disabled={!canJoin} variant="secondary" />
+            <PrimaryButton
+              title={loading ? "Går med..." : "Gå med 🎮"}
+              onPress={joinRoom}
+              disabled={!canJoin}
+              variant="secondary"
+            />
           )}
         </View>
 
@@ -294,9 +319,7 @@ export default function Home() {
   );
 
   return (
-    
     <KeyboardAvoidingView
-    
       style={{ flex: 1, backgroundColor: "#0B0F19" }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       enabled={Platform.OS !== "web"}
