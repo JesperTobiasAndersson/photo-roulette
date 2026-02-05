@@ -109,7 +109,26 @@ const copyInvite = async () => {
 const startRound = async () => {
   if (!roomId) return;
 
-  // 1) Hämta vilka statements som redan använts i detta rum
+  // ✅ 0) Räkna spelare just nu (frys antalet för hela matchen)
+  const { count, error: cErr } = await supabase
+    .from("players")
+    .select("*", { count: "exact", head: true })
+    .eq("room_id", roomId);
+
+  if (cErr) return Alert.alert("Fel (players count)", cErr.message);
+
+  const expected = count ?? 0;
+  if (expected < 2) return Alert.alert("För få spelare", "Minst 2 spelare behövs.");
+
+  // ✅ 1) Sätt expected_players + phase=playing (ATOMISKT före första rundan)
+  const { error: uErr } = await supabase
+    .from("rooms")
+    .update({ expected_players: expected, phase: "playing" })
+    .eq("id", roomId);
+
+  if (uErr) return Alert.alert("Fel (rooms update)", uErr.message);
+
+  // ✅ 2) Hämta statements som använts
   const { data: usedRows, error: usedErr } = await supabase
     .from("rounds")
     .select("statement")
@@ -121,7 +140,7 @@ const startRound = async () => {
     .map((r) => r.statement)
     .filter((s): s is string => typeof s === "string" && s.length > 0);
 
-  // 2) Räkna ut nästa round_number (som du redan gör)
+  // ✅ 3) Nästa round_number
   const { data: last, error: lastErr } = await supabase
     .from("rounds")
     .select("round_number")
@@ -130,25 +149,33 @@ const startRound = async () => {
     .limit(1)
     .maybeSingle();
 
-  if (lastErr) return Alert.alert("Fel (rounds)", lastErr.message);
+  if (lastErr) return Alert.alert("Fel (rounds last)", lastErr.message);
 
   const nextNumber = (last?.round_number ?? 0) + 1;
   if (nextNumber > 10) return router.replace({ pathname: "/results", params: { roomId } });
 
-  // 3) Välj ett statement som inte använts i rummet ännu
+  // ✅ 4) Skapa första rundan
   const statement = getRandomStatement(usedStatements);
   const endsAt = new Date(Date.now() + 60_000).toISOString();
 
-  const { error } = await supabase.from("rounds").insert({
-    room_id: roomId,
-    statement,
-    status: "collecting",
-    ends_at: endsAt,
-    round_number: nextNumber,
-  });
+  const { data: newRound, error: insErr } = await supabase
+    .from("rounds")
+    .insert({
+      room_id: roomId,
+      statement,
+      status: "collecting",
+      ends_at: endsAt,
+      round_number: nextNumber,
+    })
+    .select("id")
+    .single();
 
-  if (error) return Alert.alert("Fel (rounds)", error.message);
+  if (insErr) return Alert.alert("Fel (rounds insert)", insErr.message);
+
+  // (valfritt) du behöver inte navigera här – din roundsChannel INSERT tar alla till round.
+  // router.replace({ pathname: "/round", params: { roomId, playerId, roundId: newRound.id } });
 };
+
 
 
   useEffect(() => {
@@ -393,9 +420,10 @@ const startRound = async () => {
               renderItem={({ item }) => <PlayerRow name={item.name} isHostRow={item.id === hostId} />}
             />
 
-            {isHost && phase === "lobby" && <Button title="Börja – välj 10 bilder 🖼️" onPress={startPicking} />}
-            {isHost && phase === "picking" && <Button title="Alla klara – fortsätt ✅" onPress={setPlaying} />}
-            {isHost && phase === "playing" && <Button title="Starta runda 🚀" onPress={startRound} />}
+           {isHost && phase === "lobby" && <Button title="Börja – välj 10 bilder 🖼️" onPress={startPicking} />}
+           {isHost && phase === "picking" && <Button title="Starta spelet 🚀" onPress={startRound} />}  
+            {isHost && phase === "playing" && <Button title="Starta ny runda 🚀" onPress={startRound} />}
+
           </View>
 
           <Button title="Tillbaka" onPress={() => router.replace("/")} variant="secondary" />

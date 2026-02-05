@@ -27,15 +27,14 @@ export default function RoundScreen() {
   const finishingRef = useRef(false);
   const autoAdvanceRef = useRef(false);
 
-
 const tryAutoAdvance = async () => {
   if (!roundId) return;
   if (autoAdvanceRef.current) return;
   autoAdvanceRef.current = true;
 
   try {
-    const { error } = await supabase.rpc("advance_round_if_ready", { p_round_id: roundId });
-    if (error) console.log("advance_round_if_ready ERROR:", error);
+    const { data, error } = await supabase.rpc("advance_round_if_ready", { p_round_id: roundId });
+    console.log("advance_round_if_ready =>", { data, error });
   } finally {
     setTimeout(() => {
       autoAdvanceRef.current = false;
