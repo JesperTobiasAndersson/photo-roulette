@@ -23,6 +23,26 @@ export default function RoundScreen() {
   const playerId = asString(params.playerId);
   const roundId = asString(params.roundId);
   const popAnim = useRef(new Animated.Value(0)).current;
+  const [playerCount, setPlayerCount] = useState<number>(0);
+  const finishingRef = useRef(false);
+  const autoAdvanceRef = useRef(false);
+
+
+const tryAutoAdvance = async () => {
+  if (!roundId) return;
+  if (autoAdvanceRef.current) return;
+  autoAdvanceRef.current = true;
+
+  try {
+    const { error } = await supabase.rpc("advance_round_if_ready", { p_round_id: roundId });
+    if (error) console.log("advance_round_if_ready ERROR:", error);
+  } finally {
+    setTimeout(() => {
+      autoAdvanceRef.current = false;
+    }, 250);
+  }
+};
+
 
 
   const [statement, setStatement] = useState("");
@@ -52,6 +72,16 @@ export default function RoundScreen() {
     return data.publicUrl;
   };
 
+  const loadPlayerCount = async () => {
+  if (!roomId) return;
+  const { count, error } = await supabase
+    .from("players")
+    .select("*", { count: "exact", head: true })
+    .eq("room_id", roomId);
+
+  if (!error) setPlayerCount(count ?? 0);
+};
+
   const loadHost = async () => {
     if (!roomId) return;
     const { data, error } = await supabase.from("rooms").select("host_player_id").eq("id", roomId).single();
@@ -79,6 +109,7 @@ export default function RoundScreen() {
       .from("submissions")
       .select("id,player_id,image_path")
       .eq("round_id", roundId);
+      
 
     if (error) return Alert.alert("Fel (subs)", error.message);
 
@@ -87,7 +118,9 @@ export default function RoundScreen() {
 
     const mine = list.find((s) => s.player_id === playerId);
     setMySubmissionId(mine?.id ?? null);
+    
   };
+  
 
   const loadMyVote = async () => {
     if (!roundId || !playerId) return;
@@ -160,59 +193,107 @@ export default function RoundScreen() {
   }, [availableImages]);
 
   // Init + realtime: round/submissions/votes/hand
-  useEffect(() => {
-    if (!roomId || !playerId || !roundId) return;
+// Init + realtime: round/submissions/votes/hand
+useEffect(() => {
+  if (!roomId || !playerId || !roundId) return;
 
-    loadHost();
-    loadRound();
-    loadSubmissions();
-    loadMyVote();
-    loadVoteCounts();
-    loadAvailableImages();
+  let isMounted = true;
 
-    const roundChannel = supabase
-      .channel(`round-${roundId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rounds", filter: `id=eq.${roundId}` }, () =>
-        loadRound()
-      )
-      .subscribe();
+  (async () => {
+    // Initial load
+    await loadHost();
+    await loadRound();
+    await loadSubmissions();
+    await loadMyVote();
+    await loadVoteCounts();
+    await loadAvailableImages();
+    await loadPlayerCount();
 
-    const subsChannel = supabase
-      .channel(`subs-${roundId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "submissions", filter: `round_id=eq.${roundId}` }, () =>
-        loadSubmissions()
-      )
-      .subscribe();
+    // Kick en gång direkt när du kommit in (så du "kommer ikapp")
+    tryAutoAdvance();
+  })();
 
-    const votesChannel = supabase
-      .channel(`votes-${roundId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${roundId}` }, () => {
-        loadMyVote();
-        loadVoteCounts();
-      })
-      .subscribe();
+  const roundChannel = supabase
+    .channel(`round-${roundId}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "rounds", filter: `id=eq.${roundId}` },
+      async () => {
+        if (!isMounted) return;
+        await loadRound();
+        tryAutoAdvance();
+      }
+    )
+    .subscribe();
 
-    const handChannel = supabase
-      .channel(`hand-${roomId}-${playerId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "player_images",
-          filter: `room_id=eq.${roomId},player_id=eq.${playerId}`,
-        },
-        () => loadAvailableImages()
-      )
-      .subscribe();
+  const subsChannel = supabase
+    .channel(`subs-${roundId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "submissions", filter: `round_id=eq.${roundId}` },
+      async () => {
+        if (!isMounted) return;
+        await loadSubmissions();
+        tryAutoAdvance();
+      }
+    )
+    .subscribe();
 
-    return () => {
-      supabase.removeChannel(roundChannel);
-      supabase.removeChannel(subsChannel);
-      supabase.removeChannel(votesChannel);
-      supabase.removeChannel(handChannel);
-    };
-  }, [roomId, playerId, roundId]);
+  const votesChannel = supabase
+    .channel(`votes-${roundId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${roundId}` },
+      async () => {
+        if (!isMounted) return;
+        await loadMyVote();
+        await loadVoteCounts();
+        tryAutoAdvance();
+      }
+    )
+    .subscribe();
+
+  const handChannel = supabase
+    .channel(`hand-${roomId}-${playerId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "player_images",
+        filter: `room_id=eq.${roomId},player_id=eq.${playerId}`,
+      },
+      async () => {
+        if (!isMounted) return;
+        await loadAvailableImages();
+      }
+    )
+    .subscribe();
+
+  const playersChannel = supabase
+    .channel(`players-${roomId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "players", filter: `room_id=eq.${roomId}` },
+      async () => {
+        if (!isMounted) return;
+        await loadPlayerCount();
+        // valfritt men bra om din DB-rpc använder expected_players/players
+        tryAutoAdvance();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    isMounted = false;
+    supabase.removeChannel(roundChannel);
+    supabase.removeChannel(subsChannel);
+    supabase.removeChannel(votesChannel);
+    supabase.removeChannel(handChannel);
+    supabase.removeChannel(playersChannel); // ✅ DU SAKNADE DEN HÄR
+  };
+}, [roomId, playerId, roundId]);
+
 
   // Alla lyssnar på nya rounds i rummet och navigerar dit (eller results)
   useEffect(() => {
@@ -304,9 +385,10 @@ export default function RoundScreen() {
         .is("used_in_round_id", null);
 
       if (lockErr) return Alert.alert("Fel (låsa bild)", lockErr.message);
+setMySubmissionId(sub.id);
+await loadAvailableImages();
+tryAutoAdvance();
 
-      setMySubmissionId(sub.id);
-      loadAvailableImages();
     } finally {
       setSubmitting(false);
     }
@@ -411,7 +493,8 @@ export default function RoundScreen() {
       .insert({ round_id: roundId, voter_player_id: playerId, submission_id: submissionId });
 
     if (error) return Alert.alert("Röstning", error.message);
-    setMyVoteSubmissionId(submissionId);
+setMyVoteSubmissionId(submissionId);
+tryAutoAdvance();
   };
 
   const winner = useMemo(() => {
@@ -554,66 +637,6 @@ return (
           )}
         </Animated.View>
 
-
-        {/* Host actions */}
-        {isHost && status === "collecting" && (
-          <Pressable
-            onPress={goVoting}
-            style={({ pressed }) => ({
-              height: 56,
-              borderRadius: 16,
-              backgroundColor: "#111827",
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.85 : 1,
-              borderWidth: 1,
-              borderColor: "#1F2937",
-            })}
-          >
-            <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Gå till röstning</Text>
-          </Pressable>
-        )}
-
-        {isHost && status === "voting" && (
-          <Pressable
-            onPress={finishRound}
-            style={({ pressed }) => ({
-              height: 56,
-              borderRadius: 16,
-              backgroundColor: "#374151",
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.85 : 1,
-              borderWidth: 1,
-              borderColor: "#1F2937",
-            })}
-          >
-            <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Avsluta runda</Text>
-          </Pressable>
-        )}
-
-  {isHost && status === "done" && (
-  <Pressable
-    onPress={nextRound}
-    disabled={advancingRound}
-    style={({ pressed }) => ({
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: "#111827",
-      alignItems: "center",
-      justifyContent: "center",
-      opacity: advancingRound ? 0.5 : pressed ? 0.85 : 1,
-      borderWidth: 1,
-      borderColor: "#1F2937",
-    })}
-  >
-    <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>
-      {advancingRound ? "Startar..." : "Nästa runda"}
-    </Text>
-  </Pressable>
-)}
-
-
         {/* Main grid */}
         {status === "collecting" ? (
           !mySubmissionId ? (
@@ -668,9 +691,10 @@ return (
               }}
             >
               <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Väntar på andra…</Text>
-              <Text style={{ color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
-                När alla har skickat in går host vidare till röstning.
-              </Text>
+            <Text style={{ color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
+  När alla har skickat in går spelet automatiskt vidare.
+</Text>
+
             </View>
           )
         ) : (

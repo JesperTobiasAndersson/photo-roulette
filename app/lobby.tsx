@@ -370,23 +370,6 @@ const startRound = async () => {
               <Text style={{ color: "#9CA3AF", marginTop: 6, lineHeight: 20 }}>{phaseDesc}</Text>
             </View>
           </View>
-<Pressable
-  onPress={copyInvite}
-  disabled={!inviteUrl}
-  style={({ pressed }) => ({
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "#1F2937",
-    opacity: !inviteUrl ? 0.5 : pressed ? 0.9 : 1,
-    alignSelf: "flex-start",
-  })}
->
-  <Text style={{ color: "white", fontWeight: "900" }}>Kopiera inbjudningslänk 🔗</Text>
-</Pressable>
-
           <View
             style={{
               flex: 1,
