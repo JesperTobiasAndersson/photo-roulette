@@ -26,6 +26,8 @@ export default function RoundScreen() {
   const [playerCount, setPlayerCount] = useState<number>(0);
   const finishingRef = useRef(false);
   const autoAdvanceRef = useRef(false);
+  
+  const lastAutoNextRoundFromRoundIdRef = useRef<string | null>(null);
 
 const tryAutoAdvance = async () => {
   if (!roundId) return;
@@ -178,6 +180,7 @@ const tryAutoAdvance = async () => {
 
   useEffect(() => {
     lastSeenRoundIdRef.current = null;
+     lastAutoNextRoundFromRoundIdRef.current = null;
   }, [roundId]);
 
   // Prefetch för “handen” (collecting)
@@ -292,6 +295,8 @@ useEffect(() => {
     supabase.removeChannel(playersChannel); // ✅ DU SAKNADE DEN HÄR
   };
 }, [roomId, playerId, roundId]);
+
+
 
 
   // Alla lyssnar på nya rounds i rummet och navigerar dit (eller results)
@@ -466,10 +471,19 @@ tryAutoAdvance();
         .select("id")
         .single();
 
-      if (error) {
-        Alert.alert("Fel (nästa runda)", error.message);
-        return;
-      }
+     if (error) {
+  const msg = (error.message || "").toLowerCase();
+
+  // ✅ någon annan skapade redan nästa runda -> ignorera
+  if (msg.includes("duplicate") || msg.includes("unique") || msg.includes("rounds_room_roundnumber_unique")) {
+    return;
+  }
+
+  Alert.alert("Fel (nästa runda)", error.message);
+  return;
+}
+
+      
 
       // ✅ Säg åt listenern att skippa hostens egna INSERT
       skipNextInsertNavRef.current = data.id;
@@ -480,6 +494,18 @@ tryAutoAdvance();
       setAdvancingRound(false);
     }
   };
+  // ✅ När rundan är "done": skapa nästa runda automatiskt (med TS-statements)
+useEffect(() => {
+  if (!roomId || !playerId || !roundId) return;
+  if (status !== "done") return;
+
+  // kör bara 1 gång per roundId
+  if (lastAutoNextRoundFromRoundIdRef.current === roundId) return;
+  lastAutoNextRoundFromRoundIdRef.current = roundId;
+
+  nextRound(); // använder din getRandomStatement()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [status, roomId, playerId, roundId]);
 
   const castVote = async (submissionId: string) => {
     if (!roundId || !playerId) return;
