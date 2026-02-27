@@ -29,9 +29,9 @@ const COLORS = {
 };
 
 function medalForPlace(place: number) {
-  if (place === 1) return { emoji: "👑", color: COLORS.gold, label: "1:a" };
-  if (place === 2) return { emoji: "🥈", color: COLORS.silver, label: "2:a" };
-  if (place === 3) return { emoji: "🥉", color: COLORS.bronze, label: "3:a" };
+  if (place === 1) return { emoji: "👑", color: COLORS.gold, label: "1st" };
+  if (place === 2) return { emoji: "🥈", color: COLORS.silver, label: "2nd" };
+  if (place === 3) return { emoji: "🥉", color: COLORS.bronze, label: "3rd" };
   return { emoji: "•", color: COLORS.subText, label: `${place}:a` };
 }
 
@@ -52,7 +52,7 @@ export default function ResultsScreen() {
 
     if (sErr) {
       setLoading(false);
-      return Alert.alert("Fel (scores)", sErr.message);
+      return Alert.alert("Error (scores)", sErr.message);
     }
 
     const { data: players, error: pErr } = await supabase
@@ -62,7 +62,7 @@ export default function ResultsScreen() {
 
     if (pErr) {
       setLoading(false);
-      return Alert.alert("Fel (players)", pErr.message);
+      return Alert.alert("Error (players)", pErr.message);
     }
 
     const nameMap = new Map((players ?? []).map((p: any) => [p.id, p.name]));
@@ -325,7 +325,7 @@ export default function ResultsScreen() {
           })}
         >
           <Text style={{ color: COLORS.text, textAlign: "center", fontWeight: "900", fontSize: 15 }}>
-            Till startsidan
+            Back to home
           </Text>
           <Text style={{ color: COLORS.subText, textAlign: "center", marginTop: 2, fontSize: 12 }}>
             Start a new room or join again

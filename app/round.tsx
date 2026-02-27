@@ -9,6 +9,7 @@ import {
   Animated,
   Easing,
   SafeAreaView,
+  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, router } from "expo-router";
@@ -116,7 +117,7 @@ export default function RoundScreen() {
       .eq("id", roundId)
       .single();
 
-    if (error) return Alert.alert("Fel (round)", error.message);
+    if (error) return Alert.alert("Error (round)", error.message);
 
     setStatement(data.statement ?? "");
     setStatus(data.status);
@@ -130,7 +131,7 @@ export default function RoundScreen() {
       .select("id,player_id,image_path")
       .eq("round_id", roundId);
 
-    if (error) return Alert.alert("Fel (subs)", error.message);
+    if (error) return Alert.alert("Error (subs)", error.message);
 
     const list = data ?? [];
     setSubmissions(list);
@@ -148,7 +149,7 @@ export default function RoundScreen() {
       .eq("voter_player_id", playerId)
       .maybeSingle();
 
-    if (error) return Alert.alert("Fel (vote)", error.message);
+    if (error) return Alert.alert("Error (vote)", error.message);
     setMyVoteSubmissionId(data?.submission_id ?? null);
   };
 
@@ -156,7 +157,7 @@ export default function RoundScreen() {
     if (!roundId) return;
 
     const { data, error } = await supabase.from("votes").select("submission_id").eq("round_id", roundId);
-    if (error) return Alert.alert("Fel (votes)", error.message);
+    if (error) return Alert.alert("Error (votes)", error.message);
 
     const counts: Record<string, number> = {};
     for (const v of data ?? []) {
@@ -176,7 +177,7 @@ export default function RoundScreen() {
       .is("used_in_round_id", null)
       .order("created_at", { ascending: true });
 
-    if (error) return Alert.alert("Fel (hand)", error.message);
+    if (error) return Alert.alert("Error (hand)", error.message);
     setAvailableImages(data ?? []);
   };
 
@@ -208,7 +209,9 @@ export default function RoundScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableImages]);
 
-// ✅ När rundan är "done": auto-next (men stoppa gratis efter 5 + visa ad + paywall)
+// ✅ När rundan är "done": show winner briefly then auto-next (free users stop after 5)
+const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
+
 useEffect(() => {
   if (!roomId || !playerId || !roundId) return;
   if (status !== "done") return;
@@ -223,8 +226,12 @@ useEffect(() => {
       return;
     }
 
-    // annars: fortsätt spela
-    await nextRound();
+    // show winner image overlay for a moment
+    setShowWinnerOverlay(true);
+    setTimeout(async () => {
+      setShowWinnerOverlay(false);
+      await nextRound();
+    }, 3000);
   })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [status, roundId, roundNumber, isPremiumUser, roomId, playerId]);
@@ -405,7 +412,7 @@ useEffect(() => {
         .select("id")
         .single();
 
-      if (subErr) return Alert.alert("DB-fel", subErr.message);
+      if (subErr) return Alert.alert("DB error", subErr.message);
 
       const { error: lockErr } = await supabase
         .from("player_images")
@@ -415,7 +422,7 @@ useEffect(() => {
         .eq("player_id", playerId)
         .is("used_in_round_id", null);
 
-      if (lockErr) return Alert.alert("Fel (låsa bild)", lockErr.message);
+      if (lockErr) return Alert.alert("Error (lock image)", lockErr.message);
 
       setMySubmissionId(sub.id);
       await loadAvailableImages();
@@ -428,17 +435,17 @@ useEffect(() => {
   const goVoting = async () => {
     if (!roundId) return;
     const { error } = await supabase.from("rounds").update({ status: "voting" }).eq("id", roundId);
-    if (error) Alert.alert("Fel (voting)", error.message);
+    if (error) Alert.alert("Error (voting)", error.message);
   };
 
   const finishRound = async () => {
     if (!roundId) return;
 
     const { error: rpcErr } = await supabase.rpc("finalize_round", { p_round_id: roundId });
-    if (rpcErr) return Alert.alert("Fel (poäng)", rpcErr.message);
+    if (rpcErr) return Alert.alert("Error (points)", rpcErr.message);
 
     const { error } = await supabase.from("rounds").update({ status: "done" }).eq("id", roundId);
-    if (error) Alert.alert("Fel (done)", error.message);
+    if (error) Alert.alert("Error (done)", error.message);
   };
 
   const nextRound = async () => {
@@ -453,7 +460,7 @@ useEffect(() => {
 
       if (nextNumber > 5) {
         const { error: phaseErr } = await supabase.from("rooms").update({ phase: "finished" }).eq("id", roomId);
-        if (phaseErr) return Alert.alert("Fel (finished)", phaseErr.message);
+        if (phaseErr) return Alert.alert("Error (finished)", phaseErr.message);
 
         router.replace({ pathname: "/results", params: { roomId } });
         return;
@@ -465,7 +472,7 @@ useEffect(() => {
         .eq("room_id", roomId);
 
       if (usedErr) {
-        Alert.alert("Fel (rounds)", usedErr.message);
+        Alert.alert("Error (rounds)", usedErr.message);
         return;
       }
 
@@ -493,7 +500,7 @@ useEffect(() => {
         if (msg.includes("duplicate") || msg.includes("unique") || msg.includes("rounds_room_roundnumber_unique")) {
           return; // någon annan skapade redan
         }
-        Alert.alert("Fel (nästa runda)", error.message);
+        Alert.alert("Error (next round)", error.message);
         return;
       }
 
@@ -508,17 +515,34 @@ useEffect(() => {
   const castVote = async (submissionId: string) => {
     if (!roundId || !playerId) return;
 
-    if (submissionId === mySubmissionId) return Alert.alert("Du kan inte rösta på din egen bild");
-    if (myVoteSubmissionId) return Alert.alert("You've already voted ✅");
+    if (submissionId === mySubmissionId) {
+      // tapping the same image again does nothing
+      return;
+    }
 
-    const { error } = await supabase
-      .from("votes")
-      .insert({ round_id: roundId, voter_player_id: playerId, submission_id: submissionId });
+    if (submissionId === mySubmissionId) return;
 
-    if (error) return Alert.alert("Röstning", error.message);
+    try {
+      if (myVoteSubmissionId) {
+        // change existing vote
+        const { error: updErr } = await supabase
+          .from("votes")
+          .update({ submission_id: submissionId })
+          .eq("round_id", roundId)
+          .eq("voter_player_id", playerId);
+        if (updErr) return Alert.alert("Röstning", updErr.message);
+      } else {
+        const { error } = await supabase
+          .from("votes")
+          .insert({ round_id: roundId, voter_player_id: playerId, submission_id: submissionId });
+        if (error) return Alert.alert("Röstning", error.message);
+      }
 
-    setMyVoteSubmissionId(submissionId);
-    tryAutoAdvance();
+      setMyVoteSubmissionId(submissionId);
+      tryAutoAdvance();
+    } catch (e) {
+      console.error('vote error', e);
+    }
   };
 
   const winner = useMemo(() => {
@@ -549,10 +573,31 @@ useEffect(() => {
     <SafeAreaView style={{ flex: 1, backgroundColor: "#0B0F19" }}>
       <StatusBar style="light" />
       <View style={{ flex: 1, padding: 16, gap: 12 }}>
+        {/* winner overlay */}
+        {showWinnerOverlay && winner.submissionId && (
+          <View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: "rgba(0,0,0,0.75)",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10,
+            }}
+          >
+            <Text style={{ color: "white", fontSize: 22, fontWeight: "900", marginBottom: 12 }}>
+              Round winner
+            </Text>
+            <Image
+              source={{ uri: publicUrlFor(winner.submissionId) }}
+              style={{ width: 240, height: 240, borderRadius: 16 }}
+              contentFit="cover"
+            />
+          </View>
+        )}
         {/* Header */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ gap: 4 }}>
-            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Runda {roundNumber}/5</Text>
+            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Round {roundNumber}/5</Text>
             <Text style={{ color: "#94A3B8", fontWeight: "700" }}>{isHost ? "Du är host" : "Spelare"}</Text>
           </View>
 
@@ -706,7 +751,11 @@ useEffect(() => {
 
               return (
                 <Pressable
-                  onPress={() => (status === "voting" && !myVoteSubmissionId ? castVote(item.id) : null)}
+                  onPress={() => {
+                    if (status === "voting" && item.id !== myVoteSubmissionId) {
+                      castVote(item.id);
+                    }
+                  }}
                   style={({ pressed }) => ({
                     flex: 1,
                     borderRadius: 16,
@@ -720,9 +769,9 @@ useEffect(() => {
                   <Image source={{ uri }} style={{ width: "100%", height: 180 }} contentFit="cover" cachePolicy="memory-disk" />
 
                   <View style={{ padding: 10, gap: 2 }}>
-                    <Text style={{ color: "white", fontWeight: "900" }}>{votes} röster</Text>
-                    {isMine && <Text style={{ color: "#38BDF8", fontWeight: "800" }}>Din bild</Text>}
-                    {isVoted && <Text style={{ color: "#22C55E", fontWeight: "800" }}>Din röst</Text>}
+                    <Text style={{ color: "white", fontWeight: "900" }}>{votes} votes</Text>
+                    {isMine && <Text style={{ color: "#38BDF8", fontWeight: "800" }}>Your image</Text>}
+                    {isVoted && <Text style={{ color: "#22C55E", fontWeight: "800" }}>Your vote</Text>}
                     {isWinner && <Text style={{ color: "#F59E0B", fontWeight: "900" }}>Winner</Text>}
                   </View>
                 </Pressable>

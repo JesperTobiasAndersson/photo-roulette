@@ -60,7 +60,7 @@ export default function PickHandScreen() {
       .eq("player_id", playerId)
       .order("created_at", { ascending: true });
 
-    if (error) return Alert.alert("Fel (hand)", error.message);
+    if (error) return Alert.alert("Error (hand)", error.message);
     setHand(data ?? []);
   };
 
@@ -78,7 +78,7 @@ export default function PickHandScreen() {
     if (busy) return;
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return Alert.alert("Behöver tillgång till bilder");
+    if (!perm.granted) return Alert.alert("Need access to photos");
 
     const mediaTypes =
       // @ts-ignore
@@ -119,8 +119,7 @@ export default function PickHandScreen() {
           .upload(filePath, buf, { contentType: "image/jpeg", upsert: false });
 
         if (upErr) {
-          Alert.alert("Upload-fel", upErr.message);
-          return;
+          Alert.alert("Upload error", upErr.message);
         }
 
         const { error: insErr } = await supabase.from("player_images").insert({
@@ -131,7 +130,7 @@ export default function PickHandScreen() {
         });
 
         if (insErr) {
-          Alert.alert("DB-fel", insErr.message);
+          Alert.alert("DB error", insErr.message);
           return;
         }
 
@@ -155,10 +154,10 @@ export default function PickHandScreen() {
       .eq("room_id", roomId)
       .eq("player_id", playerId);
 
-    if (error) return Alert.alert("Fel (hand)", error.message);
+    if (error) return Alert.alert("Error (hand)", error.message);
 
     if ((count ?? 0) < MAX_IMAGES) {
-      return Alert.alert("Vänta lite…", `Uppladdning klarar inte än (${count ?? 0}/${MAX_IMAGES}).`);
+      return Alert.alert("Hold on…", `Upload not finished yet (${count ?? 0}/${MAX_IMAGES}).`);
     }
 
     router.replace({ pathname: "/lobby", params: { roomId, playerId, handReady: "1" } });
@@ -298,8 +297,8 @@ export default function PickHandScreen() {
                 hand.length >= MAX_IMAGES
                   ? "Klar"
                   : remainingToPick === MAX_IMAGES
-                  ? `Välj ${MAX_IMAGES} bilder`
-                  : "Välj fler bilder"
+                  ? `Pick ${MAX_IMAGES} images`
+                  : "Pick more images"
               }
               onPress={pickAndUploadMany}
               disabled={busy}
@@ -326,8 +325,8 @@ export default function PickHandScreen() {
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <Text style={{ color: "white", fontSize: 16, fontWeight: "900" }}>Din hand</Text>
-              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{selectedUris.length} bilder</Text>
+              <Text style={{ color: "white", fontSize: 16, fontWeight: "900" }}>Your hand</Text>
+              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{selectedUris.length} images</Text>
             </View>
 
             <FlatList

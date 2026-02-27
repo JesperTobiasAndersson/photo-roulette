@@ -42,10 +42,10 @@ export default function Home() {
 
   const createRoom = async () => {
     // ✅ Safety: blockera create på web även om någon skulle trigga funktionen
-    if (isWeb) return Alert.alert("Endast i appen", "Du kan skapa rum i appen. På webben kan du bara gå med.");
+    if (isWeb) return Alert.alert("App only", "You can create a room in the app. On web you can only join.");
 
     const n = trimmedName;
-    if (!n) return Alert.alert("Skriv ditt namn");
+    if (!n) return Alert.alert("Enter your name");
 
     setLoading(true);
     try {
@@ -57,7 +57,7 @@ export default function Home() {
         .select()
         .single();
 
-      if (roomErr) return Alert.alert("Fel (rooms)", roomErr.message);
+      if (roomErr) return Alert.alert("Error (rooms)", roomErr.message);
 
       const { data: player, error: playerErr } = await supabase
         .from("players")
@@ -65,7 +65,7 @@ export default function Home() {
         .select()
         .single();
 
-      if (playerErr) return Alert.alert("Fel (players)", playerErr.message);
+      if (playerErr) return Alert.alert("Error (players)", playerErr.message);
 
       await supabase.from("rooms").update({ host_player_id: player.id }).eq("id", room.id);
 
@@ -81,13 +81,13 @@ export default function Home() {
   const joinRoom = async () => {
     const n = trimmedName;
     const c = trimmedCode;
-    if (!n) return Alert.alert("Skriv ditt namn");
-    if (!c) return Alert.alert("Skriv rumskod");
+    if (!n) return Alert.alert("Enter your name");
+    if (!c) return Alert.alert("Enter room code");
 
     setLoading(true);
     try {
       const { data: room, error: roomErr } = await supabase.from("rooms").select("*").eq("code", c).single();
-      if (roomErr) return Alert.alert("Hittar inte rummet", roomErr.message);
+      if (roomErr) return Alert.alert("Room not found", roomErr.message);
 
       const { data: player, error: playerErr } = await supabase
         .from("players")
@@ -194,13 +194,13 @@ export default function Home() {
           <Text style={{ color: "white", fontSize: 40, fontWeight: "900", letterSpacing: 0.5 }}>Picklo</Text>
 
           <Text style={{ color: "#9CA3AF", marginTop: 10, textAlign: "center", lineHeight: 24, fontSize: 15 }}>
-            Välj bilder. Matcha påståendet. Rösta. Skratta.
+            Pick images. Match the statement. Vote. Laugh.
           </Text>
 
           {/* ✅ Web hint */}
           {isWeb && (
             <Text style={{ color: "#94A3B8", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13 }}>
-              På webben kan du bara gå med i ett rum. Skapa rum görs i appen.
+              On web you can only join a room. Create rooms from the app.
             </Text>
           )}
         </View>
@@ -219,18 +219,18 @@ export default function Home() {
           {/* ✅ Tabs bara i appen (inte på web) */}
           {!isWeb && (
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <Tab label="Skapa" active={mode === "create"} onPress={() => setMode("create")} />
-              <Tab label="Gå med" active={mode === "join"} onPress={() => setMode("join")} />
+              <Tab label="Create" active={mode === "create"} onPress={() => setMode("create")} />
+              <Tab label="Join" active={mode === "join"} onPress={() => setMode("join")} />
             </View>
           )}
 
           {/* Name */}
           <View style={{ gap: 8 }}>
-            <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Ditt namn</Text>
+            <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Your name</Text>
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="t.ex. Alex"
+              placeholder="e.g. Alex"
               placeholderTextColor="#64748B"
               editable={!loading}
               autoCorrect={false}
@@ -258,7 +258,7 @@ export default function Home() {
           {/* ✅ Join code: alltid på web, annars bara när mode=join */}
           {(isWeb || mode === "join") && (
             <View style={{ gap: 8 }}>
-              <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Rumskod</Text>
+              <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Room code</Text>
               <TextInput
                 value={code}
                 onChangeText={setCode}
@@ -288,21 +288,21 @@ export default function Home() {
                     : null),
                 }}
               />
-              <Text style={{ color: "#94A3B8", fontSize: 12 }}>Tips: Koden är 4 tecken (A–Z, 2–9)</Text>
+              <Text style={{ color: "#94A3B8", fontSize: 12 }}>Tip: Code is 4 characters (A–Z, 2–9)</Text>
             </View>
           )}
 
           {/* ✅ Button: web = alltid "Gå med", app = create/join beroende på mode */}
           {!isWeb && mode === "create" ? (
             <PrimaryButton
-              title={loading ? "Skapar..." : "Skapa rum 🚀"}
+              title={loading ? "Creating..." : "Create room 🚀"}
               onPress={createRoom}
               disabled={!canCreate}
               variant="primary"
             />
           ) : (
             <PrimaryButton
-              title={loading ? "Går med..." : "Gå med 🎮"}
+              title={loading ? "Joining..." : "Join 🎮"}
               onPress={joinRoom}
               disabled={!canJoin}
               variant="secondary"
@@ -312,7 +312,7 @@ export default function Home() {
 
         {/* Footer */}
         <Text style={{ color: "#64748B", textAlign: "center", marginTop: 14, fontSize: 12 }}>
-          Genom att fortsätta godkänner du att spelet använder dina valda bilder i rummet.
+          By continuing you agree that the game may use the images you select in the room.
         </Text>
       </View>
     </View>

@@ -26,7 +26,7 @@ export default function JoinScreen() {
     const n = trimmedName;
     const c = codeFromUrl;
 
-    if (!n) return Alert.alert("Skriv ditt namn");
+    if (!n) return Alert.alert("Enter your name");
     if (!c) return Alert.alert("Missing room code");
 
     const { data: room, error: roomErr } = await supabase.from("rooms").select("*").eq("code", c).single();
@@ -38,7 +38,7 @@ export default function JoinScreen() {
       .select()
       .single();
 
-    if (playerErr) return Alert.alert("Fel (players)", playerErr.message);
+    if (playerErr) return Alert.alert("Error (players)", playerErr.message);
 
     router.replace({
       pathname: "/lobby",
@@ -127,7 +127,7 @@ export default function JoinScreen() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 14 }}>Till startsidan</Text>
+          <Text style={{ color: "white", fontWeight: "900", fontSize: 14 }}>Back to home</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
