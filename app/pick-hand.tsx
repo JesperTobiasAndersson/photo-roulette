@@ -74,8 +74,14 @@ export default function PickHandScreen() {
 
   const pickAndUploadMany = async () => {
     if (!roomId || !playerId) return;
-    if (hand.length >= MAX_IMAGES) return Alert.alert("You have already selected 5 ✅");
     if (busy) return;
+
+    if (hand.length >= MAX_IMAGES) {
+      return Alert.alert(
+        "Max reached",
+        "You've picked 5 images. Tap an image below to remove it, then pick again."
+      );
+    }
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return Alert.alert("Need access to photos");
@@ -295,7 +301,7 @@ export default function PickHandScreen() {
             <Button
               title={
                 hand.length >= MAX_IMAGES
-                  ? "Finished"
+                  ? "Change images"
                   : remainingToPick === MAX_IMAGES
                   ? `Pick ${MAX_IMAGES} images`
                   : "Pick more images"
@@ -328,6 +334,11 @@ export default function PickHandScreen() {
               <Text style={{ color: "white", fontSize: 16, fontWeight: "900" }}>Your hand</Text>
               <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{selectedUris.length} images</Text>
             </View>
+            {hand.length > 0 && (
+              <Text style={{ color: "#94A3B8", fontSize: 12, marginTop: 4 }}>
+                Tap an image to remove it and pick a new one.
+              </Text>
+            )}
 
             <FlatList
               data={selectedUris}
@@ -335,20 +346,65 @@ export default function PickHandScreen() {
               numColumns={3}
               columnWrapperStyle={{ gap: 8 }}
               contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
-              renderItem={({ item }) => (
-                <View
-                  style={{
-                    flex: 1,
-                    borderRadius: 14,
-                    overflow: "hidden",
-                    borderWidth: 1,
-                    borderColor: "#1F2937",
-                    backgroundColor: "#0B1222",
-                  }}
-                >
-                  <Image source={{ uri: item }} style={{ width: "100%", height: 110 }} />
-                </View>
-              )}
+              renderItem={({ item, index }) => {
+                const image = hand[index];
+                const uri = publicUrlFor(image.image_path);
+                return (
+                  <Pressable
+                    onPress={() => {
+                      Alert.alert(
+                        "Remove image?",
+                        "This will delete the picture from your hand.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: async () => {
+                              try {
+                                // remove from storage
+                                await supabase.storage.from("game-images").remove([image.image_path]);
+                              } catch (e) {
+                                console.warn("storage remove error", e);
+                              }
+                              const { error: dbErr } = await supabase
+                                .from("player_images")
+                                .delete()
+                                .eq("id", image.id);
+                              if (dbErr) {
+                                Alert.alert("DB error", dbErr.message);
+                              }
+                              loadHand();
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    style={{
+                      flex: 1,
+                      borderRadius: 14,
+                      overflow: "hidden",
+                      borderWidth: 1,
+                      borderColor: "#1F2937",
+                      backgroundColor: "#0B1222",
+                    }}
+                  >
+                    <Image source={{ uri }} style={{ width: "100%", aspectRatio: 1, height: undefined }} resizeMode="cover" />
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: 4,
+                        right: 4,
+                        backgroundColor: "rgba(0,0,0,0.5)",
+                        borderRadius: 12,
+                        padding: 2,
+                      }}
+                    >
+                      <Text style={{ color: "white", fontSize: 12, fontWeight: "900" }}>✖</Text>
+                    </View>
+                  </Pressable>
+                );
+              }}
               ListEmptyComponent={
                 <View style={{ paddingVertical: 18 }}>
                   <Text style={{ color: "#9CA3AF", textAlign: "center", lineHeight: 20 }}>

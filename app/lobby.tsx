@@ -357,7 +357,7 @@ const startRound = async () => {
                   gap: 8,
                 }}
               >
-                <Text style={{ color: "#9CA3AF", fontWeight: "800" }}>Kod</Text>
+                <Text style={{ color: "#9CA3AF", fontWeight: "800" }}>Code</Text>
                 <Text style={{ color: "white", fontWeight: "900", fontSize: 16, letterSpacing: 3 }}>
                   {roomCode || "----"}
                 </Text>
@@ -410,7 +410,7 @@ const startRound = async () => {
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={{ color: "white", fontSize: 18, fontWeight: "900" }}>Player</Text>
-              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{players.length} pcs</Text>
+              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{players.length} players</Text>
             </View>
 
             <FlatList

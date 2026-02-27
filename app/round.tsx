@@ -257,7 +257,7 @@ useEffect(() => {
           useNativeDriver: true,
         }).start();
       });
-    }, 3000);
+    }, 4000);
   })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [status, roundId, roundNumber, isPremiumUser, roomId, playerId]);
@@ -574,14 +574,16 @@ useEffect(() => {
   const winner = useMemo(() => {
     let bestId: string | null = null;
     let best = -1;
+    let bestPath: string | null = null;
     for (const s of submissions) {
       const c = voteCounts[s.id] ?? 0;
       if (c > best) {
         best = c;
         bestId = s.id;
+        bestPath = s.image_path;
       }
     }
-    return { submissionId: bestId, votes: best < 0 ? 0 : best };
+    return { submissionId: bestId, votes: best < 0 ? 0 : best, imagePath: bestPath };
   }, [submissions, voteCounts]);
 
   const statusLabel = status === "collecting" ? "Selecting" : status === "voting" ? "Voting" : "Done";
@@ -632,7 +634,7 @@ useEffect(() => {
                 }}
               >
                 <Image
-                  source={{ uri: publicUrlFor(winner.submissionId) }}
+                  source={{ uri: publicUrlFor(winner.imagePath ?? "") }}
                   style={{ width: 280, height: 280, borderRadius: 16 }}
                   contentFit="cover"
                 />
