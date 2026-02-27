@@ -590,7 +590,7 @@ useEffect(() => {
   if (!roomId || !playerId || !roundId) {
     return (
       <View style={{ flex: 1, backgroundColor: "#0B0F19", padding: 16, justifyContent: "center" }}>
-        <Text style={{ color: "white" }}>Laddar...</Text>
+        <Text style={{ color: "white" }}>Loading...</Text>
       </View>
     );
   }
@@ -612,14 +612,41 @@ useEffect(() => {
               transform: [{ scale: overlayAnim }],
             }}
           >
-            <Text style={{ color: "white", fontSize: 22, fontWeight: "900", marginBottom: 12 }}>
-              Round winner
-            </Text>
-            <Image
-              source={{ uri: publicUrlFor(winner.submissionId) }}
-              style={{ width: 240, height: 240, borderRadius: 16 }}
-              contentFit="cover"
-            />
+            <View style={{ alignItems: "center", gap: 20 }}>
+              <Text style={{ color: "white", fontSize: 28, fontWeight: "900", letterSpacing: 0.5 }}>
+                🏆 Round Winner
+              </Text>
+              
+              <View
+                style={{
+                  backgroundColor: "#0F172A",
+                  borderRadius: 24,
+                  padding: 16,
+                  borderWidth: 2,
+                  borderColor: "#F59E0B",
+                  shadowColor: "#F59E0B",
+                  shadowOpacity: 0.4,
+                  shadowRadius: 20,
+                  shadowOffset: { width: 0, height: 10 },
+                  elevation: 15,
+                }}
+              >
+                <Image
+                  source={{ uri: publicUrlFor(winner.submissionId) }}
+                  style={{ width: 280, height: 280, borderRadius: 16 }}
+                  contentFit="cover"
+                />
+              </View>
+
+              <View style={{ alignItems: "center", gap: 8 }}>
+                <Text style={{ color: "#F59E0B", fontSize: 18, fontWeight: "900" }}>
+                  {winner.votes} {winner.votes === 1 ? "vote" : "votes"}
+                </Text>
+                <Text style={{ color: "#94A3B8", fontSize: 14, fontWeight: "700" }}>
+                  Next round starting…
+                </Text>
+              </View>
+            </View>
           </Animated.View>
         )}
         {/* Header */}
@@ -674,7 +701,7 @@ useEffect(() => {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View style={{ width: 10, height: 34, borderRadius: 999, backgroundColor: "#38BDF8" }} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#E2E8F0", fontWeight: "900", letterSpacing: 0.2 }}>Påstående</Text>
+              <Text style={{ color: "#E2E8F0", fontWeight: "900", letterSpacing: 0.2 }}>Statement</Text>
               <Text style={{ color: "#94A3B8", fontWeight: "700", marginTop: 2 }}>Pick the best fitting picture 👇</Text>
             </View>
           </View>

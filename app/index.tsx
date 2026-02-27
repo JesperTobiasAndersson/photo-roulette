@@ -95,7 +95,7 @@ export default function Home() {
         .select()
         .single();
 
-      if (playerErr) return Alert.alert("Fel (players)", playerErr.message);
+      if (playerErr) return Alert.alert("Error (players)", playerErr.message);
 
       router.push({
         pathname: "/lobby",

@@ -118,7 +118,7 @@ const startRound = async () => {
   if (cErr) return Alert.alert("Error (players count)", cErr.message);
 
   const expected = count ?? 0;
-  if (expected < 2) return Alert.alert("För få spelare", "Minst 2 spelare behövs.");
+  if (expected < 2) return Alert.alert("Too few players“, ”At least 2 players are needed");
 
   // ✅ 1) Sätt expected_players + phase=playing (ATOMISKT före första rundan)
   const { error: uErr } = await supabase
@@ -379,7 +379,7 @@ const startRound = async () => {
   })}
 >
   <Text style={{ color: "white", fontWeight: "900", textAlign: "center" }}>
-    Kopiera inbjudningslänk 🔗
+    Copy invitation link 🔗
   </Text>
 </Pressable>
 
@@ -409,8 +409,8 @@ const startRound = async () => {
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "white", fontSize: 18, fontWeight: "900" }}>Spelare</Text>
-              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{players.length} st</Text>
+              <Text style={{ color: "white", fontSize: 18, fontWeight: "900" }}>Player</Text>
+              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{players.length} pcs</Text>
             </View>
 
             <FlatList
@@ -421,7 +421,7 @@ const startRound = async () => {
             />
 
            {isHost && phase === "lobby" && <Button title="Start – pick 5 images 🖼️" onPress={startPicking} />}
-           {isHost && phase === "picking" && <Button title="Starta spelet 🚀" onPress={startRound} />}  
+           {isHost && phase === "picking" && <Button title="Start game 🚀" onPress={startRound} />}  
             {isHost && phase === "playing" && <Button title="Start new round 🚀" onPress={startRound} />}
 
           </View>

@@ -232,7 +232,7 @@ export default function ResultsScreen() {
             })}
           >
             <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 12 }}>
-              {loading ? "Laddar…" : "Uppdatera"}
+              {loading ? "Loading" : "Updating"}
             </Text>
           </Pressable>
         </View>

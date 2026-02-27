@@ -74,7 +74,7 @@ export default function PickHandScreen() {
 
   const pickAndUploadMany = async () => {
     if (!roomId || !playerId) return;
-    if (hand.length >= MAX_IMAGES) return Alert.alert("Du har redan valt 5 ✅");
+    if (hand.length >= MAX_IMAGES) return Alert.alert("You have already selected 5 ✅");
     if (busy) return;
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -256,7 +256,7 @@ export default function PickHandScreen() {
                 <View style={{ gap: 10, marginTop: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                     <Text style={{ color: "white", fontWeight: "900" }}>
-                      Laddar upp {uploadDone}/{uploadTotal}
+                      Uploading {uploadDone}/{uploadTotal}
                     </Text>
                     <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>
                       {Math.round(progress * 100)}%
@@ -295,7 +295,7 @@ export default function PickHandScreen() {
             <Button
               title={
                 hand.length >= MAX_IMAGES
-                  ? "Klar"
+                  ? "Finished"
                   : remainingToPick === MAX_IMAGES
                   ? `Pick ${MAX_IMAGES} images`
                   : "Pick more images"
@@ -306,7 +306,7 @@ export default function PickHandScreen() {
             />
 
             <Button
-              title="Fortsätt"
+              title="Continue"
               onPress={goNext}
               disabled={busy || !canContinue}
               variant="secondary"
