@@ -13,19 +13,14 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import * as ImageManipulator from "expo-image-manipulator";
 import { supabase } from "../src/lib/supabase";
+import { compressImage, uriToArrayBuffer } from "../src/lib/imageUpload";
 
 type HandRow = {
   id: string;
   image_path: string;
   used_in_round_id: string | null;
 };
-
-async function uriToArrayBuffer(uri: string) {
-  const res = await fetch(uri);
-  return await res.arrayBuffer();
-}
 
 async function mapWithConcurrency<T>(
   items: T[],
@@ -73,12 +68,13 @@ export default function PickHandScreen() {
     loadHand();
   }, [roomId, playerId]);
 
-  const remainingToPick = Math.max(0, 10 - hand.length);
-  const canContinue = hand.length === 10;
+  const MAX_IMAGES = 5;
+  const remainingToPick = Math.max(0, MAX_IMAGES - hand.length);
+  const canContinue = hand.length === MAX_IMAGES;
 
   const pickAndUploadMany = async () => {
     if (!roomId || !playerId) return;
-    if (hand.length >= 10) return Alert.alert("Du har redan valt 10 ✅");
+    if (hand.length >= MAX_IMAGES) return Alert.alert("Du har redan valt 5 ✅");
     if (busy) return;
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -103,8 +99,7 @@ export default function PickHandScreen() {
     const assets = res.assets ?? [];
     if (assets.length === 0) return;
 
-    const slots = Math.max(0, 10 - hand.length);
-    const picked = assets.slice(0, slots);
+    const picked = assets.slice(0, remainingToPick);
 
     setUploadTotal(picked.length);
     setUploadDone(0);
@@ -115,13 +110,8 @@ export default function PickHandScreen() {
         const uri = (asset as any)?.uri as string | undefined;
         if (!uri) return;
 
-        const manipulated = await ImageManipulator.manipulateAsync(
-          uri,
-          [{ resize: { width: 1024 } }],
-          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
-        );
-
-        const buf = await uriToArrayBuffer(manipulated.uri);
+        const compressedUri = await compressImage(uri);
+        const buf = await uriToArrayBuffer(compressedUri);
         const filePath = `${roomId}/hand/${playerId}-${Date.now()}-${i}.jpg`;
 
         const { error: upErr } = await supabase.storage
@@ -167,8 +157,8 @@ export default function PickHandScreen() {
 
     if (error) return Alert.alert("Fel (hand)", error.message);
 
-    if ((count ?? 0) < 10) {
-      return Alert.alert("Vänta lite…", `Uppladdning klarar inte än (${count ?? 0}/10).`);
+    if ((count ?? 0) < MAX_IMAGES) {
+      return Alert.alert("Vänta lite…", `Uppladdning klarar inte än (${count ?? 0}/${MAX_IMAGES}).`);
     }
 
     router.replace({ pathname: "/lobby", params: { roomId, playerId, handReady: "1" } });
@@ -191,7 +181,7 @@ export default function PickHandScreen() {
   }) => {
     const bg =
       variant === "primary"
-        ? hand.length >= 10
+        ? hand.length >= MAX_IMAGES
           ? "#0F766E"
           : "#111827"
         : "#374151";
@@ -227,7 +217,7 @@ export default function PickHandScreen() {
         <View style={{ flex: 1, padding: 16, gap: 12 }}>
           {/* Header */}
           <View style={{ gap: 10 }}>
-            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Välj dina 10 bilder</Text>
+            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Välj dina 5 bilder</Text>
 
             <View
               style={{
@@ -253,7 +243,7 @@ export default function PickHandScreen() {
                   }}
                 >
                   <Text style={{ color: "white", fontWeight: "900" }}>
-                    {hand.length}/10{remainingToPick > 0 ? `  (+${remainingToPick})` : " ✅"}
+                    {hand.length}/{MAX_IMAGES}{remainingToPick > 0 ? `  (+${remainingToPick})` : " ✅"}
                   </Text>
                 </View>
               </View>
@@ -305,10 +295,10 @@ export default function PickHandScreen() {
           <View style={{ gap: 10 }}>
             <Button
               title={
-                hand.length >= 10
+                hand.length >= MAX_IMAGES
                   ? "Klar"
-                  : remainingToPick === 10
-                  ? "Välj 10 bilder"
+                  : remainingToPick === MAX_IMAGES
+                  ? `Välj ${MAX_IMAGES} bilder`
                   : "Välj fler bilder"
               }
               onPress={pickAndUploadMany}
@@ -363,7 +353,7 @@ export default function PickHandScreen() {
               ListEmptyComponent={
                 <View style={{ paddingVertical: 18 }}>
                   <Text style={{ color: "#9CA3AF", textAlign: "center", lineHeight: 20 }}>
-                    Inga bilder än. Tryck på “Välj 10 bilder” för att börja.
+                    Inga bilder än. Tryck på “Välj 5 bilder” för att börja.
                   </Text>
                 </View>
               }

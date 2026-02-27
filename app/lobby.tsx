@@ -152,7 +152,7 @@ const startRound = async () => {
   if (lastErr) return Alert.alert("Fel (rounds last)", lastErr.message);
 
   const nextNumber = (last?.round_number ?? 0) + 1;
-  if (nextNumber > 10) return router.replace({ pathname: "/results", params: { roomId } });
+  if (nextNumber > 5) return router.replace({ pathname: "/results", params: { roomId } });
 
   // ✅ 4) Skapa första rundan
   const statement = getRandomStatement(usedStatements);
@@ -236,7 +236,7 @@ const startRound = async () => {
         const c = await getHandCount();
         setHandCount(c);
 
-        if (c < 10) {
+        if (c < 5) {
           router.replace({ pathname: "/pick-hand", params: { roomId, playerId } });
         }
       }
@@ -265,7 +265,7 @@ const startRound = async () => {
     phase === "lobby"
       ? "Vänta tills alla har joinat. Host startar när ni är redo."
       : phase === "picking"
-      ? `Alla väljer 10 bilder. Du har ${handCount}/10. När alla är klara trycker host “Fortsätt”.`
+      ? `Alla väljer 5 bilder. Du har ${handCount}/5. När alla är klara trycker host “Fortsätt”.`
       : phase === "playing"
       ? "Spelet är igång. Host kan starta första rundan."
       : "Matchen är klar!";
@@ -420,7 +420,7 @@ const startRound = async () => {
               renderItem={({ item }) => <PlayerRow name={item.name} isHostRow={item.id === hostId} />}
             />
 
-           {isHost && phase === "lobby" && <Button title="Börja – välj 10 bilder 🖼️" onPress={startPicking} />}
+           {isHost && phase === "lobby" && <Button title="Börja – välj 5 bilder 🖼️" onPress={startPicking} />}
            {isHost && phase === "picking" && <Button title="Starta spelet 🚀" onPress={startRound} />}  
             {isHost && phase === "playing" && <Button title="Starta ny runda 🚀" onPress={startRound} />}
 

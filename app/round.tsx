@@ -1,15 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getRandomStatement } from "../src/constants/statements";
-import { View, Text, Pressable, Alert, FlatList, Animated, Easing, SafeAreaView } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  Alert,
+  FlatList,
+  Animated,
+  Easing,
+  SafeAreaView,
+} from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { StatusBar } from "expo-status-bar";
-
+import { getIsPremium } from "../src/lib/premium";
+import { showEndOfGameAd } from "../src/lib/ads";
 
 type Submission = { id: string; player_id: string; image_path: string };
 type PlayerImage = { id: string; image_path: string };
-
 
 function asString(v: unknown): string | undefined {
   if (typeof v === "string") return v;
@@ -22,29 +31,21 @@ export default function RoundScreen() {
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
   const roundId = asString(params.roundId);
+
   const popAnim = useRef(new Animated.Value(0)).current;
+
   const [playerCount, setPlayerCount] = useState<number>(0);
-  const finishingRef = useRef(false);
   const autoAdvanceRef = useRef(false);
-  
+
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const v = await getIsPremium();
+      setIsPremiumUser(v);
+    })();
+  }, []);
+
   const lastAutoNextRoundFromRoundIdRef = useRef<string | null>(null);
-
-const tryAutoAdvance = async () => {
-  if (!roundId) return;
-  if (autoAdvanceRef.current) return;
-  autoAdvanceRef.current = true;
-
-  try {
-    const { data, error } = await supabase.rpc("advance_round_if_ready", { p_round_id: roundId });
-    console.log("advance_round_if_ready =>", { data, error });
-  } finally {
-    setTimeout(() => {
-      autoAdvanceRef.current = false;
-    }, 250);
-  }
-};
-
-
 
   const [statement, setStatement] = useState("");
   const [status, setStatus] = useState<"collecting" | "voting" | "done">("collecting");
@@ -73,19 +74,38 @@ const tryAutoAdvance = async () => {
     return data.publicUrl;
   };
 
-  const loadPlayerCount = async () => {
-  if (!roomId) return;
-  const { count, error } = await supabase
-    .from("players")
-    .select("*", { count: "exact", head: true })
-    .eq("room_id", roomId);
+  const tryAutoAdvance = async () => {
+    if (!roundId) return;
+    if (autoAdvanceRef.current) return;
+    autoAdvanceRef.current = true;
 
-  if (!error) setPlayerCount(count ?? 0);
-};
+    try {
+      const { data, error } = await supabase.rpc("advance_round_if_ready", { p_round_id: roundId });
+      console.log("advance_round_if_ready =>", { data, error });
+    } finally {
+      setTimeout(() => {
+        autoAdvanceRef.current = false;
+      }, 250);
+    }
+  };
+
+  const loadPlayerCount = async () => {
+    if (!roomId) return;
+    const { count, error } = await supabase
+      .from("players")
+      .select("*", { count: "exact", head: true })
+      .eq("room_id", roomId);
+
+    if (!error) setPlayerCount(count ?? 0);
+  };
 
   const loadHost = async () => {
     if (!roomId) return;
-    const { data, error } = await supabase.from("rooms").select("host_player_id").eq("id", roomId).single();
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("host_player_id")
+      .eq("id", roomId)
+      .single();
     if (!error) setHostId(data.host_player_id ?? "");
   };
 
@@ -99,7 +119,7 @@ const tryAutoAdvance = async () => {
 
     if (error) return Alert.alert("Fel (round)", error.message);
 
-    setStatement(data.statement);
+    setStatement(data.statement ?? "");
     setStatus(data.status);
     setRoundNumber(data.round_number ?? 0);
   };
@@ -110,7 +130,6 @@ const tryAutoAdvance = async () => {
       .from("submissions")
       .select("id,player_id,image_path")
       .eq("round_id", roundId);
-      
 
     if (error) return Alert.alert("Fel (subs)", error.message);
 
@@ -119,9 +138,7 @@ const tryAutoAdvance = async () => {
 
     const mine = list.find((s) => s.player_id === playerId);
     setMySubmissionId(mine?.id ?? null);
-    
   };
-  
 
   const loadMyVote = async () => {
     if (!roundId || !playerId) return;
@@ -164,7 +181,6 @@ const tryAutoAdvance = async () => {
     setAvailableImages(data ?? []);
   };
 
-
   // ✅ POP-animation när statement ändras
   useEffect(() => {
     if (!statement) return;
@@ -178,126 +194,141 @@ const tryAutoAdvance = async () => {
     }).start();
   }, [statement]);
 
+  // ✅ reset only the nav guard when round changes
   useEffect(() => {
     lastSeenRoundIdRef.current = null;
-     lastAutoNextRoundFromRoundIdRef.current = null;
   }, [roundId]);
 
   // Prefetch för “handen” (collecting)
   useEffect(() => {
     if (!availableImages.length) return;
-
     availableImages.forEach((img) => {
       const uri = publicUrlFor(img.image_path);
-      (uri);
+      uri;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableImages]);
 
-  // Init + realtime: round/submissions/votes/hand
-// Init + realtime: round/submissions/votes/hand
+// ✅ När rundan är "done": auto-next (men stoppa gratis efter 5 + visa ad + paywall)
 useEffect(() => {
   if (!roomId || !playerId || !roundId) return;
+  if (status !== "done") return;
 
-  let isMounted = true;
+  if (lastAutoNextRoundFromRoundIdRef.current === roundId) return;
+  lastAutoNextRoundFromRoundIdRef.current = roundId;
 
   (async () => {
-    // Initial load
-    await loadHost();
-    await loadRound();
-    await loadSubmissions();
-    await loadMyVote();
-    await loadVoteCounts();
-    await loadAvailableImages();
-    await loadPlayerCount();
+    // Gratis-limit: efter 5 rundor -> ad -> paywall
+    if (!isPremiumUser && roundNumber >= 5) {
+      await showEndOfGameAd();
+      router.replace({ pathname: "/paywall", params: { roomId } });
+      return;
+    }
 
-    // Kick en gång direkt när du kommit in (så du "kommer ikapp")
-    tryAutoAdvance();
+    // annars: fortsätt spela
+    await nextRound();
   })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [status, roundId, roundNumber, isPremiumUser, roomId, playerId]);
 
-  const roundChannel = supabase
-    .channel(`round-${roundId}`)
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "rounds", filter: `id=eq.${roundId}` },
-      async () => {
-        if (!isMounted) return;
-        await loadRound();
-        tryAutoAdvance();
-      }
-    )
-    .subscribe();
+  // Init + realtime: round/submissions/votes/hand
+  useEffect(() => {
+    if (!roomId || !playerId || !roundId) return;
 
-  const subsChannel = supabase
-    .channel(`subs-${roundId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "submissions", filter: `round_id=eq.${roundId}` },
-      async () => {
-        if (!isMounted) return;
-        await loadSubmissions();
-        tryAutoAdvance();
-      }
-    )
-    .subscribe();
+    let isMounted = true;
 
-  const votesChannel = supabase
-    .channel(`votes-${roundId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${roundId}` },
-      async () => {
-        if (!isMounted) return;
-        await loadMyVote();
-        await loadVoteCounts();
-        tryAutoAdvance();
-      }
-    )
-    .subscribe();
+    (async () => {
+      await loadHost();
+      await loadRound();
+      await loadSubmissions();
+      await loadMyVote();
+      await loadVoteCounts();
+      await loadAvailableImages();
+      await loadPlayerCount();
 
-  const handChannel = supabase
-    .channel(`hand-${roomId}-${playerId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "player_images",
-        filter: `room_id=eq.${roomId},player_id=eq.${playerId}`,
-      },
-      async () => {
-        if (!isMounted) return;
-        await loadAvailableImages();
-      }
-    )
-    .subscribe();
+      tryAutoAdvance();
+    })();
 
-  const playersChannel = supabase
-    .channel(`players-${roomId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "players", filter: `room_id=eq.${roomId}` },
-      async () => {
-        if (!isMounted) return;
-        await loadPlayerCount();
-        // valfritt men bra om din DB-rpc använder expected_players/players
-        tryAutoAdvance();
-      }
-    )
-    .subscribe();
+    const roundChannel = supabase
+      .channel(`round-${roundId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rounds", filter: `id=eq.${roundId}` },
+        async () => {
+          if (!isMounted) return;
+          await loadRound();
+          tryAutoAdvance();
+        }
+      )
+      .subscribe();
 
-  return () => {
-    isMounted = false;
-    supabase.removeChannel(roundChannel);
-    supabase.removeChannel(subsChannel);
-    supabase.removeChannel(votesChannel);
-    supabase.removeChannel(handChannel);
-    supabase.removeChannel(playersChannel); // ✅ DU SAKNADE DEN HÄR
-  };
-}, [roomId, playerId, roundId]);
+    const subsChannel = supabase
+      .channel(`subs-${roundId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "submissions", filter: `round_id=eq.${roundId}` },
+        async () => {
+          if (!isMounted) return;
+          await loadSubmissions();
+          tryAutoAdvance();
+        }
+      )
+      .subscribe();
 
+    const votesChannel = supabase
+      .channel(`votes-${roundId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${roundId}` },
+        async () => {
+          if (!isMounted) return;
+          await loadMyVote();
+          await loadVoteCounts();
+          tryAutoAdvance();
+        }
+      )
+      .subscribe();
 
+    const handChannel = supabase
+      .channel(`hand-${roomId}-${playerId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "player_images",
+          filter: `room_id=eq.${roomId},player_id=eq.${playerId}`,
+        },
+        async () => {
+          if (!isMounted) return;
+          await loadAvailableImages();
+        }
+      )
+      .subscribe();
 
+    const playersChannel = supabase
+      .channel(`players-${roomId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "players", filter: `room_id=eq.${roomId}` },
+        async () => {
+          if (!isMounted) return;
+          await loadPlayerCount();
+          tryAutoAdvance();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(roundChannel);
+      supabase.removeChannel(subsChannel);
+      supabase.removeChannel(votesChannel);
+      supabase.removeChannel(handChannel);
+      supabase.removeChannel(playersChannel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, playerId, roundId]);
 
   // Alla lyssnar på nya rounds i rummet och navigerar dit (eller results)
   useEffect(() => {
@@ -319,13 +350,13 @@ useEffect(() => {
           }
 
           if (roundNumber && newNumber <= roundNumber) return;
-
           if (lastSeenRoundIdRef.current === newRoundId) return;
+
           lastSeenRoundIdRef.current = newRoundId;
 
           if (newRoundId === roundId) return;
 
-          if (newNumber > 10) {
+          if (newNumber > 5) {
             router.replace({ pathname: "/results", params: { roomId } });
             return;
           }
@@ -341,29 +372,27 @@ useEffect(() => {
   }, [roomId, playerId, roundId, roundNumber]);
 
   // ✅ Alla ska hoppa till results när rooms.phase blir "finished"
-    useEffect(() => {
-     if (!roomId) return;
+  useEffect(() => {
+    if (!roomId) return;
 
-  const roomPhaseChannel = supabase
-    .channel(`room-phase-${roomId}`)
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
-      (payload) => {
-        const newPhase = (payload.new as any)?.phase as string | undefined;
-
-        if (newPhase === "finished") {
-          router.replace({ pathname: "/results", params: { roomId } });
+    const roomPhaseChannel = supabase
+      .channel(`room-phase-${roomId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
+        (payload) => {
+          const newPhase = (payload.new as any)?.phase as string | undefined;
+          if (newPhase === "finished") {
+            router.replace({ pathname: "/results", params: { roomId } });
+          }
         }
-      }
-    )
-    .subscribe();
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(roomPhaseChannel);
-  };
-}, [roomId]);
-
+    return () => {
+      supabase.removeChannel(roomPhaseChannel);
+    };
+  }, [roomId]);
 
   const submitFromHand = async (playerImageId: string, imagePath: string) => {
     if (!roomId || !playerId || !roundId) return;
@@ -389,10 +418,10 @@ useEffect(() => {
         .is("used_in_round_id", null);
 
       if (lockErr) return Alert.alert("Fel (låsa bild)", lockErr.message);
-setMySubmissionId(sub.id);
-await loadAvailableImages();
-tryAutoAdvance();
 
+      setMySubmissionId(sub.id);
+      await loadAvailableImages();
+      tryAutoAdvance();
     } finally {
       setSubmitting(false);
     }
@@ -417,7 +446,6 @@ tryAutoAdvance();
   const nextRound = async () => {
     if (!roomId || !playerId) return;
 
-    // ✅ STOPPA dubbelklick
     if (advancingRoundRef.current) return;
     advancingRoundRef.current = true;
     setAdvancingRound(true);
@@ -425,21 +453,14 @@ tryAutoAdvance();
     try {
       const nextNumber = (roundNumber ?? 0) + 1;
 
-    if (nextNumber > 10) {
-  // 🔥 Säg till alla via DB att spelet är slut
-  const { error: phaseErr } = await supabase
-    .from("rooms")
-    .update({ phase: "finished" })
-    .eq("id", roomId);
+      if (nextNumber > 5) {
+        const { error: phaseErr } = await supabase.from("rooms").update({ phase: "finished" }).eq("id", roomId);
+        if (phaseErr) return Alert.alert("Fel (finished)", phaseErr.message);
 
-  if (phaseErr) return Alert.alert("Fel (finished)", phaseErr.message);
+        router.replace({ pathname: "/results", params: { roomId } });
+        return;
+      }
 
-  router.replace({ pathname: "/results", params: { roomId } });
-  return;
-}
-
-
-      // (din statement-logik)
       const { data: usedRows, error: usedErr } = await supabase
         .from("rounds")
         .select("statement")
@@ -454,9 +475,7 @@ tryAutoAdvance();
         .map((r: any) => r.statement)
         .filter((s: any): s is string => typeof s === "string" && s.length > 0);
 
-      // ✅ OBS: detta kräver att getRandomStatement kan ta exclude-list (se notis längst ner)
       const statement = getRandomStatement(usedStatements);
-
       const endsAt = new Date(Date.now() + 60_000).toISOString();
 
       const { data, error } = await supabase
@@ -471,41 +490,22 @@ tryAutoAdvance();
         .select("id")
         .single();
 
-     if (error) {
-  const msg = (error.message || "").toLowerCase();
+      if (error) {
+        const msg = (error.message || "").toLowerCase();
+        if (msg.includes("duplicate") || msg.includes("unique") || msg.includes("rounds_room_roundnumber_unique")) {
+          return; // någon annan skapade redan
+        }
+        Alert.alert("Fel (nästa runda)", error.message);
+        return;
+      }
 
-  // ✅ någon annan skapade redan nästa runda -> ignorera
-  if (msg.includes("duplicate") || msg.includes("unique") || msg.includes("rounds_room_roundnumber_unique")) {
-    return;
-  }
-
-  Alert.alert("Fel (nästa runda)", error.message);
-  return;
-}
-
-      
-
-      // ✅ Säg åt listenern att skippa hostens egna INSERT
       skipNextInsertNavRef.current = data.id;
-
       router.replace({ pathname: "/round", params: { roomId, playerId, roundId: data.id } });
     } finally {
       advancingRoundRef.current = false;
       setAdvancingRound(false);
     }
   };
-  // ✅ När rundan är "done": skapa nästa runda automatiskt (med TS-statements)
-useEffect(() => {
-  if (!roomId || !playerId || !roundId) return;
-  if (status !== "done") return;
-
-  // kör bara 1 gång per roundId
-  if (lastAutoNextRoundFromRoundIdRef.current === roundId) return;
-  lastAutoNextRoundFromRoundIdRef.current = roundId;
-
-  nextRound(); // använder din getRandomStatement()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [status, roomId, playerId, roundId]);
 
   const castVote = async (submissionId: string) => {
     if (!roundId || !playerId) return;
@@ -518,8 +518,9 @@ useEffect(() => {
       .insert({ round_id: roundId, voter_player_id: playerId, submission_id: submissionId });
 
     if (error) return Alert.alert("Röstning", error.message);
-setMyVoteSubmissionId(submissionId);
-tryAutoAdvance();
+
+    setMyVoteSubmissionId(submissionId);
+    tryAutoAdvance();
   };
 
   const winner = useMemo(() => {
@@ -535,11 +536,8 @@ tryAutoAdvance();
     return { submissionId: bestId, votes: best < 0 ? 0 : best };
   }, [submissions, voteCounts]);
 
-  const statusLabel =
-    status === "collecting" ? "Väljer" : status === "voting" ? "Röstar" : "Klart";
-
-  const statusBg =
-    status === "collecting" ? "#0B1222" : status === "voting" ? "#111827" : "#052e1b";
+  const statusLabel = status === "collecting" ? "Väljer" : status === "voting" ? "Röstar" : "Klart";
+  const statusBg = status === "collecting" ? "#0B1222" : status === "voting" ? "#111827" : "#052e1b";
 
   if (!roomId || !playerId || !roundId) {
     return (
@@ -549,20 +547,15 @@ tryAutoAdvance();
     );
   }
 
-return (
-  <SafeAreaView style={{ flex: 1, backgroundColor: "#0B0F19" }}>
-    <StatusBar style="light" />
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0B0F19" }}>
+      <StatusBar style="light" />
+      <View style={{ flex: 1, padding: 16, gap: 12 }}>
         {/* Header */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ gap: 4 }}>
-            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>
-              Runda {roundNumber}/10
-            </Text>
-            <Text style={{ color: "#94A3B8", fontWeight: "700" }}>
-              {isHost ? "Du är host" : "Spelare"}
-            </Text>
+            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Runda {roundNumber}/5</Text>
+            <Text style={{ color: "#94A3B8", fontWeight: "700" }}>{isHost ? "Du är host" : "Spelare"}</Text>
           </View>
 
           <View
@@ -594,54 +587,28 @@ return (
               inputRange: [0, 1],
               outputRange: [0.7, 1],
             }),
-
             backgroundColor: "#0F172A",
             borderRadius: 20,
             padding: 16,
             borderWidth: 1,
             borderColor: "rgba(56,189,248,0.35)",
-
-            // glow + depth
             shadowColor: "#38BDF8",
             shadowOpacity: 0.25,
             shadowRadius: 18,
             shadowOffset: { width: 0, height: 10 },
             elevation: 10,
-
             gap: 10,
           }}
         >
-          {/* Accent bar + header */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
-              style={{
-                width: 10,
-                height: 34,
-                borderRadius: 999,
-                backgroundColor: "#38BDF8",
-              }}
-            />
+            <View style={{ width: 10, height: 34, borderRadius: 999, backgroundColor: "#38BDF8" }} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#E2E8F0", fontWeight: "900", letterSpacing: 0.2 }}>
-                Påstående
-              </Text>
-              <Text style={{ color: "#94A3B8", fontWeight: "700", marginTop: 2 }}>
-                Välj bilden som passar bäst 👇
-              </Text>
+              <Text style={{ color: "#E2E8F0", fontWeight: "900", letterSpacing: 0.2 }}>Påstående</Text>
+              <Text style={{ color: "#94A3B8", fontWeight: "700", marginTop: 2 }}>Välj bilden som passar bäst 👇</Text>
             </View>
           </View>
 
-          {/* Statement text */}
-          <Text
-            style={{
-              color: "white",
-              fontSize: 20,
-              lineHeight: 28,
-              fontWeight: "900",
-            }}
-          >
-            {statement || "..."}
-          </Text>
+          <Text style={{ color: "white", fontSize: 20, lineHeight: 28, fontWeight: "900" }}>{statement || "..."}</Text>
 
           {status === "collecting" && (
             <Text style={{ color: "#A5B4FC", fontWeight: "800" }}>
@@ -691,12 +658,7 @@ return (
                       backgroundColor: "#0B1222",
                     })}
                   >
-                    <Image
-                      source={{ uri }}
-                      style={{ width: "100%", height: 180 }}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
+                    <Image source={{ uri }} style={{ width: "100%", height: 180 }} contentFit="cover" cachePolicy="memory-disk" />
                   </Pressable>
                 );
               }}
@@ -716,10 +678,9 @@ return (
               }}
             >
               <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Väntar på andra…</Text>
-            <Text style={{ color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
-  När alla har skickat in går spelet automatiskt vidare.
-</Text>
-
+              <Text style={{ color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
+                När alla har skickat in går spelet automatiskt vidare.
+              </Text>
             </View>
           )
         ) : (
@@ -758,12 +719,7 @@ return (
                     opacity: pressed ? 0.92 : 1,
                   })}
                 >
-                  <Image
-                    source={{ uri }}
-                    style={{ width: "100%", height: 180 }}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
+                  <Image source={{ uri }} style={{ width: "100%", height: 180 }} contentFit="cover" cachePolicy="memory-disk" />
 
                   <View style={{ padding: 10, gap: 2 }}>
                     <Text style={{ color: "white", fontWeight: "900" }}>{votes} röster</Text>
@@ -777,6 +733,6 @@ return (
           />
         )}
       </View>
-  </SafeAreaView>
+    </SafeAreaView>
   );
 }
