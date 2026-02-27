@@ -65,12 +65,15 @@ export default function ResultsScreen() {
       return Alert.alert("Error (players)", pErr.message);
     }
 
-    const nameMap = new Map((players ?? []).map((p: any) => [p.id, p.name]));
-    const merged = (scores ?? []).map((r: any) => ({
-      player_id: r.player_id,
-      points: r.points,
-      name: nameMap.get(r.player_id) ?? r.player_id,
+    const scoresMap = new Map((scores ?? []).map((s: any) => [s.player_id, s.points]));
+    const merged = (players ?? []).map((p: any) => ({
+      player_id: p.id,
+      points: scoresMap.get(p.id) ?? 0,
+      name: p.name,
     }));
+
+    // Sort by points descending
+    merged.sort((a, b) => b.points - a.points);
 
     setRows(merged);
     setLoading(false);
@@ -215,7 +218,7 @@ export default function ResultsScreen() {
         {/* List header */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
           <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "900" }}>
-            Placeringar
+            Leaderboard
           </Text>
           <Pressable
             onPress={load}
@@ -251,7 +254,7 @@ export default function ResultsScreen() {
               }}
             >
               <Text style={{ color: COLORS.subText }}>
-                {rows.length <= 3 ? "Inga fler spelare att visa." : "Inga resultat att visa."}
+                {rows.length <= 3 ? "No more players to show." : "No results to show."}
               </Text>
             </View>
           }

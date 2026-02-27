@@ -33,6 +33,8 @@ export default function RoundScreen() {
   const roundId = asString(params.roundId);
 
   const popAnim = useRef(new Animated.Value(0)).current;
+  const overlayAnim = useRef(new Animated.Value(0)).current; // for winner image pop
+  const transitionAnim = useRef(new Animated.Value(1)).current; // fade out/in between rounds
 
   const [playerCount, setPlayerCount] = useState<number>(0);
   const autoAdvanceRef = useRef(false);
@@ -181,7 +183,7 @@ export default function RoundScreen() {
     setAvailableImages(data ?? []);
   };
 
-  // ✅ POP-animation när statement ändras
+  // ✅ POP-animation when statement changes
   useEffect(() => {
     if (!statement) return;
 
@@ -193,6 +195,17 @@ export default function RoundScreen() {
       useNativeDriver: true,
     }).start();
   }, [statement]);
+
+  // winner overlay pop
+  useEffect(() => {
+    if (!showWinnerOverlay) return;
+    overlayAnim.setValue(0);
+    Animated.spring(overlayAnim, {
+      toValue: 1,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  }, [showWinnerOverlay]);
 
   // ✅ reset only the nav guard when round changes
   useEffect(() => {
@@ -220,7 +233,7 @@ useEffect(() => {
   lastAutoNextRoundFromRoundIdRef.current = roundId;
 
   (async () => {
-    // Gratis-limit: efter 5 rundor -> direkt till resultat
+    // Gratis-limit: after 5 rundor -> direkt till resultat
     if (!isPremiumUser && roundNumber >= 5) {
       router.replace({ pathname: "/results", params: { roomId } });
       return;
@@ -229,8 +242,21 @@ useEffect(() => {
     // show winner image overlay for a moment
     setShowWinnerOverlay(true);
     setTimeout(async () => {
+      // hide overlay, then fade content out, advance round, fade back in
       setShowWinnerOverlay(false);
-      await nextRound();
+      Animated.timing(transitionAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(async () => {
+        await nextRound();
+        transitionAnim.setValue(0);
+        Animated.timing(transitionAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      });
     }, 3000);
   })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -572,16 +598,18 @@ useEffect(() => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#0B0F19" }}>
       <StatusBar style="light" />
-      <View style={{ flex: 1, padding: 16, gap: 12 }}>
+      <Animated.View style={{ flex: 1, padding: 16, gap: 12, opacity: transitionAnim }}>
         {/* winner overlay */}
         {showWinnerOverlay && winner.submissionId && (
-          <View
+          <Animated.View
             style={{
               ...StyleSheet.absoluteFillObject,
               backgroundColor: "rgba(0,0,0,0.75)",
               alignItems: "center",
               justifyContent: "center",
               zIndex: 10,
+              opacity: overlayAnim,
+              transform: [{ scale: overlayAnim }],
             }}
           >
             <Text style={{ color: "white", fontSize: 22, fontWeight: "900", marginBottom: 12 }}>
@@ -592,13 +620,13 @@ useEffect(() => {
               style={{ width: 240, height: 240, borderRadius: 16 }}
               contentFit="cover"
             />
-          </View>
+          </Animated.View>
         )}
         {/* Header */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ gap: 4 }}>
             <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Round {roundNumber}/5</Text>
-            <Text style={{ color: "#94A3B8", fontWeight: "700" }}>{isHost ? "Du är host" : "Spelare"}</Text>
+            <Text style={{ color: "#94A3B8", fontWeight: "700" }}>{isHost ? "You are host" : "Player"}</Text>
           </View>
 
           <View
@@ -722,7 +750,7 @@ useEffect(() => {
             >
               <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Waiting for others…</Text>
               <Text style={{ color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
-                När alla har skickat in går spelet automatiskt vidare.
+                When everyone has submitted the game moves on automatically.
               </Text>
             </View>
           )
