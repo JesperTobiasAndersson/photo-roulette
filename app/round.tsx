@@ -63,6 +63,7 @@ export default function RoundScreen() {
 
   const [availableImages, setAvailableImages] = useState<PlayerImage[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
 
   const lastSeenRoundIdRef = useRef<string | null>(null);
   const skipNextInsertNavRef = useRef<string | null>(null);
@@ -222,8 +223,7 @@ export default function RoundScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableImages]);
 
-// ✅ När rundan är "done": show winner briefly then auto-next (free users stop after 5)
-const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
+// ✅ When round is "done": show winner briefly then auto-next (free users stop after 5)
 
 useEffect(() => {
   if (!roomId || !playerId || !roundId) return;
@@ -807,7 +807,7 @@ useEffect(() => {
             }}
           />
         )}
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
