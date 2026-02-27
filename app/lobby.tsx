@@ -38,9 +38,9 @@ const inviteUrl = roomCode ? `${baseUrl}/join?code=${roomCode}` : "";
 
 
 const copyInvite = async () => {
-  if (!inviteUrl) return Alert.alert("Vänta", "Rumskoden laddas...");
+  if (!inviteUrl) return Alert.alert("Wait", "Room code is loading...");
   await Clipboard.setStringAsync(inviteUrl);
-  Alert.alert("Kopierad!", inviteUrl);
+  Alert.alert("Copied!", inviteUrl);
 };
 
 
@@ -254,21 +254,21 @@ const startRound = async () => {
 
   const phaseLabel =
     phase === "lobby"
-      ? "Väntar i lobby"
+      ? "Waiting in lobby"
       : phase === "picking"
-      ? "Väljer bilder"
+      ? "Selecting images"
       : phase === "playing"
-      ? "Redo att spela"
-      : "Avslutat";
+      ? "Ready to play"
+      : "Finished";
 
   const phaseDesc =
     phase === "lobby"
-      ? "Vänta tills alla har joinat. Host startar när ni är redo."
+      ? "Wait until everyone has joined. Host starts when you're ready."
       : phase === "picking"
-      ? `Alla väljer 5 bilder. Du har ${handCount}/5. När alla är klara trycker host “Fortsätt”.`
+      ? `Everyone selects 5 images. You have ${handCount}/5. When ready host presses “Continue”.`
       : phase === "playing"
-      ? "Spelet är igång. Host kan starta första rundan."
-      : "Matchen är klar!";
+      ? "Game is running. Host can start the first round."
+      : "Match is over!";
 
   const Button = ({
     title,
@@ -426,7 +426,7 @@ const startRound = async () => {
 
           </View>
 
-          <Button title="Tillbaka" onPress={() => router.replace("/")} variant="secondary" />
+          <Button title="Back" onPress={() => router.replace("/")} variant="secondary" />
         </View>
       </SafeAreaView>
     </KeyboardAvoidingView>

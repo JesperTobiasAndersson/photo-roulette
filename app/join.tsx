@@ -27,10 +27,10 @@ export default function JoinScreen() {
     const c = codeFromUrl;
 
     if (!n) return Alert.alert("Skriv ditt namn");
-    if (!c) return Alert.alert("Saknar rumskod");
+    if (!c) return Alert.alert("Missing room code");
 
     const { data: room, error: roomErr } = await supabase.from("rooms").select("*").eq("code", c).single();
-    if (roomErr) return Alert.alert("Hittar inte rummet", roomErr.message);
+    if (roomErr) return Alert.alert("Room not found", roomErr.message);
 
     const { data: player, error: playerErr } = await supabase
       .from("players")
@@ -64,18 +64,18 @@ export default function JoinScreen() {
 
         {codeFromUrl ? (
           <Text style={{ color: "#94A3B8" }}>
-            Gå med i rum: <Text style={{ color: "white", fontWeight: "900" }}>{codeFromUrl}</Text>
+            Join room: <Text style={{ color: "white", fontWeight: "900" }}>{codeFromUrl}</Text>
           </Text>
         ) : (
           <Text style={{ color: "#FCA5A5", fontWeight: "800" }}>
-            Saknar kod. Öppna länken från hosten (…/join?code=XXXX).
+            Missing code. Open link from host (…/join?code=XXXX).
           </Text>
         )}
 
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Ditt namn"
+          placeholder="Your name"
           placeholderTextColor="#64748B"
           editable={!!codeFromUrl}
           autoCorrect={false}
@@ -111,7 +111,7 @@ export default function JoinScreen() {
             opacity: !canJoin ? 0.5 : pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Gå med</Text>
+          <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Join</Text>
         </Pressable>
 
         <Pressable

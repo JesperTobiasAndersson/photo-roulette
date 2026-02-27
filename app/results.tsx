@@ -118,10 +118,10 @@ export default function ResultsScreen() {
         {/* Header */}
         <View style={{ gap: 6 }}>
           <Text style={{ color: COLORS.text, fontSize: 26, fontWeight: "900" }}>
-            Slutresultat
+            Final Results
           </Text>
           <Text style={{ color: COLORS.subText, fontSize: 13 }}>
-            Rum: <Text style={{ color: COLORS.text, fontWeight: "700" }}>{roomId ?? "—"}</Text>
+            Room: <Text style={{ color: COLORS.text, fontWeight: "700" }}>{roomId ?? "—"}</Text>
           </Text>
         </View>
 
@@ -136,7 +136,7 @@ export default function ResultsScreen() {
           }}
         >
           <Text style={{ color: COLORS.subText, fontSize: 12, fontWeight: "700" }}>
-            Vinnare
+            Winner
           </Text>
 
           <View
@@ -153,7 +153,7 @@ export default function ResultsScreen() {
                 👑 {winnerName}
               </Text>
               <Text style={{ color: COLORS.subText, marginTop: 2 }}>
-                Snyggt jobbat!
+                Great job!
               </Text>
             </View>
 
@@ -328,7 +328,7 @@ export default function ResultsScreen() {
             Till startsidan
           </Text>
           <Text style={{ color: COLORS.subText, textAlign: "center", marginTop: 2, fontSize: 12 }}>
-            Starta nytt rum eller joina igen
+            Start a new room or join again
           </Text>
         </Pressable>
       </View>

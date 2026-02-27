@@ -15,7 +15,6 @@ import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { StatusBar } from "expo-status-bar";
 import { getIsPremium } from "../src/lib/premium";
-import { showEndOfGameAd } from "../src/lib/ads";
 
 type Submission = { id: string; player_id: string; image_path: string };
 type PlayerImage = { id: string; image_path: string };
@@ -218,10 +217,9 @@ useEffect(() => {
   lastAutoNextRoundFromRoundIdRef.current = roundId;
 
   (async () => {
-    // Gratis-limit: efter 5 rundor -> ad -> paywall
+    // Gratis-limit: efter 5 rundor -> direkt till resultat
     if (!isPremiumUser && roundNumber >= 5) {
-      await showEndOfGameAd();
-      router.replace({ pathname: "/paywall", params: { roomId } });
+      router.replace({ pathname: "/results", params: { roomId } });
       return;
     }
 
@@ -396,7 +394,7 @@ useEffect(() => {
 
   const submitFromHand = async (playerImageId: string, imagePath: string) => {
     if (!roomId || !playerId || !roundId) return;
-    if (mySubmissionId) return Alert.alert("Du har redan skickat in ✅");
+    if (mySubmissionId) return Alert.alert("You've already submitted ✅");
     if (submitting) return;
 
     setSubmitting(true);
@@ -511,7 +509,7 @@ useEffect(() => {
     if (!roundId || !playerId) return;
 
     if (submissionId === mySubmissionId) return Alert.alert("Du kan inte rösta på din egen bild");
-    if (myVoteSubmissionId) return Alert.alert("Du har redan röstat ✅");
+    if (myVoteSubmissionId) return Alert.alert("You've already voted ✅");
 
     const { error } = await supabase
       .from("votes")
@@ -536,7 +534,7 @@ useEffect(() => {
     return { submissionId: bestId, votes: best < 0 ? 0 : best };
   }, [submissions, voteCounts]);
 
-  const statusLabel = status === "collecting" ? "Väljer" : status === "voting" ? "Röstar" : "Klart";
+  const statusLabel = status === "collecting" ? "Selecting" : status === "voting" ? "Voting" : "Done";
   const statusBg = status === "collecting" ? "#0B1222" : status === "voting" ? "#111827" : "#052e1b";
 
   if (!roomId || !playerId || !roundId) {
@@ -604,7 +602,7 @@ useEffect(() => {
             <View style={{ width: 10, height: 34, borderRadius: 999, backgroundColor: "#38BDF8" }} />
             <View style={{ flex: 1 }}>
               <Text style={{ color: "#E2E8F0", fontWeight: "900", letterSpacing: 0.2 }}>Påstående</Text>
-              <Text style={{ color: "#94A3B8", fontWeight: "700", marginTop: 2 }}>Välj bilden som passar bäst 👇</Text>
+              <Text style={{ color: "#94A3B8", fontWeight: "700", marginTop: 2 }}>Pick the best fitting picture 👇</Text>
             </View>
           </View>
 
@@ -612,19 +610,19 @@ useEffect(() => {
 
           {status === "collecting" && (
             <Text style={{ color: "#A5B4FC", fontWeight: "800" }}>
-              {mySubmissionId ? "Inskickad ✅" : `Välj en bild (${availableImages.length} kvar)`}
+              {mySubmissionId ? "Submitted ✅" : `Choose a picture (${availableImages.length} left)`}
             </Text>
           )}
 
           {status === "voting" && (
             <Text style={{ color: "#86EFAC", fontWeight: "900" }}>
-              {myVoteSubmissionId ? "Du har röstat ✅" : "Tryck på en bild för att rösta (ej din egen)."}
+              {myVoteSubmissionId ? "You voted ✅" : "Tap an image to vote (not your own)."}
             </Text>
           )}
 
           {status === "done" && (
             <Text style={{ color: "#FDE68A", fontWeight: "900" }}>
-              Vinnare: {winner.votes} röster {winner.submissionId ? "🏆" : ""}
+              Winner: {winner.votes} votes {winner.submissionId ? "🏆" : ""}
             </Text>
           )}
         </Animated.View>
@@ -662,7 +660,7 @@ useEffect(() => {
                   </Pressable>
                 );
               }}
-              ListEmptyComponent={<Text style={{ color: "#94A3B8" }}>Inga bilder kvar i handen.</Text>}
+              ListEmptyComponent={<Text style={{ color: "#94A3B8" }}>No images left in hand.</Text>}
             />
           ) : (
             <View
@@ -677,7 +675,7 @@ useEffect(() => {
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Väntar på andra…</Text>
+              <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Waiting for others…</Text>
               <Text style={{ color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
                 När alla har skickat in går spelet automatiskt vidare.
               </Text>
@@ -725,7 +723,7 @@ useEffect(() => {
                     <Text style={{ color: "white", fontWeight: "900" }}>{votes} röster</Text>
                     {isMine && <Text style={{ color: "#38BDF8", fontWeight: "800" }}>Din bild</Text>}
                     {isVoted && <Text style={{ color: "#22C55E", fontWeight: "800" }}>Din röst</Text>}
-                    {isWinner && <Text style={{ color: "#F59E0B", fontWeight: "900" }}>Vinnare</Text>}
+                    {isWinner && <Text style={{ color: "#F59E0B", fontWeight: "900" }}>Winner</Text>}
                   </View>
                 </Pressable>
               );

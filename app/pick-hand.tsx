@@ -217,7 +217,7 @@ export default function PickHandScreen() {
         <View style={{ flex: 1, padding: 16, gap: 12 }}>
           {/* Header */}
           <View style={{ gap: 10 }}>
-            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Välj dina 5 bilder</Text>
+            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Choose your 5 pics</Text>
 
             <View
               style={{
@@ -249,7 +249,7 @@ export default function PickHandScreen() {
               </View>
 
               <Text style={{ color: "#9CA3AF", lineHeight: 20 }}>
-                Välj bilder från din kamerarulle. De används bara i detta rum.
+                Pick photos from your library. They’re only used in this room.
               </Text>
 
               {/* Upload progress */}
@@ -284,7 +284,7 @@ export default function PickHandScreen() {
                   </View>
 
                   <Text style={{ color: "#94A3B8", fontSize: 12 }}>
-                    Tips: välj gärna screenshots/memes – det blir roligare 😄
+                    Tip: choose screenshots/memes – it’s more fun 😄
                   </Text>
                 </View>
               )}
@@ -353,7 +353,7 @@ export default function PickHandScreen() {
               ListEmptyComponent={
                 <View style={{ paddingVertical: 18 }}>
                   <Text style={{ color: "#9CA3AF", textAlign: "center", lineHeight: 20 }}>
-                    Inga bilder än. Tryck på “Välj 5 bilder” för att börja.
+                    No pictures yet. Tap “Choose 5 pics” to start.
                   </Text>
                 </View>
               }
@@ -373,7 +373,7 @@ export default function PickHandScreen() {
               opacity: busy ? 0.5 : pressed ? 0.9 : 1,
             })}
           >
-            <Text style={{ color: "white", fontWeight: "900" }}>Tillbaka</Text>
+            <Text style={{ color: "white", fontWeight: "900" }}>Back</Text>
           </Pressable>
         </View>
       </SafeAreaView>

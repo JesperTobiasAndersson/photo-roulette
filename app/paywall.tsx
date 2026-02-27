@@ -8,7 +8,7 @@ export default function Paywall() {
 
   const unlock = async () => {
     await setIsPremium(true); // mock unlock
-    Alert.alert("Premium aktiv!", "Mock-premium är nu på.");
+    Alert.alert("Premium active!", "Mock premium is now on.");
     router.replace({ pathname: "/", params: roomId ? { roomId } : {} });
   };
 
@@ -19,7 +19,7 @@ export default function Paywall() {
           Premium
         </Text>
         <Text style={{ color: "#94A3B8", fontSize: 16, lineHeight: 22, textAlign: "center" }}>
-          Obegränsade rundor + senare fler features (egna statements m.m.)
+          Unlimited rounds + more features later (custom statements etc.)
         </Text>
 
         <Pressable
@@ -33,7 +33,7 @@ export default function Paywall() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "black", fontWeight: "900", fontSize: 16 }}>Lås upp Premium (mock)</Text>
+          <Text style={{ color: "black", fontWeight: "900", fontSize: 16 }}>Unlock Premium (mock)</Text>
         </Pressable>
 
         <Pressable
@@ -49,7 +49,7 @@ export default function Paywall() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Inte nu</Text>
+          <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Not now</Text>
         </Pressable>
       </View>
     </SafeAreaView>
