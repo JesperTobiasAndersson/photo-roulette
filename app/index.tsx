@@ -205,6 +205,12 @@ export default function Home() {
           <Text style={{ color: "#9CA3AF", marginTop: 10, textAlign: "center", lineHeight: 24, fontSize: 15 }}>
             Pick images. Match the statement. Vote. Laugh.
           </Text>
+
+          {isWeb && (
+            <Text style={{ color: "#94A3B8", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13 }}>
+              💡 Pro tip: Add to Home Screen for app-like experience!
+            </Text>
+          )}
         </View>
 
         {/* Card */}

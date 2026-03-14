@@ -39,11 +39,37 @@
       },
       "meta": {
         "viewport": "width=device-width, initial-scale=1.0",
+        "apple-mobile-web-app-capable": "yes",
+        "apple-mobile-web-app-status-bar-style": "black-translucent",
+        "apple-mobile-web-app-title": "Picklo",
+        "mobile-web-app-capable": "yes",
         "script": [
           {
             "async": true,
             "src": "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5551520118812971",
             "crossOrigin": "anonymous"
+          }
+        ]
+      },
+      "manifest": {
+        "name": "Picklo - Photo Roulette Game",
+        "short_name": "Picklo",
+        "description": "Pick images. Match the statement. Vote. Laugh.",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0F172A",
+        "theme_color": "#7C5CFF",
+        "orientation": "portrait",
+        "icons": [
+          {
+            "src": "/favicon.ico",
+            "sizes": "64x64 32x32 24x24 16x16",
+            "type": "image/x-icon"
+          },
+          {
+            "src": "/icon.png",
+            "sizes": "512x512",
+            "type": "image/png"
           }
         ]
       }

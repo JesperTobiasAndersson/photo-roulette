@@ -1,0 +1,22 @@
+{
+  "name": "Picklo - Photo Roulette Game",
+  "short_name": "Picklo",
+  "description": "Pick images. Match the statement. Vote. Laugh.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#7C5CFF",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

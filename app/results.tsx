@@ -42,42 +42,54 @@ export default function ResultsScreen() {
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
-    if (!roomId) return;
+    if (!roomId) {
+      console.error("Results: no roomId");
+      return;
+    }
     setLoading(true);
 
-    const { data: scores, error: sErr } = await supabase
-      .from("room_scores")
-      .select("player_id,points")
-      .eq("room_id", roomId)
-      .order("points", { ascending: false });
+    try {
+      const { data: scores, error: sErr } = await supabase
+        .from("room_scores")
+        .select("player_id,points")
+        .eq("room_id", roomId)
+        .order("points", { ascending: false });
 
-    if (sErr) {
+      if (sErr) {
+        console.error("Results: scores error", sErr);
+        setLoading(false);
+        return Alert.alert("Error (scores)", sErr.message);
+      }
+
+      const { data: players, error: pErr } = await supabase
+        .from("players")
+        .select("id,name")
+        .eq("room_id", roomId);
+
+      if (pErr) {
+        console.error("Results: players error", pErr);
+        setLoading(false);
+        return Alert.alert("Error (players)", pErr.message);
+      }
+
+      const scoresMap = new Map((scores ?? []).map((s: any) => [s.player_id, s.points]));
+      const merged = (players ?? []).map((p: any) => ({
+        player_id: p.id,
+        points: scoresMap.get(p.id) ?? 0,
+        name: p.name,
+      }));
+
+      // Sort by points descending
+      merged.sort((a, b) => b.points - a.points);
+
+      console.log("Results: loaded", merged.length, "players");
+      setRows(merged);
+    } catch (error) {
+      console.error("Results: load failed", error);
+      Alert.alert("Failed to load results", String(error));
+    } finally {
       setLoading(false);
-      return Alert.alert("Error (scores)", sErr.message);
     }
-
-    const { data: players, error: pErr } = await supabase
-      .from("players")
-      .select("id,name")
-      .eq("room_id", roomId);
-
-    if (pErr) {
-      setLoading(false);
-      return Alert.alert("Error (players)", pErr.message);
-    }
-
-    const scoresMap = new Map((scores ?? []).map((s: any) => [s.player_id, s.points]));
-    const merged = (players ?? []).map((p: any) => ({
-      player_id: p.id,
-      points: scoresMap.get(p.id) ?? 0,
-      name: p.name,
-    }));
-
-    // Sort by points descending
-    merged.sort((a, b) => b.points - a.points);
-
-    setRows(merged);
-    setLoading(false);
   };
 
   useEffect(() => {

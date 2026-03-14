@@ -485,6 +485,69 @@ useEffect(() => {
       const nextNumber = (roundNumber ?? 0) + 1;
 
       if (nextNumber > 5) {
+        // Calculate final scores
+        const { data: rounds, error: roundsErr } = await supabase
+          .from("rounds")
+          .select("id")
+          .eq("room_id", roomId);
+
+        if (roundsErr) {
+          Alert.alert("Error calculating scores", roundsErr.message);
+          return;
+        }
+
+        const playerScores: Record<string, number> = {};
+
+        for (const round of rounds ?? []) {
+          const { data: votes, error: votesErr } = await supabase
+            .from("votes")
+            .select("submission_id")
+            .eq("round_id", round.id);
+
+          if (votesErr) continue;
+
+          const voteCounts: Record<string, number> = {};
+          votes?.forEach((v: any) => {
+            voteCounts[v.submission_id] = (voteCounts[v.submission_id] || 0) + 1;
+          });
+
+          // Find the submission with most votes
+          let maxVotes = 0;
+          let winnerSubmissionId: string | null = null;
+          for (const [subId, count] of Object.entries(voteCounts)) {
+            if (count > maxVotes) {
+              maxVotes = count;
+              winnerSubmissionId = subId;
+            }
+          }
+
+          if (winnerSubmissionId) {
+            const { data: submission, error: subErr } = await supabase
+              .from("submissions")
+              .select("player_id")
+              .eq("id", winnerSubmissionId)
+              .single();
+
+            if (!subErr && submission) {
+              playerScores[submission.player_id] = (playerScores[submission.player_id] || 0) + 1; // 1 point per round win
+            }
+          }
+        }
+
+        // Insert scores into room_scores
+        const scoreInserts = Object.entries(playerScores).map(([playerId, points]) => ({
+          room_id: roomId,
+          player_id: playerId,
+          points,
+        }));
+
+        if (scoreInserts.length > 0) {
+          const { error: scoreErr } = await supabase.from("room_scores").insert(scoreInserts);
+          if (scoreErr) {
+            console.error("Error inserting scores", scoreErr);
+          }
+        }
+
         const { error: phaseErr } = await supabase.from("rooms").update({ phase: "finished" }).eq("id", roomId);
         if (phaseErr) return Alert.alert("Error (finished)", phaseErr.message);
 
