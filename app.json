@@ -29,17 +29,27 @@
       "package": "com.anonymous.Picklo"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "build": {
+        "babel": {
+          "include": [
+            "react-adsense"
+          ]
+        }
+      },
+      "meta": {
+        "viewport": "width=device-width, initial-scale=1.0",
+        "script": [
+          {
+            "async": true,
+            "src": "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXXXXXXXX",
+            "crossOrigin": "anonymous"
+          }
+        ]
+      }
     },
     "plugins": [
-      "expo-router",
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-4988670383239425~7674212826"
-        }
-      ]
+      "expo-router"
     ],
     "extra": {
       "router": {},

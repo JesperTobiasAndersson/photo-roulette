@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
+import { AdSenseAd } from "../src/lib/ads";
 
 type Row = { player_id: string; points: number; name?: string };
 
@@ -213,6 +214,11 @@ export default function ResultsScreen() {
               );
             })}
           </View>
+        </View>
+
+        {/* AdSense Ad */}
+        <View style={{ marginVertical: 12 }}>
+          <AdSenseAd />
         </View>
 
         {/* List header */}

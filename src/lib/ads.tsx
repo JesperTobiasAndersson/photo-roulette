@@ -1,8 +1,20 @@
-import { Alert } from "react-native";
+import React from 'react';
+import { AdSense } from 'react-adsense';
 
-// Placeholder for ad integration (currently unused)
+export const AdSenseAd: React.FC = () => {
+  return (
+    <AdSense.Google
+      client="ca-pub-XXXXXXXXXXXXXXXXXXXXXX" // Replace with your AdSense publisher ID
+      slot="XXXXXXXXXX" // Replace with your ad slot ID
+      style={{ display: 'block' }}
+      format="auto"
+      responsive="true"
+    />
+  );
+};
+
 export async function showEndOfGameAd(): Promise<void> {
-  // no-op / future implementation
-  // example: integrate Google Mobile Ads interstitial here
+  // For AdSense, ads are displayed as banners, not interstitials
+  // This function can be used to trigger ad display or just return
   return;
 }

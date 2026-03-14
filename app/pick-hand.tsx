@@ -335,7 +335,7 @@ export default function PickHandScreen() {
               <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{selectedUris.length} images</Text>
             </View>
             {hand.length > 0 && (
-              <Text style={{ color: "#94A3B8", fontSize: 12, marginTop: 4 }}>
+              <Text style={{ color: "#94A3B8", fontSize: 12, marginTop: 4, marginBottom: 12 }}>
                 Tap an image to remove it and pick a new one.
               </Text>
             )}
@@ -390,18 +390,6 @@ export default function PickHandScreen() {
                     }}
                   >
                     <Image source={{ uri }} style={{ width: "100%", aspectRatio: 1, height: undefined }} resizeMode="cover" />
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: 4,
-                        right: 4,
-                        backgroundColor: "rgba(0,0,0,0.5)",
-                        borderRadius: 12,
-                        padding: 2,
-                      }}
-                    >
-                      <Text style={{ color: "white", fontSize: 12, fontWeight: "900" }}>✖</Text>
-                    </View>
                   </Pressable>
                 );
               }}

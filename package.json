@@ -4,11 +4,14 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
+    "web": "expo start --web",
+    "build:web": "expo export --platform web",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@revenuecat/purchases-js": "^1.28.0",
     "@supabase/supabase-js": "^2.93.2",
     "buffer": "^6.0.3",
     "expo": "~54.0.32",
@@ -23,9 +26,9 @@
     "expo-router": "~6.0.22",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
+    "react-adsense": "^0.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-google-mobile-ads": "^16.0.3",
     "react-native-purchases": "^9.10.5",
     "react-native-purchases-ui": "^9.10.5",
     "react-native-safe-area-context": "~5.6.0",
