@@ -56,7 +56,7 @@ export default function Home() {
 
       if (roomErr) {
         Alert.alert("Error (rooms)", roomErr.message);
-        console.error("createRoom - rooms error", roomErr);
+        console.error("createRoom - rooms error", JSON.stringify(roomErr, null, 2));
         return;
       }
 

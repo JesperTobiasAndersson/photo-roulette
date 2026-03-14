@@ -11,10 +11,14 @@ function validateEnvironment() {
     'EXPO_PUBLIC_REVENUECAT_ANDROID_KEY',
   ];
 
-  const missing = required.filter(key => !process.env[key]);
+  const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
-    console.warn(`⚠️ Missing environment variables: ${missing.join(', ')}`);
+    const msg = `⚠️ Missing environment variables: ${missing.join(', ')}`;
+    console.warn(msg);
+    if (typeof window !== 'undefined') {
+      alert(msg);
+    }
   }
 }
 
