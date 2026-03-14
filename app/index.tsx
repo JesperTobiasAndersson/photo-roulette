@@ -54,7 +54,11 @@ export default function Home() {
         .select()
         .single();
 
-      if (roomErr) return Alert.alert("Error (rooms)", roomErr.message);
+      if (roomErr) {
+        Alert.alert("Error (rooms)", roomErr.message);
+        console.error("createRoom - rooms error", roomErr);
+        return;
+      }
 
       const { data: player, error: playerErr } = await supabase
         .from("players")
@@ -62,7 +66,11 @@ export default function Home() {
         .select()
         .single();
 
-      if (playerErr) return Alert.alert("Error (players)", playerErr.message);
+      if (playerErr) {
+        Alert.alert("Error (players)", playerErr.message);
+        console.error("createRoom - players error", playerErr);
+        return;
+      }
 
       await supabase.from("rooms").update({ host_player_id: player.id }).eq("id", room.id);
 
@@ -70,6 +78,9 @@ export default function Home() {
         pathname: "/lobby",
         params: { roomId: room.id, playerId: player.id },
       });
+    } catch (error) {
+      console.error("createRoom failed", error);
+      Alert.alert("Failed to create room", String(error));
     } finally {
       setLoading(false);
     }
