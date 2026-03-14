@@ -12,14 +12,17 @@ export default function RootLayout() {
 /* ----------UTAN WHITEBAR-------*/
 
 import { Stack } from "expo-router";
+import { PWAInstall } from "../src/lib/pwa-install";
 
 export default function Layout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
-    />
+    <PWAInstall>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      />
+    </PWAInstall>
   );
 }
  

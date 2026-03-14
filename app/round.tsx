@@ -486,16 +486,19 @@ useEffect(() => {
 
       if (nextNumber > 5) {
         // Calculate final scores
+        console.log("Calculating final scores...");
         const { data: rounds, error: roundsErr } = await supabase
           .from("rounds")
           .select("id")
           .eq("room_id", roomId);
 
         if (roundsErr) {
+          console.error("Error fetching rounds:", roundsErr);
           Alert.alert("Error calculating scores", roundsErr.message);
           return;
         }
 
+        console.log(`Found ${rounds?.length || 0} rounds`);
         const playerScores: Record<string, number> = {};
 
         for (const round of rounds ?? []) {
@@ -504,7 +507,10 @@ useEffect(() => {
             .select("submission_id")
             .eq("round_id", round.id);
 
-          if (votesErr) continue;
+          if (votesErr) {
+            console.error(`Error fetching votes for round ${round.id}:`, votesErr);
+            continue;
+          }
 
           const voteCounts: Record<string, number> = {};
           votes?.forEach((v: any) => {
@@ -530,9 +536,13 @@ useEffect(() => {
 
             if (!subErr && submission) {
               playerScores[submission.player_id] = (playerScores[submission.player_id] || 0) + 1; // 1 point per round win
+            } else {
+              console.error(`Error fetching submission ${winnerSubmissionId}:`, subErr);
             }
           }
         }
+
+        console.log("Player scores:", playerScores);
 
         // Insert scores into room_scores
         const scoreInserts = Object.entries(playerScores).map(([playerId, points]) => ({
@@ -541,10 +551,13 @@ useEffect(() => {
           points,
         }));
 
+        console.log(`Inserting ${scoreInserts.length} score records`);
         if (scoreInserts.length > 0) {
           const { error: scoreErr } = await supabase.from("room_scores").insert(scoreInserts);
           if (scoreErr) {
             console.error("Error inserting scores", scoreErr);
+          } else {
+            console.log("Scores inserted successfully");
           }
         }
 
