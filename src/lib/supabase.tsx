@@ -9,5 +9,14 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
+try {
+  // Ensure the URL is valid and resolvable:
+  new URL(SUPABASE_URL);
+} catch (err) {
+  throw new Error(
+    `EXPO_PUBLIC_SUPABASE_URL is invalid: ${SUPABASE_URL}. Make sure it is the correct Supabase project URL.`
+  );
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
