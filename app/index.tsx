@@ -29,8 +29,8 @@ export default function Home() {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
 
-  // ✅ Web: default till join och vi kommer dölja create-läget i UI
-  const [mode, setMode] = useState<"create" | "join">(isWeb ? "join" : "create");
+  // ✅ Allow creating rooms on both web and mobile
+  const [mode, setMode] = useState<"create" | "join">("create");
 
   const [loading, setLoading] = useState(false);
 
@@ -41,9 +41,6 @@ export default function Home() {
   const canJoin = trimmedName.length > 0 && trimmedCode.length > 0 && !loading;
 
   const createRoom = async () => {
-    // ✅ Safety: blockera create på web även om någon skulle trigga funktionen
-    if (isWeb) return Alert.alert("App only", "You can create a room in the app. On web you can only join.");
-
     const n = trimmedName;
     if (!n) return Alert.alert("Enter your name");
 
@@ -196,13 +193,6 @@ export default function Home() {
           <Text style={{ color: "#9CA3AF", marginTop: 10, textAlign: "center", lineHeight: 24, fontSize: 15 }}>
             Pick images. Match the statement. Vote. Laugh.
           </Text>
-
-          {/* ✅ Web hint */}
-          {isWeb && (
-            <Text style={{ color: "#94A3B8", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13 }}>
-              On web you can only join a room. Create rooms from the app.
-            </Text>
-          )}
         </View>
 
         {/* Card */}
@@ -216,11 +206,20 @@ export default function Home() {
             gap: 16,
           }}
         >
-          {/* ✅ Tabs bara i appen (inte på web) */}
-          {!isWeb && (
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Tab label="Create" active={mode === "create"} onPress={() => setMode("create")} />
-              <Tab label="Join" active={mode === "join"} onPress={() => setMode("join")} />
+          {/* ✅ Web: toggle between create and join */}
+          {isWeb && (
+            <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
+              <Pressable onPress={() => setMode("create")}>
+                <Text style={{ color: mode === "create" ? "#38BDF8" : "#94A3B8", fontWeight: "800", fontSize: 14 }}>
+                  Create Room
+                </Text>
+              </Pressable>
+              <Text style={{ color: "#94A3B8" }}>|</Text>
+              <Pressable onPress={() => setMode("join")}>
+                <Text style={{ color: mode === "join" ? "#38BDF8" : "#94A3B8", fontWeight: "800", fontSize: 14 }}>
+                  Join Room
+                </Text>
+              </Pressable>
             </View>
           )}
 
@@ -255,8 +254,8 @@ export default function Home() {
             />
           </View>
 
-          {/* ✅ Join code: alltid på web, annars bara när mode=join */}
-          {(isWeb || mode === "join") && (
+          {/* ✅ Join code: when mode=join */}
+          {mode === "join" && (
             <View style={{ gap: 8 }}>
               <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Room code</Text>
               <TextInput
@@ -292,8 +291,8 @@ export default function Home() {
             </View>
           )}
 
-          {/* ✅ Button: web = alltid "Gå med", app = create/join beroende på mode */}
-          {!isWeb && mode === "create" ? (
+          {/* ✅ Button: based on mode */}
+          {mode === "create" ? (
             <PrimaryButton
               title={loading ? "Creating..." : "Create room 🚀"}
               onPress={createRoom}
