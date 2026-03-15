@@ -426,7 +426,7 @@ const startRound = async () => {
 
           </View>
 
-          <Button title="Back" onPress={() => router.replace("/")} variant="secondary" />
+          <Button title="Back" onPress={() => router.replace("/picklo")} variant="secondary" />
         </View>
       </SafeAreaView>
     </KeyboardAvoidingView>

@@ -335,7 +335,7 @@ export default function ResultsScreen() {
 
         {/* CTA */}
         <Pressable
-          onPress={() => router.replace("/")}
+          onPress={() => router.replace("/picklo")}
           style={({ pressed }) => ({
             paddingVertical: 14,
             borderRadius: 18,
@@ -346,7 +346,7 @@ export default function ResultsScreen() {
           })}
         >
           <Text style={{ color: COLORS.text, textAlign: "center", fontWeight: "900", fontSize: 15 }}>
-            Back to home
+            Back to MemeMatch
           </Text>
           <Text style={{ color: COLORS.subText, textAlign: "center", marginTop: 2, fontSize: 12 }}>
             Start a new room or join again

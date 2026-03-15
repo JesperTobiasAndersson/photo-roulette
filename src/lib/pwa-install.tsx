@@ -71,7 +71,7 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
       {children}
       <View
         style={{
-          position: 'fixed',
+          position: (isWeb ? 'fixed' : 'absolute') as any,
           bottom: 20,
           left: 20,
           right: 20,

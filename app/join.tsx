@@ -60,7 +60,7 @@ export default function JoinScreen() {
     >
       <StatusBar style="light" />
       <View style={{ gap: 14, width: "100%", maxWidth: isWeb ? 420 : undefined }}>
-        <Text style={{ color: "white", fontSize: 32, fontWeight: "900" }}>Picklo</Text>
+        <Text style={{ color: "white", fontSize: 32, fontWeight: "900" }}>MemeMatch</Text>
 
         {codeFromUrl ? (
           <Text style={{ color: "#94A3B8" }}>
@@ -115,7 +115,7 @@ export default function JoinScreen() {
         </Pressable>
 
         <Pressable
-          onPress={() => router.replace("/")}
+          onPress={() => router.replace("/picklo")}
           style={({ pressed }) => ({
             height: 50,
             borderRadius: 16,
@@ -127,7 +127,7 @@ export default function JoinScreen() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 14 }}>Back to home</Text>
+          <Text style={{ color: "white", fontWeight: "900", fontSize: 14 }}>Back to MemeMatch</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

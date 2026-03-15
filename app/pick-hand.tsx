@@ -405,7 +405,7 @@ export default function PickHandScreen() {
 
           {/* Back */}
           <Pressable
-            onPress={() => router.replace("/lobby")}
+            onPress={() => router.replace({ pathname: "/lobby", params: { roomId, playerId } })}
             disabled={busy}
             style={({ pressed }) => ({
               height: 50,

@@ -1,353 +1,172 @@
-import React, { useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
-  ActivityIndicator,
-} from "react-native";
+import React from "react";
+import { View, Text, Pressable, Platform } from "react-native";
 import { router } from "expo-router";
-import { supabase } from "../src/lib/supabase";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 
 const isWeb = Platform.OS === "web";
 
-function makeCode(len = 4) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let s = "";
-  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
+const games = [
+  {
+    slug: "picklo",
+    title: "MemeMatch",
+    tagline: "Pick images. Match the statement. Vote. Laugh.",
+    status: "Available now",
+    accent: "#38BDF8",
+    description: "Multiplayer party game with room codes, realtime rounds, image uploads, voting, and results.",
+    icon: require("../assets/Memematch.png"),
+    cta: "Open MemeMatch",
+  },
+  {
+    slug: "mafia",
+    title: "Mafia",
+    tagline: "Hidden roles, bluffing, and social deduction.",
+    status: "Starter ready",
+    accent: "#F43F5E",
+    description: "Separate game module for role assignment, day and night phases, voting, and eliminations.",
+    icon: require("../assets/mafia.png"),
+    cta: "Open Mafia",
+  },
+];
 
-export default function Home() {
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+export default function GameLibraryHome() {
+  return (
+    <View style={{ flex: 1, backgroundColor: "#070B14", padding: 20 }}>
+      <StatusBar style="light" />
 
-  // ✅ Allow creating rooms on both web and mobile
-  const [mode, setMode] = useState<"create" | "join">("create");
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <View style={{ width: "100%", maxWidth: isWeb ? 980 : 520, gap: 22 }}>
+          <View style={{ gap: 16, alignItems: isWeb ? "center" : "flex-start" }}>
+            <View style={{ alignItems: isWeb ? "center" : "flex-start", gap: 14 }}>
+              <View
+                style={{
+                  width: isWeb ? 132 : 104,
+                  height: isWeb ? 132 : 104,
+                  borderRadius: 32,
+                  overflow: "hidden",
+                  borderWidth: 1,
+                  borderColor: "rgba(56,189,248,0.35)",
+                  backgroundColor: "#111827",
+                  shadowColor: "#38BDF8",
+                  shadowOpacity: 0.28,
+                  shadowRadius: 18,
+                  shadowOffset: { width: 0, height: 10 },
+                  elevation: 12,
+                }}
+              >
+                <Image source={require("../assets/icon.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+              </View>
 
-  const [loading, setLoading] = useState(false);
+              <View style={{ gap: 4, alignItems: isWeb ? "center" : "flex-start" }}>
+                <Text style={{ color: "#F8FAFC", fontSize: isWeb ? 28 : 24, fontWeight: "900" }}>Picklo</Text>
+                <Text style={{ color: "#94A3B8", fontSize: 13 }}>Party game collection</Text>
+              </View>
+            </View>
 
-  const trimmedName = useMemo(() => name.trim(), [name]);
-  const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
+            <Text style={{ color: "#F8FAFC", fontSize: isWeb ? 34 : 28, fontWeight: "800" }}>Game Library</Text>
+            <Text
+              style={{
+                color: "#94A3B8",
+                fontSize: 16,
+                lineHeight: 24,
+                maxWidth: 700,
+                textAlign: isWeb ? "center" : "left",
+              }}
+            >
+              Choose a game to launch. MemeMatch is available now, and this home screen is ready for more games over
+              time.
+            </Text>
+          </View>
 
-  const canCreate = trimmedName.length > 0 && !loading;
-  const canJoin = trimmedName.length > 0 && trimmedCode.length > 0 && !loading;
-
-  const createRoom = async () => {
-    const n = trimmedName;
-    if (!n) return Alert.alert("Enter your name");
-
-    setLoading(true);
-    try {
-      const roomCode = makeCode(4);
-
-      const { data: room, error: roomErr } = await supabase
-        .from("rooms")
-        .insert({ code: roomCode, status: "lobby" })
-        .select()
-        .single();
-
-      if (roomErr) {
-        const msg = roomErr.message || "Unknown error";
-        Alert.alert("Error creating room", msg);
-        console.error("createRoom - rooms error", JSON.stringify(roomErr, null, 2));
-        return;
-      }
-
-      const { data: player, error: playerErr } = await supabase
-        .from("players")
-        .insert({ room_id: room.id, name: n })
-        .select()
-        .single();
-
-      if (playerErr) {
-        Alert.alert("Error (players)", playerErr.message);
-        console.error("createRoom - players error", playerErr);
-        return;
-      }
-
-      await supabase.from("rooms").update({ host_player_id: player.id }).eq("id", room.id);
-
-      router.push({
-        pathname: "/lobby",
-        params: { roomId: room.id, playerId: player.id },
-      });
-    } catch (error) {
-      console.error("createRoom failed", error);
-      Alert.alert("Failed to create room", String(error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const joinRoom = async () => {
-    const n = trimmedName;
-    const c = trimmedCode;
-    if (!n) return Alert.alert("Enter your name");
-    if (!c) return Alert.alert("Enter room code");
-
-    setLoading(true);
-    try {
-      const { data: room, error: roomErr } = await supabase.from("rooms").select("*").eq("code", c).single();
-      if (roomErr) return Alert.alert("Room not found", roomErr.message);
-
-      const { data: player, error: playerErr } = await supabase
-        .from("players")
-        .insert({ room_id: room.id, name: n })
-        .select()
-        .single();
-
-      if (playerErr) return Alert.alert("Error (players)", playerErr.message);
-
-      router.push({
-        pathname: "/lobby",
-        params: { roomId: room.id, playerId: player.id },
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const PrimaryButton = ({
-    title,
-    onPress,
-    disabled,
-    variant = "primary",
-  }: {
-    title: string;
-    onPress: () => void;
-    disabled?: boolean;
-    variant?: "primary" | "secondary";
-  }) => (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => ({
-        height: 60,
-        borderRadius: 16,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: variant === "primary" ? "#000000" : "#374151",
-        opacity: disabled ? 0.5 : 1,
-        transform: [{ scale: pressed ? 0.97 : 1 }],
-        flexDirection: "row",
-        gap: 10,
-      })}
-    >
-      {loading ? <ActivityIndicator color="white" /> : null}
-      <Text style={{ color: "white", fontWeight: "900", fontSize: 18, letterSpacing: 0.3 }}>{title}</Text>
-    </Pressable>
-  );
-
-  const Tab = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
-    <Pressable
-      onPress={onPress}
-      disabled={loading}
-      style={({ pressed }) => ({
-        flex: 1,
-        paddingVertical: 14,
-        borderRadius: 14,
-        backgroundColor: active ? "#000000" : "#95979d",
-        borderWidth: 1,
-        borderColor: active ? "#374151" : "#1F2937",
-        opacity: loading ? 0.6 : pressed ? 0.9 : 1,
-        transform: [{ scale: pressed ? 0.98 : 1 }],
-      })}
-    >
-      <Text style={{ color: "white", textAlign: "center", fontWeight: "900", fontSize: 16 }}>{label}</Text>
-    </Pressable>
-  );
-
-  const Content = (
-    <View
-      style={{
-        flex: 1,
-        padding: 20,
-        justifyContent: "center",
-        alignItems: isWeb ? "center" : undefined,
-      }}
-    >
-      <View style={{ width: "100%", maxWidth: isWeb ? 420 : undefined }}>
-        {/* Header */}
-        <StatusBar style="light" />
-        <View style={{ alignItems: "center", marginBottom: 18 }}>
-          {/* App icon */}
           <View
             style={{
-              width: 96,
-              height: 96,
-              borderRadius: 24,
-              overflow: "hidden",
-              marginBottom: 14,
-
-              borderWidth: 1,
-              borderColor: "rgba(56,189,248,0.35)",
-              shadowColor: "#38BDF8",
-              shadowOpacity: 0.25,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 10 },
-              elevation: 10,
               backgroundColor: "#0F172A",
+              borderRadius: 28,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: "#1E293B",
+              gap: 16,
             }}
           >
-            <Image source={require("../assets/icon.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          </View>
+            <Text style={{ color: "#E2E8F0", fontSize: 16, fontWeight: "800" }}>Featured Games</Text>
 
-          <Text style={{ color: "white", fontSize: 40, fontWeight: "900", letterSpacing: 0.5 }}>Picklo</Text>
-
-          <Text style={{ color: "#9CA3AF", marginTop: 10, textAlign: "center", lineHeight: 24, fontSize: 15 }}>
-            Pick images. Match the statement. Vote. Laugh.
-          </Text>
-
-          {isWeb && (
-            <Text style={{ color: "#94A3B8", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13 }}>
-              💡 Pro tip: Add to Home Screen for app-like experience!
-            </Text>
-          )}
-        </View>
-
-        {/* Card */}
-        <View
-          style={{
-            backgroundColor: "#0F172A",
-            borderRadius: 20,
-            padding: 20,
-            borderWidth: 1,
-            borderColor: "#1F2937",
-            gap: 16,
-          }}
-        >
-          {/* ✅ Web: toggle between create and join */}
-          {isWeb && (
-            <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
-              <Pressable onPress={() => setMode("create")}>
-                <Text style={{ color: mode === "create" ? "#38BDF8" : "#94A3B8", fontWeight: "800", fontSize: 14 }}>
-                  Create Room
-                </Text>
-              </Pressable>
-              <Text style={{ color: "#94A3B8" }}>|</Text>
-              <Pressable onPress={() => setMode("join")}>
-                <Text style={{ color: mode === "join" ? "#38BDF8" : "#94A3B8", fontWeight: "800", fontSize: 14 }}>
-                  Join Room
-                </Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Name */}
-          <View style={{ gap: 8 }}>
-            <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Your name</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="e.g. Alex"
-              placeholderTextColor="#64748B"
-              editable={!loading}
-              autoCorrect={false}
-              autoComplete="name"
-              style={{
-                height: 56,
-                borderRadius: 16,
-                paddingHorizontal: 18,
-                fontSize: 16,
-                backgroundColor: "#0B1222",
-                borderWidth: 1,
-                borderColor: "#1F2937",
-                color: "white",
-                fontWeight: "700",
-                ...(isWeb
-                  ? ({
-                      outlineStyle: "none",
-                      boxSizing: "border-box",
-                    } as any)
-                  : null),
-              }}
-            />
-          </View>
-
-          {/* ✅ Join code: when mode=join */}
-          {mode === "join" && (
-            <View style={{ gap: 8 }}>
-              <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Room code</Text>
-              <TextInput
-                value={code}
-                onChangeText={setCode}
-                placeholder="AB12"
-                placeholderTextColor="#64748B"
-                autoCapitalize="characters"
-                editable={!loading}
-                autoCorrect={false}
-                autoComplete="off"
-                style={{
-                  height: 56,
-                  borderRadius: 16,
-                  paddingHorizontal: 18,
-                  fontSize: 18,
-                  backgroundColor: "#000000",
+            {games.map((game) => (
+              <Pressable
+                key={game.slug}
+                onPress={() => router.push(`/${game.slug}` as any)}
+                style={({ pressed }) => ({
+                  borderRadius: 24,
+                  overflow: "hidden",
+                  backgroundColor: "#020617",
                   borderWidth: 1,
-                  borderColor: "#1F2937",
-                  color: "white",
-                  fontWeight: "900",
-                  letterSpacing: 3,
-                  textAlign: "center",
-                  ...(isWeb
-                    ? ({
-                        outlineStyle: "none",
-                        boxSizing: "border-box",
-                      } as any)
-                    : null),
-                }}
-              />
-              <Text style={{ color: "#94A3B8", fontSize: 12 }}>Tip: Code is 4 characters (A–Z, 2–9)</Text>
-            </View>
-          )}
+                  borderColor: pressed ? game.accent : "#1F2937",
+                  transform: [{ scale: pressed ? 0.99 : 1 }],
+                })}
+              >
+                <View
+                  style={{
+                    padding: 20,
+                    gap: 16,
+                    backgroundColor: "rgba(15,23,42,0.92)",
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 14, flex: 1 }}>
+                      <View
+                        style={{
+                          width: 72,
+                          height: 72,
+                          borderRadius: 20,
+                          overflow: "hidden",
+                          borderWidth: 1,
+                          borderColor: game.accent,
+                          backgroundColor: "#111827",
+                        }}
+                      >
+                        <Image source={game.icon} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                      </View>
 
-          {/* ✅ Button: based on mode */}
-          {mode === "create" ? (
-            <PrimaryButton
-              title={loading ? "Creating..." : "Create room 🚀"}
-              onPress={createRoom}
-              disabled={!canCreate}
-              variant="primary"
-            />
-          ) : (
-            <PrimaryButton
-              title={loading ? "Joining..." : "Join 🎮"}
-              onPress={joinRoom}
-              disabled={!canJoin}
-              variant="secondary"
-            />
-          )}
+                      <View style={{ flex: 1, gap: 6 }}>
+                        <Text style={{ color: "#F8FAFC", fontSize: 28, fontWeight: "900" }}>{game.title}</Text>
+                        <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 22 }}>{game.tagline}</Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        backgroundColor: `${game.accent}22`,
+                        borderWidth: 1,
+                        borderColor: `${game.accent}55`,
+                      }}
+                    >
+                      <Text style={{ color: "#E2E8F0", fontWeight: "900", fontSize: 12 }}>{game.status}</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: isWeb ? "row" : "column", justifyContent: "space-between", gap: 12 }}>
+                    <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 22, flex: 1 }}>{game.description}</Text>
+
+                    <View
+                      style={{
+                        alignSelf: isWeb ? "center" : "flex-start",
+                        paddingVertical: 12,
+                        paddingHorizontal: 16,
+                        borderRadius: 16,
+                        backgroundColor: "#000000",
+                      }}
+                    >
+                      <Text style={{ color: "white", fontWeight: "900", fontSize: 14 }}>{game.cta}</Text>
+                    </View>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+          </View>
         </View>
-
-        {/* Footer */}
-        <Text style={{ color: "#64748B", textAlign: "center", marginTop: 14, fontSize: 12 }}>
-          By continuing you agree that the game may use the images you select in the room.
-        </Text>
       </View>
     </View>
-  );
-
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#0B0F19" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      enabled={Platform.OS !== "web"}
-    >
-      {isWeb ? (
-        Content
-      ) : (
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          {Content}
-        </TouchableWithoutFeedback>
-      )}
-    </KeyboardAvoidingView>
   );
 }
