@@ -30,6 +30,17 @@ const games = [
     icon: require("../assets/mafia.png"),
     cta: "Open Mafia",
   },
+  {
+    slug: "imposter",
+    title: "Imposter",
+    tagline: "Blend in, improvise, and expose the fake.",
+    status: "Coming soon",
+    recommendedPlayers: "4-12 players",
+    accent: "#F59E0B",
+    description: "Upcoming social party game for bluffing, secret prompts, and group deduction.",
+    icon: require("../assets/imposter.png"),
+    cta: "Coming soon",
+  },
 ];
 
 const footerLinks = [
@@ -113,14 +124,18 @@ export default function GameLibraryHome() {
             {games.map((game) => (
               <Pressable
                 key={game.slug}
-                onPress={() => router.push(`/${game.slug}` as any)}
+                onPress={() => {
+                  if (game.status === "Coming soon") return;
+                  router.push(`/${game.slug}` as any);
+                }}
                 style={({ pressed }) => ({
                   borderRadius: 24,
                   overflow: "hidden",
                   backgroundColor: "#020617",
                   borderWidth: 1,
                   borderColor: pressed ? game.accent : "#1F2937",
-                  transform: [{ scale: pressed ? 0.99 : 1 }],
+                  transform: [{ scale: game.status === "Coming soon" ? 1 : pressed ? 0.99 : 1 }],
+                  opacity: game.status === "Coming soon" ? 0.88 : 1,
                 })}
               >
                 <View
@@ -216,20 +231,26 @@ export default function GameLibraryHome() {
 
           <View
             style={{
-              borderRadius: isCompact ? 20 : 24,
-              padding: isCompact ? 14 : 18,
-              backgroundColor: "#0B1222",
-              borderWidth: 1,
-              borderColor: "#182235",
-              gap: 12,
+              marginTop: isCompact ? 4 : 8,
+              paddingTop: isCompact ? 18 : 22,
+              paddingBottom: isCompact ? 6 : 10,
+              borderTopWidth: 1,
+              borderTopColor: "#182235",
+              gap: 14,
             }}
           >
-            <Text style={{ color: "#E2E8F0", fontSize: 15, fontWeight: "800" }}>Legal & Support</Text>
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: "#E2E8F0", fontSize: 14, fontWeight: "900" }}>Legal & Support</Text>
+              <Text style={{ color: "#64748B", fontSize: 13, lineHeight: 20 }}>
+                Policies, contact information, and app support for Picklo.
+              </Text>
+            </View>
+
             <View
               style={{
                 flexDirection: isCompact ? "column" : "row",
                 flexWrap: "wrap",
-                gap: 10,
+                gap: 8,
               }}
             >
               {footerLinks.map((link) => (
@@ -237,12 +258,14 @@ export default function GameLibraryHome() {
                   key={link.href}
                   onPress={() => router.push(link.href as any)}
                   style={({ pressed }) => ({
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
+                    minHeight: 46,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
                     borderRadius: 14,
-                    backgroundColor: "#111827",
+                    backgroundColor: "#0B1222",
                     borderWidth: 1,
-                    borderColor: "#1F2937",
+                    borderColor: "#1E293B",
+                    justifyContent: "center",
                     opacity: pressed ? 0.9 : 1,
                   })}
                 >
@@ -250,6 +273,10 @@ export default function GameLibraryHome() {
                 </Pressable>
               ))}
             </View>
+
+            <Text style={{ color: "#475569", fontSize: 12, lineHeight: 18 }}>
+              Picklo is a party game collection for web and mobile.
+            </Text>
           </View>
 
           <AdConsentBanner />

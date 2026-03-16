@@ -9,10 +9,13 @@ export async function compressImage(uri: string): Promise<string> {
   try {
     const compressed = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 600, height: 600 } }], // Smaller dimensions
-      { 
-        compress: 0.4, // More aggressive compression
-        format: ImageManipulator.SaveFormat.JPEG 
+      [
+        // Resize by width only so the original aspect ratio is preserved.
+        { resize: { width: 1200 } },
+      ],
+      {
+        compress: 0.6,
+        format: ImageManipulator.SaveFormat.JPEG,
       }
     );
     return compressed.uri;

@@ -106,6 +106,9 @@ export default function PickHandScreen() {
     if (assets.length === 0) return;
 
     const picked = assets.slice(0, remainingToPick);
+    if (picked.length === 0) {
+      return Alert.alert("Max reached", "You can only keep 5 images in your hand.");
+    }
 
     setUploadTotal(picked.length);
     setUploadDone(0);
@@ -113,6 +116,9 @@ export default function PickHandScreen() {
     setBusy(true);
     try {
       await mapWithConcurrency(picked, 3, async (asset, i) => {
+        const currentHandCount = hand.length + i;
+        if (currentHandCount >= MAX_IMAGES) return;
+
         const uri = (asset as any)?.uri as string | undefined;
         if (!uri) return;
 
@@ -301,7 +307,7 @@ export default function PickHandScreen() {
             <Button
               title={
                 hand.length >= MAX_IMAGES
-                  ? "Change images"
+                  ? "Hand is full"
                   : remainingToPick === MAX_IMAGES
                   ? `Pick ${MAX_IMAGES} images`
                   : "Pick more images"

@@ -1,121 +1,119 @@
-import type { MafiaAction, MafiaPlayer, MafiaRole, MafiaWinner } from "./types";
+import type { MafiaAlignment, MafiaDayVoteDto, MafiaNightActionDto, MafiaPhase, MafiaRole, MafiaRoleDto } from "./types";
 
-function shuffle<T>(items: T[]): T[] {
-  const next = [...items];
-  for (let i = next.length - 1; i > 0; i--) {
+export function getRoleDescription(role: MafiaRole) {
+  if (role === "mafia") return "Coordinate privately with the other mafia, choose a target, and confirm together.";
+  if (role === "doctor") return "Choose one player to protect tonight.";
+  if (role === "police") return "Investigate one player tonight. Only you will see the result.";
+  return "Stay active at night so nobody can guess your role. Tap ready and blend in.";
+}
+
+export function getPhaseTitle(phase: MafiaPhase) {
+  if (phase === "lobby") return "Lobby";
+  if (phase === "role_reveal") return "Role Reveal";
+  if (phase === "night") return "Night";
+  if (phase === "night_result") return "Night Result";
+  if (phase === "day_discussion") return "Day Discussion";
+  if (phase === "day_voting") return "Day Voting";
+  if (phase === "vote_result") return "Vote Result";
+  return "Game Ended";
+}
+
+export function getRecommendedPlayersText(title: string) {
+  return title === "Mafia" ? "Recommended: 5-10 players" : "";
+}
+
+function shuffle<T>(items: T[]) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
-    [next[i], next[j]] = [next[j], next[i]];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-  return next;
-}
-
-function countVotes(targetIds: string[]) {
-  const counts: Record<string, number> = {};
-  for (const targetId of targetIds) {
-    counts[targetId] = (counts[targetId] ?? 0) + 1;
-  }
-  return counts;
-}
-
-function getTopTarget(targetIds: string[]): string | null {
-  const entries = Object.entries(countVotes(targetIds)).sort((a, b) => b[1] - a[1]);
-  if (entries.length === 0) return null;
-  if (entries.length > 1 && entries[0][1] === entries[1][1]) return null;
-  return entries[0][0];
+  return copy;
 }
 
 export function assignRoles(playerIds: string[]): Record<string, MafiaRole> {
   const shuffled = shuffle(playerIds);
-  const assignments: Record<string, MafiaRole> = {};
+  const roles: Record<string, MafiaRole> = {};
   const mafiaCount = shuffled.length >= 7 ? 2 : 1;
-  const hasDoctor = shuffled.length >= 5;
 
   shuffled.forEach((playerId, index) => {
-    if (index < mafiaCount) assignments[playerId] = "mafia";
-    else if (index === mafiaCount) assignments[playerId] = "detective";
-    else if (hasDoctor && index === mafiaCount + 1) assignments[playerId] = "doctor";
-    else assignments[playerId] = "villager";
+    if (index < mafiaCount) {
+      roles[playerId] = "mafia";
+    } else if (index === mafiaCount) {
+      roles[playerId] = "doctor";
+    } else if (index === mafiaCount + 1) {
+      roles[playerId] = "police";
+    } else {
+      roles[playerId] = "villager";
+    }
   });
 
-  return assignments;
+  return roles;
 }
 
-export function getRoleSummaryText(playerCount: number): string {
-  if (playerCount < 4) return "Recommended: at least 4 players.";
-  if (playerCount < 5) return "Roles: 1 Mafia, 1 Detective, 2 Villagers.";
-  if (playerCount < 7) return "Roles: 1 Mafia, 1 Detective, 1 Doctor, rest Villagers.";
-  return "Roles: 2 Mafia, 1 Detective, 1 Doctor, rest Villagers.";
-}
+export function getWinner(roles: MafiaRoleDto[]): MafiaAlignment | null {
+  const aliveRoles = roles.filter((role) => role.is_alive);
+  const mafiaAlive = aliveRoles.filter((role) => role.role === "mafia").length;
+  const villageAlive = aliveRoles.length - mafiaAlive;
 
-export function getRoleDescription(role: MafiaRole): string {
-  if (role === "mafia") return "Blend in during the day and secretly choose who gets eliminated at night.";
-  if (role === "detective") return "Investigate one player each night to learn whether they are Mafia or Town.";
-  if (role === "doctor") return "Protect one player each night. If the Mafia targets them, they survive.";
-  return "Stay alive, read the room, and vote carefully to eliminate the Mafia.";
-}
-
-export function getAlivePlayers(players: MafiaPlayer[]): MafiaPlayer[] {
-  return players.filter((player) => player.is_alive);
-}
-
-export function getPlayerById(players: MafiaPlayer[], playerId: string): MafiaPlayer | undefined {
-  return players.find((player) => player.id === playerId);
-}
-
-export function getRequiredNightActors(players: MafiaPlayer[]): string[] {
-  return players
-    .filter((player) => player.is_alive && (player.role === "mafia" || player.role === "detective" || player.role === "doctor"))
-    .map((player) => player.id);
-}
-
-export function hasNightAction(actorId: string, actions: MafiaAction[], players: MafiaPlayer[]): boolean {
-  const actor = getPlayerById(players, actorId);
-  if (!actor?.is_alive) return true;
-  if (actor.role === "mafia") return actions.some((action) => action.actor_player_id === actorId && action.action_type === "mafia_target");
-  if (actor.role === "detective") return actions.some((action) => action.actor_player_id === actorId && action.action_type === "detective_check");
-  if (actor.role === "doctor") return actions.some((action) => action.actor_player_id === actorId && action.action_type === "doctor_save");
-  return true;
-}
-
-export function getWinner(players: MafiaPlayer[]): MafiaWinner {
-  const alive = players.filter((player) => player.is_alive);
-  const mafiaAlive = alive.filter((player) => player.role === "mafia").length;
-  const townAlive = alive.length - mafiaAlive;
-
-  if (mafiaAlive === 0) return "town";
-  if (mafiaAlive >= townAlive) return "mafia";
+  if (mafiaAlive === 0) return "village";
+  if (mafiaAlive >= villageAlive) return "mafia";
   return null;
 }
 
-export function resolveNightState(players: MafiaPlayer[], actions: MafiaAction[]) {
-  const mafiaTarget = getTopTarget(actions.filter((action) => action.action_type === "mafia_target").map((action) => action.target_player_id));
-  const savedTarget = getTopTarget(actions.filter((action) => action.action_type === "doctor_save").map((action) => action.target_player_id));
-  const detectiveActions = actions.filter((action) => action.action_type === "detective_check");
-  const eliminatedPlayerId = mafiaTarget && mafiaTarget !== savedTarget ? mafiaTarget : null;
-  const detectiveMessages: Record<string, string> = {};
+export function resolveNightActions(actions: MafiaNightActionDto[], roles: MafiaRoleDto[]) {
+  const mafiaActions = actions.filter((action) => action.actor_role === "mafia" && action.target_player_id);
+  const doctorAction = actions.find((action) => action.actor_role === "doctor");
+  const policeAction = actions.find((action) => action.actor_role === "police");
 
-  detectiveActions.forEach((action) => {
-    const target = getPlayerById(players, action.target_player_id);
-    if (!target) return;
-    detectiveMessages[action.actor_player_id] = `${target.name} is ${target.role === "mafia" ? "Mafia" : "Town"}.`;
+  const counts: Record<string, number> = {};
+  mafiaActions.forEach((action) => {
+    if (!action.target_player_id) return;
+    counts[action.target_player_id] = (counts[action.target_player_id] ?? 0) + 1;
   });
 
-  const eliminatedPlayer = eliminatedPlayerId ? getPlayerById(players, eliminatedPlayerId) : null;
-  const summary = eliminatedPlayer
-    ? `${eliminatedPlayer.name} was eliminated during the night.`
-    : "Nobody was eliminated during the night.";
+  const sortedTargets = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  let killTarget: string | null = null;
 
-  return { eliminatedPlayerId, detectiveMessages, summary };
-}
+  if (
+    mafiaActions.length > 0 &&
+    mafiaActions.every((action) => action.confirmed) &&
+    new Set(mafiaActions.map((action) => action.target_player_id)).size === 1
+  ) {
+    killTarget = mafiaActions[0].target_player_id;
+  } else if (sortedTargets.length === 1) {
+    killTarget = sortedTargets[0][0];
+  } else if (sortedTargets.length > 1 && sortedTargets[0][1] > sortedTargets[1][1]) {
+    killTarget = sortedTargets[0][0];
+  }
 
-export function resolveDayVote(players: MafiaPlayer[], actions: MafiaAction[]) {
-  const eliminatedPlayerId = getTopTarget(actions.map((action) => action.target_player_id));
-  const eliminatedPlayer = eliminatedPlayerId ? getPlayerById(players, eliminatedPlayerId) : null;
+  const doctorTarget = doctorAction?.target_player_id ?? null;
+  const eliminatedPlayerId = killTarget && killTarget !== doctorTarget ? killTarget : null;
+  const policeTarget = policeAction?.target_player_id ?? null;
+  const policeAlignment =
+    policeTarget && roles.find((role) => role.player_id === policeTarget)?.role === "mafia" ? "mafia" : "village";
 
   return {
-    eliminatedPlayerId: eliminatedPlayer?.id ?? null,
-    summary: eliminatedPlayer
-      ? `${eliminatedPlayer.name} was voted out by the town.`
-      : "The town could not agree. Nobody was eliminated.",
+    eliminatedPlayerId,
+    policeTarget,
+    policeAlignment: policeTarget ? policeAlignment : null,
+    summary: eliminatedPlayerId ? "Someone was eliminated during the night." : "Nobody was eliminated during the night.",
   };
+}
+
+export function resolveDayVotes(votes: MafiaDayVoteDto[]) {
+  const counts: Record<string, number> = {};
+
+  votes.forEach((vote) => {
+    counts[vote.target_player_id] = (counts[vote.target_player_id] ?? 0) + 1;
+  });
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (sorted.length === 0) {
+    return { eliminatedPlayerId: null, summary: "No votes were cast." };
+  }
+  if (sorted.length > 1 && sorted[0][1] === sorted[1][1]) {
+    return { eliminatedPlayerId: null, summary: "The vote tied. Nobody was eliminated." };
+  }
+  return { eliminatedPlayerId: sorted[0][0], summary: "The village eliminated a player." };
 }

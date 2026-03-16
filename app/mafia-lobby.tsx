@@ -1,11 +1,23 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Alert, Platform, ScrollView } from "react-native";
+import React, { Fragment, useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, ScrollView, Alert, Image } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import * as Clipboard from "expo-clipboard";
 import { StatusBar } from "expo-status-bar";
-import { supabase } from "../src/lib/supabase";
-import { assignRoles, getRoleSummaryText } from "../src/games/mafia/logic";
-import type { MafiaPhase, MafiaPlayer, MafiaRoom } from "../src/games/mafia/types";
+import * as Clipboard from "expo-clipboard";
+import {
+  checkWinCondition,
+  finishRoleReveal,
+  resolveDayVote,
+  resolveNight,
+  startDayDiscussion,
+  startDayVoting,
+  startMafiaGame,
+  startNextNight,
+  submitDayVote,
+  submitDiscussionReady,
+  submitNightAction,
+} from "../src/games/mafia/api";
+import { getPhaseTitle, getRoleDescription } from "../src/games/mafia/logic";
+import { useMafiaRoom } from "../src/games/mafia/useMafiaRoom";
 
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -13,213 +25,586 @@ function asString(v: unknown): string {
   return "";
 }
 
-export default function MafiaLobby() {
+export default function MafiaRoomScreen() {
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const { room, players, myPlayer, myRole, myNightAction, mafiaNightActions, myPoliceReports, myDayVote, currentDayVotes, events, loading, refresh } =
+    useMafiaRoom(roomId, playerId);
 
-  const [room, setRoom] = useState<MafiaRoom | null>(null);
-  const [players, setPlayers] = useState<MafiaPlayer[]>([]);
-  const [starting, setStarting] = useState(false);
+  const isHost = !!room && !!myPlayer && room.host_player_id === myPlayer.id;
+  const alivePlayers = useMemo(() => players.filter((player) => player.status === "alive"), [players]);
+  const latestReport = myPoliceReports[0] ?? null;
+  const latestEvent = events[events.length - 1] ?? null;
+  const discussionReadyCount = useMemo(() => alivePlayers.filter((player) => player.discussion_ready).length, [alivePlayers]);
+  const phaseSecondsLeft = room?.phase_ends_at ? Math.max(0, Math.ceil((new Date(room.phase_ends_at).getTime() - now) / 1000)) : 0;
+  const phaseMinutesText = `${Math.floor(phaseSecondsLeft / 60)}:${String(phaseSecondsLeft % 60).padStart(2, "0")}`;
+  const latestEliminatedPlayerId = typeof latestEvent?.payload?.eliminatedPlayerId === "string" ? latestEvent.payload.eliminatedPlayerId : null;
+  const latestEliminatedPlayer = latestEliminatedPlayerId ? players.find((player) => player.id === latestEliminatedPlayerId) ?? null : null;
+  const voteTallies = useMemo(() => {
+    const counts = new Map<string, number>();
+    currentDayVotes.forEach((vote) => {
+      counts.set(vote.target_player_id, (counts.get(vote.target_player_id) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([targetPlayerId, count]) => ({
+        player: players.find((player) => player.id === targetPlayerId) ?? null,
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [currentDayVotes, players]);
 
-  const isHost = room?.host_player_id === playerId;
-  const roleSummary = useMemo(() => getRoleSummaryText(players.length), [players.length]);
-  const baseUrl = Platform.OS === "web" ? window.location.origin : "https://picklo.app";
-  const inviteUrl = room?.code ? `${baseUrl}/mafia?code=${room.code}` : "";
-
-  const load = async () => {
-    if (!roomId) return;
-
-    const [{ data: roomData, error: roomErr }, { data: playerData, error: playerErr }] = await Promise.all([
-      supabase.from("mafia_rooms").select("*").eq("id", roomId).single(),
-      supabase.from("mafia_players").select("*").eq("room_id", roomId).order("joined_at", { ascending: true }),
-    ]);
-
-    if (roomErr) return Alert.alert("Error loading room", roomErr.message);
-    if (playerErr) return Alert.alert("Error loading players", playerErr.message);
-
-    setRoom(roomData as MafiaRoom);
-    setPlayers((playerData ?? []) as MafiaPlayer[]);
+  const run = async (key: string, fn: () => Promise<unknown>) => {
+    setBusy(key);
+    try {
+      await fn();
+      await refresh();
+    } catch (err) {
+      Alert.alert("Action failed", String((err as Error)?.message ?? err));
+    } finally {
+      setBusy(null);
+    }
   };
 
   useEffect(() => {
-    load();
-  }, [roomId]);
+    if (!room?.phase_ends_at || room.state === "lobby" || room.state === "ended") return;
 
-  useEffect(() => {
-    if (!roomId || !playerId) return;
-
-    const roomChannel = supabase
-      .channel(`mafia-room-${roomId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "mafia_rooms", filter: `id=eq.${roomId}` }, () => load())
-      .subscribe();
-
-    const playersChannel = supabase
-      .channel(`mafia-players-${roomId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "mafia_players", filter: `room_id=eq.${roomId}` }, () => load())
-      .subscribe();
+    const intervalId = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
 
     return () => {
-      supabase.removeChannel(roomChannel);
-      supabase.removeChannel(playersChannel);
+      clearInterval(intervalId);
     };
-  }, [roomId, playerId]);
+  }, [room?.phase_ends_at, room?.state]);
 
   useEffect(() => {
-    const phase = room?.phase as MafiaPhase | undefined;
-    if (!phase) return;
-    if (phase === "night" || phase === "day") {
-      router.replace({ pathname: "/mafia-game", params: { roomId, playerId } });
+    if (!room || !isHost) return;
+    if (room.state !== "day_discussion") return;
+    if (!room.phase_ends_at) return;
+    if (phaseSecondsLeft > 0) return;
+    if (busy) return;
+
+    run("auto-start-voting", () => startDayVoting(roomId, playerId));
+  }, [busy, isHost, phaseSecondsLeft, playerId, room, roomId]);
+
+  useEffect(() => {
+    if (!room || !isHost) return;
+    if (room.state !== "day_voting") return;
+    if (busy) return;
+
+    const aliveVoterCount = alivePlayers.length;
+    const uniqueVoters = new Set(currentDayVotes.map((vote) => vote.voter_player_id).filter(Boolean));
+    if (aliveVoterCount > 0 && uniqueVoters.size === aliveVoterCount) {
+      run("auto-resolve-vote", () => resolveDayVote(roomId, playerId));
     }
-    if (phase === "finished") {
-      router.replace({ pathname: "/mafia-results", params: { roomId, playerId } });
-    }
-  }, [room?.phase, roomId, playerId]);
+  }, [alivePlayers.length, busy, currentDayVotes, isHost, playerId, room, roomId]);
 
-  const copyInvite = async () => {
-    if (!inviteUrl) return;
-    await Clipboard.setStringAsync(inviteUrl);
-    Alert.alert("Copied", inviteUrl);
-  };
+  if (loading || !room || !myPlayer) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
+        <StatusBar style="light" />
+        <View style={{ width: "100%", maxWidth: 420, alignItems: "center" }}>
+          <View
+            style={{
+              width: 112,
+              height: 112,
+              borderRadius: 30,
+              overflow: "hidden",
+              backgroundColor: "#111827",
+              borderWidth: 1,
+              borderColor: "rgba(244,63,94,0.35)",
+              marginBottom: 18,
+            }}
+          >
+            <Image source={require("../assets/mafia.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          </View>
+          <Text style={{ color: "white", fontSize: 34, fontWeight: "900", textAlign: "center" }}>Loading Mafia</Text>
+          <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 24, textAlign: "center", marginTop: 10 }}>
+            Setting up the room, syncing players, and getting everything ready for the next move.
+          </Text>
+          <View
+            style={{
+              marginTop: 22,
+              width: "100%",
+              backgroundColor: "#0F172A",
+              borderRadius: 22,
+              padding: 18,
+              borderWidth: 1,
+              borderColor: "#1E293B",
+              gap: 10,
+            }}
+          >
+            <View style={{ height: 12, borderRadius: 999, backgroundColor: "#1F2937", overflow: "hidden" }}>
+              <View style={{ width: "62%", height: "100%", backgroundColor: "#7F1D1D", borderRadius: 999 }} />
+            </View>
+            <Text style={{ color: "#CBD5E1", textAlign: "center", fontWeight: "700" }}>Joining the table...</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
-  const startGame = async () => {
-    if (!roomId || !isHost) return;
-    if (players.length < 4) return Alert.alert("Need more players", "At least 4 players are needed for Mafia.");
+  if (room.state === "ended") {
+    router.replace({ pathname: "/mafia-results", params: { roomId, playerId } });
+  }
 
-    setStarting(true);
-    try {
-      const assignments = assignRoles(players.map((player) => player.id));
-      await Promise.all(
-        players.map((player) =>
-          supabase
-            .from("mafia_players")
-            .update({
-              role: assignments[player.id],
-              is_alive: true,
-              private_message: null,
-            })
-            .eq("id", player.id)
-        )
-      );
-
-      const { error } = await supabase
-        .from("mafia_rooms")
-        .update({
-          phase: "night",
-          day_number: 1,
-          winner: null,
-          night_result: "Roles assigned. Night 1 begins.",
-          last_eliminated_player_id: null,
-        })
-        .eq("id", roomId);
-
-      if (error) return Alert.alert("Error starting game", error.message);
-    } finally {
-      setStarting(false);
-    }
-  };
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://picklo.app";
+  const inviteUrl = `${baseUrl}/mafia?code=${room.code}`;
+  const selectedTargetId = myNightAction?.target_player_id ?? null;
+  const voteTargetId = myDayVote?.target_player_id ?? null;
+  const role = myRole?.role ?? "villager";
+  const showIdentityCard = room.state !== "lobby" && !!myRole;
+  const nightTargets =
+    role === "mafia"
+      ? alivePlayers.filter((player) => player.id !== myPlayer.id)
+      : role === "doctor"
+        ? alivePlayers
+        : role === "police"
+          ? alivePlayers.filter((player) => player.id !== myPlayer.id)
+          : [];
 
   return (
     <View style={{ flex: 1, backgroundColor: "#070B14" }}>
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-        <View style={{ gap: 10 }}>
-          <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>Mafia Lobby</Text>
-          <View
-            style={{
-              padding: 14,
-              borderRadius: 18,
-              backgroundColor: "#0F172A",
-              borderWidth: 1,
-              borderColor: "#1E293B",
-              gap: 8,
-            }}
-          >
-            <Text style={{ color: "#E2E8F0", fontWeight: "900" }}>Room code: {room?.code ?? "----"}</Text>
-            <Text style={{ color: "#94A3B8", lineHeight: 21 }}>
-              Share the invite link or room code with your group. {roleSummary}
-            </Text>
-            <Pressable
-              onPress={copyInvite}
-              disabled={!room?.code}
-              style={({ pressed }) => ({
-                height: 46,
-                borderRadius: 14,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#111827",
-                borderWidth: 1,
-                borderColor: "#1F2937",
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Text style={{ color: "white", fontWeight: "900" }}>Copy invitation link</Text>
-            </Pressable>
-          </View>
+        <View style={{ gap: 6 }}>
+          <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>Mafia</Text>
+          <Text style={{ color: "#94A3B8" }}>
+            {getPhaseTitle(room.state)} · Room {room.code}
+          </Text>
         </View>
 
-        <View
-          style={{
-            backgroundColor: "#0F172A",
-            borderRadius: 20,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: "#1E293B",
-            gap: 12,
-          }}
-        >
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "900" }}>Players</Text>
-            <Text style={{ color: "#94A3B8", fontWeight: "800" }}>{players.length} joined</Text>
+        {showIdentityCard ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Your identity</Text>
+            <Text style={{ color: role === "mafia" ? "#FDA4AF" : "#E2E8F0", fontWeight: "900", fontSize: 22 }}>{role.toUpperCase()}</Text>
+            <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{getRoleDescription(role)}</Text>
+            {myPlayer.status === "eliminated" ? <Text style={{ color: "#FCA5A5", fontWeight: "900" }}>You are eliminated but can still follow the game.</Text> : null}
+            {latestReport ? (
+              <View style={{ backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937" }}>
+                <Text style={{ color: "#BAE6FD", fontWeight: "900" }}>Latest police report</Text>
+                <Text style={{ color: "#E2E8F0", marginTop: 6 }}>
+                  {latestReport.result_alignment === "mafia" ? "You picked a mafia player." : "You picked a village player."}
+                </Text>
+              </View>
+            ) : null}
           </View>
+        ) : null}
 
-          {players.map((player) => (
-            <View
-              key={player.id}
-              style={{
-                paddingVertical: 12,
-                paddingHorizontal: 14,
-                borderRadius: 14,
-                backgroundColor: "#020617",
-                borderWidth: 1,
-                borderColor: "#1F2937",
-                flexDirection: "row",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text style={{ color: "white", fontWeight: "800" }}>{player.name}</Text>
-              <Text style={{ color: room?.host_player_id === player.id ? "#FDA4AF" : "#64748B", fontWeight: "800" }}>
-                {room?.host_player_id === player.id ? "HOST" : "PLAYER"}
-              </Text>
+        {room.state === "lobby" ? (
+          <View style={{ gap: 14 }}>
+            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Players</Text>
+              {players.map((player) => (
+                <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text
+                      style={{
+                        color: player.status === "eliminated" ? "#FCA5A5" : "white",
+                        fontWeight: "800",
+                        textDecorationLine: player.status === "eliminated" ? "line-through" : "none",
+                      }}
+                    >
+                      {player.display_name}
+                    </Text>
+                    {player.status === "eliminated" ? (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(252,165,165,0.12)", borderWidth: 1, borderColor: "rgba(252,165,165,0.35)" }}>
+                        <Text style={{ color: "#FCA5A5", fontWeight: "900", fontSize: 11 }}>DEAD</Text>
+                      </View>
+                    ) : room.state === "role_reveal" && player.role_reveal_ready ? (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(134,239,172,0.12)", borderWidth: 1, borderColor: "rgba(134,239,172,0.35)" }}>
+                        <Text style={{ color: "#86EFAC", fontWeight: "900", fontSize: 11 }}>READY</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={{ color: player.id === room.host_player_id ? "#FDA4AF" : "#64748B", fontWeight: "800" }}>
+                    {player.id === room.host_player_id ? "HOST" : "PLAYER"}
+                  </Text>
+                </View>
+              ))}
+              <Pressable
+                onPress={() => Clipboard.setStringAsync(inviteUrl)}
+                style={({ pressed }) => ({
+                  height: 46,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#111827",
+                  borderWidth: 1,
+                  borderColor: "#1F2937",
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={{ color: "white", fontWeight: "900" }}>Copy invite link</Text>
+              </Pressable>
+              {isHost ? (
+                <Pressable
+                  onPress={() => run("start", () => startMafiaGame(roomId, playerId))}
+                  disabled={busy === "start" || players.length < 4}
+                  style={({ pressed }) => ({
+                    height: 54,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#7F1D1D",
+                    opacity: busy === "start" || players.length < 4 ? 0.5 : pressed ? 0.92 : 1,
+                  })}
+                >
+                  <Text style={{ color: "white", fontWeight: "900" }}>Start the game</Text>
+                </Pressable>
+              ) : (
+                <Text style={{ color: "#94A3B8" }}>Waiting for the host to start the game.</Text>
+              )}
             </View>
-          ))}
+          </View>
+        ) : null}
 
-          {isHost ? (
+        {room.state === "role_reveal" ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Private role reveal</Text>
+            <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>Read your role privately, then tap ready. The game advances once everyone is ready.</Text>
             <Pressable
-              onPress={startGame}
-              disabled={starting || players.length < 4}
+              onPress={() => run("reveal", () => finishRoleReveal(roomId, playerId))}
+              disabled={busy === "reveal" || myPlayer.role_reveal_ready}
               style={({ pressed }) => ({
-                height: 54,
+                height: 52,
                 borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "#7F1D1D",
-                borderWidth: 1,
-                borderColor: "#991B1B",
-                opacity: starting || players.length < 4 ? 0.5 : pressed ? 0.92 : 1,
+                backgroundColor: "#000000",
+                opacity: myPlayer.role_reveal_ready ? 0.6 : pressed ? 0.92 : 1,
               })}
             >
-              <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>
-                {starting ? "Starting..." : "Start Mafia game"}
-              </Text>
+              <Text style={{ color: "white", fontWeight: "900" }}>{myPlayer.role_reveal_ready ? "Ready" : "I saw my role"}</Text>
             </Pressable>
-          ) : (
-            <Text style={{ color: "#94A3B8", lineHeight: 21 }}>Waiting for the host to assign roles and start the game.</Text>
-          )}
-        </View>
+          </View>
+        ) : null}
+
+        {room.state === "night" ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Night actions</Text>
+            <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
+              Everyone has an active-looking night screen so roles do not stand out from how the phone is used.
+            </Text>
+
+            {role === "villager" ? (
+              <Pressable
+                onPress={() => run("villager-ready", () => submitNightAction(roomId, playerId, null, true))}
+                disabled={busy === "villager-ready" || myNightAction?.confirmed}
+                style={({ pressed }) => ({
+                  height: 52,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#111827",
+                  borderWidth: 1,
+                  borderColor: "#1F2937",
+                  opacity: myNightAction?.confirmed ? 0.6 : pressed ? 0.92 : 1,
+                })}
+              >
+                <Text style={{ color: "white", fontWeight: "900" }}>{myNightAction?.confirmed ? "Ready" : "I'm ready"}</Text>
+              </Pressable>
+            ) : null}
+
+            {role !== "villager" ? (
+              <View style={{ gap: 10 }}>
+                {nightTargets.map((player) => (
+                  <Pressable
+                    key={player.id}
+                    onPress={() => run(`night-${player.id}`, () => submitNightAction(roomId, playerId, player.id, false))}
+                    style={({ pressed }) => ({
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 14,
+                      backgroundColor: selectedTargetId === player.id ? "#7F1D1D" : "#020617",
+                      borderWidth: 1,
+                      borderColor: selectedTargetId === player.id ? "#991B1B" : "#1F2937",
+                      opacity: pressed ? 0.92 : 1,
+                    })}
+                  >
+                    <Text style={{ color: "white", fontWeight: "900" }}>{player.display_name}</Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  onPress={() => run("confirm-night", () => submitNightAction(roomId, playerId, selectedTargetId, true))}
+                  disabled={!selectedTargetId || busy === "confirm-night"}
+                  style={({ pressed }) => ({
+                    height: 52,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#000000",
+                    opacity: !selectedTargetId ? 0.5 : pressed ? 0.92 : 1,
+                  })}
+                >
+                  <Text style={{ color: "white", fontWeight: "900" }}>{myNightAction?.confirmed ? "Confirmed" : "Confirm choice"}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {role === "mafia" && mafiaNightActions.length > 0 ? (
+              <View style={{ gap: 8, backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937" }}>
+                <Text style={{ color: "#FDA4AF", fontWeight: "900" }}>Mafia coordination</Text>
+                {mafiaNightActions.map((action) => {
+                  const teammate = players.find((player) => player.id === action.actor_player_id);
+                  const target = players.find((player) => player.id === action.target_player_id);
+                  return (
+                    <Text key={action.actor_player_id} style={{ color: "#E5E7EB", lineHeight: 20 }}>
+                      {teammate?.display_name ?? "Teammate"}: {target?.display_name ?? "No target"} {action.confirmed ? "· confirmed" : "· choosing"}
+                    </Text>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {isHost ? (
+              <Pressable
+                onPress={() => run("resolve-night", () => resolveNight(roomId, playerId))}
+                disabled={busy === "resolve-night"}
+                style={({ pressed }) => ({
+                  height: 50,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#111827",
+                  borderWidth: 1,
+                  borderColor: "#1F2937",
+                  opacity: pressed ? 0.92 : 1,
+                })}
+              >
+                <Text style={{ color: "white", fontWeight: "900" }}>Resolve night if timer ended</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ color: "#94A3B8" }}>Waiting for the host to resolve the night when everyone is ready.</Text>
+            )}
+          </View>
+        ) : null}
+
+        {room.state === "night_result" ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Night result</Text>
+            <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
+            {latestEvent?.event_type === "night_result" ? <Text style={{ color: "#94A3B8", lineHeight: 21 }}>Night actions have been resolved.</Text> : null}
+            {latestEliminatedPlayer ? <Text style={{ color: "#FCA5A5", fontWeight: "800" }}>{latestEliminatedPlayer.display_name} was eliminated.</Text> : null}
+            {isHost ? (
+              <Pressable
+                onPress={() => run("discussion", () => startDayDiscussion(roomId, playerId))}
+                disabled={busy === "discussion"}
+                style={({ pressed }) => ({
+                  height: 52,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#000000",
+                  opacity: pressed ? 0.92 : 1,
+                })}
+              >
+                <Text style={{ color: "white", fontWeight: "900" }}>Continue to discussion</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ color: "#94A3B8" }}>Waiting for the host to move into discussion.</Text>
+            )}
+          </View>
+        ) : null}
+
+        {room.state === "day_discussion" ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Discuss</Text>
+            <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
+            <View style={{ backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937", gap: 6 }}>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>Time left</Text>
+              <Text style={{ color: "#FDBA74", fontSize: 28, fontWeight: "900" }}>{phaseMinutesText}</Text>
+              <Text style={{ color: "#94A3B8" }}>
+                {discussionReadyCount}/{alivePlayers.length} living players are ready to vote.
+              </Text>
+            </View>
+            {myPlayer.status === "alive" ? (
+              <Pressable
+                onPress={() => run("discussion-ready", () => submitDiscussionReady(roomId, playerId))}
+                disabled={busy === "discussion-ready" || myPlayer.discussion_ready}
+                style={({ pressed }) => ({
+                  height: 52,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#000000",
+                  opacity: myPlayer.discussion_ready ? 0.6 : pressed ? 0.92 : 1,
+                })}
+              >
+                <Text style={{ color: "white", fontWeight: "900" }}>{myPlayer.discussion_ready ? "Ready to vote" : "I'm ready to vote"}</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ color: "#94A3B8" }}>Eliminated players can watch the discussion, but only living players can mark ready.</Text>
+            )}
+            {isHost ? (
+              <Pressable
+                onPress={() => run("start-voting", () => startDayVoting(roomId, playerId))}
+                disabled={busy === "start-voting"}
+                style={({ pressed }) => ({
+                  height: 52,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#111827",
+                  borderWidth: 1,
+                  borderColor: "#1F2937",
+                  opacity: pressed ? 0.92 : 1,
+                })}
+              >
+                <Text style={{ color: "white", fontWeight: "900" }}>Open voting now</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {room.state === "day_voting" ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Vote</Text>
+            {alivePlayers
+              .filter((player) => player.id !== myPlayer.id)
+              .map((player) => (
+                <Pressable
+                  key={player.id}
+                  onPress={() => run(`vote-${player.id}`, () => submitDayVote(roomId, playerId, player.id))}
+                  disabled={myPlayer.status !== "alive"}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    borderRadius: 14,
+                    backgroundColor: voteTargetId === player.id ? "#7F1D1D" : "#020617",
+                    borderWidth: 1,
+                    borderColor: voteTargetId === player.id ? "#991B1B" : "#1F2937",
+                    opacity: myPlayer.status !== "alive" ? 0.5 : pressed ? 0.92 : 1,
+                  })}
+                >
+                  <Text style={{ color: "white", fontWeight: "900" }}>{player.display_name}</Text>
+                </Pressable>
+              ))}
+            {isHost ? (
+              <Pressable
+                onPress={() => run("resolve-vote", () => resolveDayVote(roomId, playerId))}
+                disabled={busy === "resolve-vote"}
+                style={({ pressed }) => ({
+                  height: 50,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#111827",
+                  borderWidth: 1,
+                  borderColor: "#1F2937",
+                  opacity: pressed ? 0.92 : 1,
+                })}
+              >
+                <Text style={{ color: "white", fontWeight: "900" }}>Resolve vote if timer ended</Text>
+              </Pressable>
+            ) : (
+              <Text style={{ color: "#94A3B8" }}>Waiting for the host to resolve the vote.</Text>
+            )}
+          </View>
+        ) : null}
+
+        {room.state === "vote_result" ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Vote result</Text>
+            <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
+            {latestEliminatedPlayer ? <Text style={{ color: "#FCA5A5", fontWeight: "800" }}>{latestEliminatedPlayer.display_name} was eliminated.</Text> : null}
+            {voteTallies.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>Vote breakdown</Text>
+                {voteTallies.map((entry) => (
+                  <View key={entry.player?.id ?? `unknown-${entry.count}`} style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ color: "#E2E8F0", fontWeight: "800" }}>{entry.player?.display_name ?? "Unknown player"}</Text>
+                    <Text style={{ color: "#FDBA74", fontWeight: "900" }}>{entry.count} vote{entry.count === 1 ? "" : "s"}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {isHost ? (
+              <Fragment>
+                <Pressable
+                  onPress={() => run("check-win", () => checkWinCondition(roomId))}
+                  disabled={busy === "check-win"}
+                  style={({ pressed }) => ({
+                    height: 48,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#111827",
+                    borderWidth: 1,
+                    borderColor: "#1F2937",
+                    opacity: pressed ? 0.92 : 1,
+                  })}
+                >
+                  <Text style={{ color: "white", fontWeight: "900" }}>Check winner</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => run("next-night", () => startNextNight(roomId, playerId))}
+                  disabled={busy === "next-night"}
+                  style={({ pressed }) => ({
+                    height: 52,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#000000",
+                    opacity: pressed ? 0.92 : 1,
+                  })}
+                >
+                  <Text style={{ color: "white", fontWeight: "900" }}>Continue to next night</Text>
+                </Pressable>
+              </Fragment>
+            ) : (
+              <Text style={{ color: "#94A3B8" }}>Waiting for the host to continue the game.</Text>
+            )}
+          </View>
+        ) : null}
+
+        {room.state !== "lobby" ? (
+          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Players</Text>
+            {players.map((player) => (
+              <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <View style={{ gap: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text
+                      style={{
+                        color: player.status === "eliminated" ? "#FCA5A5" : "white",
+                        fontWeight: "800",
+                        textDecorationLine: player.status === "eliminated" ? "line-through" : "none",
+                      }}
+                    >
+                      {player.display_name}
+                    </Text>
+                    {player.status === "eliminated" ? (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(252,165,165,0.12)", borderWidth: 1, borderColor: "rgba(252,165,165,0.35)" }}>
+                        <Text style={{ color: "#FCA5A5", fontWeight: "900", fontSize: 11 }}>DEAD</Text>
+                      </View>
+                    ) : room.state === "role_reveal" && player.role_reveal_ready ? (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(134,239,172,0.12)", borderWidth: 1, borderColor: "rgba(134,239,172,0.35)" }}>
+                        <Text style={{ color: "#86EFAC", fontWeight: "900", fontSize: 11 }}>READY</Text>
+                      </View>
+                    ) : null}
+                    {room.state === "day_discussion" && player.discussion_ready ? (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(125,211,252,0.12)", borderWidth: 1, borderColor: "rgba(125,211,252,0.35)" }}>
+                        <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 11 }}>VOTE READY</Text>
+                      </View>
+                    ) : null}
+                    {player.status === "eliminated" ? <Text style={{ color: "#FCA5A5", fontSize: 16 }}>☠</Text> : null}
+                  </View>
+                  <Text style={{ color: player.status === "alive" ? "#94A3B8" : "#FCA5A5" }}>{player.status === "alive" ? "Alive" : "Eliminated"}</Text>
+                </View>
+                <View style={{ alignItems: "flex-end", gap: 6 }}>
+                  {player.id === myPlayer.id ? <Text style={{ color: "#BAE6FD", fontWeight: "900" }}>YOU</Text> : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <Pressable
-          onPress={() => router.replace("/mafia")}
+          onPress={() => router.replace("/")}
           style={({ pressed }) => ({
             height: 50,
             borderRadius: 16,
@@ -231,7 +616,7 @@ export default function MafiaLobby() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900" }}>Back to Mafia home</Text>
+          <Text style={{ color: "white", fontWeight: "900" }}>Back to games</Text>
         </Pressable>
       </ScrollView>
     </View>

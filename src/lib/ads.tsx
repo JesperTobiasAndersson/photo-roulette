@@ -6,13 +6,6 @@ const CONSENT_KEY = "picklo_ads_consent";
 const ADSENSE_CLIENT = process.env.EXPO_PUBLIC_ADSENSE_CLIENT;
 const ADSENSE_SLOT = process.env.EXPO_PUBLIC_ADSENSE_SLOT;
 
-let AdSense: any = null;
-try {
-  AdSense = require("react-adsense").AdSense;
-} catch (error) {
-  console.warn("AdSense library not available:", error);
-}
-
 function getStoredConsent(): boolean {
   if (!isWeb || typeof window === "undefined") return false;
   return window.localStorage.getItem(CONSENT_KEY) === "accepted";
@@ -101,7 +94,15 @@ export const AdSenseAd: React.FC = () => {
 
   if (!isWeb || !hasConsent) return null;
   if (!ADSENSE_CLIENT || !ADSENSE_SLOT || ADSENSE_SLOT === "XXXXXXXXXX") return null;
-  if (!AdSense || !AdSense.Google) return null;
+
+  let AdSense: any = null;
+  try {
+    AdSense = require("react-adsense").AdSense;
+  } catch (error) {
+    console.warn("AdSense library not available:", error);
+    return null;
+  }
+  if (!AdSense?.Google) return null;
 
   try {
     return (

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, Platform } from 'react-native';
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, Platform } from "react-native";
 
-// Extend the global WindowEventMap to include beforeinstallprompt
 declare global {
   interface WindowEventMap {
     beforeinstallprompt: BeforeInstallPromptEvent;
@@ -10,24 +9,57 @@ declare global {
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
 interface PWAInstallProps {
   children?: React.ReactNode;
 }
 
+const DISMISS_KEY = "picklo_install_banner_dismissed";
+
+function isStandaloneMode() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as any)?.standalone === true;
+}
+
 export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
+  const isWeb = Platform.OS === "web";
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstall, setShowInstall] = useState(false);
-  const isWeb = Platform.OS === 'web';
+
+  const installContext = useMemo(() => {
+    if (!isWeb || typeof navigator === "undefined") {
+      return {
+        isMobile: false,
+        isIosSafari: false,
+      };
+    }
+
+    const ua = navigator.userAgent;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+    const isIos = /iPhone|iPad|iPod/i.test(ua);
+    const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+
+    return {
+      isMobile,
+      isIosSafari: isIos && isSafari,
+    };
+  }, [isWeb]);
 
   useEffect(() => {
-    if (!isWeb || typeof window === 'undefined') return;
+    if (!isWeb || !installContext.isMobile || typeof window === "undefined") return;
+    if (isStandaloneMode()) return;
+    if (window.localStorage.getItem(DISMISS_KEY) === "1") return;
 
-    const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
+    if (installContext.isIosSafari) {
+      setShowInstall(true);
+      return;
+    }
+
+    const handleBeforeInstallPrompt = (event: BeforeInstallPromptEvent) => {
+      event.preventDefault();
+      setDeferredPrompt(event);
       setShowInstall(true);
     };
 
@@ -36,33 +68,37 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
       setDeferredPrompt(null);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
-  }, [isWeb]);
+  }, [installContext.isIosSafari, installContext.isMobile, isWeb]);
+
+  const dismiss = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(DISMISS_KEY, "1");
+    }
+    setShowInstall(false);
+  };
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
 
-    deferredPrompt.prompt();
+    await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-
-    if (outcome === 'accepted') {
+    if (outcome === "accepted") {
       setShowInstall(false);
     }
-
     setDeferredPrompt(null);
   };
 
-  const handleDismiss = () => {
-    setShowInstall(false);
-  };
+  const shouldShowIosInstructions = installContext.isIosSafari && showInstall;
+  const shouldShowAndroidPrompt = !installContext.isIosSafari && !!deferredPrompt && showInstall;
 
-  if (!isWeb || !showInstall) {
+  if (!isWeb || (!shouldShowIosInstructions && !shouldShowAndroidPrompt)) {
     return <>{children}</>;
   }
 
@@ -71,73 +107,73 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
       {children}
       <View
         style={{
-          position: (isWeb ? 'fixed' : 'absolute') as any,
-          bottom: 20,
-          left: 20,
-          right: 20,
-          backgroundColor: '#1F2937',
-          borderRadius: 12,
+          position: "fixed" as any,
+          left: 16,
+          right: 16,
+          bottom: 16,
+          backgroundColor: "#0F172A",
+          borderRadius: 20,
           padding: 16,
           borderWidth: 1,
-          borderColor: '#374151',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 10,
+          borderColor: "#1E293B",
+          shadowColor: "#000",
+          shadowOpacity: 0.28,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 10 },
           zIndex: 1000,
+          gap: 12,
         }}
       >
-        <Text
-          style={{
-            color: '#F9FAFB',
-            fontSize: 16,
-            fontWeight: '700',
-            marginBottom: 8,
-            textAlign: 'center',
-          }}
-        >
-          📱 Install Picklo App
-        </Text>
-        <Text
-          style={{
-            color: '#D1D5DB',
-            fontSize: 14,
-            marginBottom: 16,
-            textAlign: 'center',
-            lineHeight: 20,
-          }}
-        >
-          Get the full app experience with offline access and home screen icon!
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <Text style={{ color: "#F8FAFC", fontSize: 16, fontWeight: "900", textAlign: "center" }}>Install Picklo</Text>
+
+        {shouldShowIosInstructions ? (
+          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>
+            In Safari, tap the Share button and then choose{" "}
+            <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>Add to Home Screen</Text>.
+          </Text>
+        ) : (
+          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>
+            Save Picklo to your home screen for the full app experience.
+          </Text>
+        )}
+
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          {shouldShowAndroidPrompt ? (
+            <Pressable
+              onPress={handleInstall}
+              style={({ pressed }) => ({
+                flex: 1,
+                minHeight: 48,
+                borderRadius: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#000000",
+                opacity: pressed ? 0.92 : 1,
+              })}
+            >
+              <Text style={{ color: "white", fontWeight: "900" }}>Install</Text>
+            </Pressable>
+          ) : (
+            <View style={{ flex: 1, minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#111827", borderWidth: 1, borderColor: "#1F2937" }}>
+              <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>Use Safari Share</Text>
+            </View>
+          )}
+
           <Pressable
-            onPress={handleInstall}
-            style={{
+            onPress={dismiss}
+            style={({ pressed }) => ({
               flex: 1,
-              backgroundColor: '#7C5CFF',
-              borderRadius: 8,
-              paddingVertical: 12,
-              alignItems: 'center',
-            }}
+              minHeight: 48,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#111827",
+              borderWidth: 1,
+              borderColor: "#1F2937",
+              opacity: pressed ? 0.92 : 1,
+            })}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>
-              Install App
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleDismiss}
-            style={{
-              flex: 1,
-              backgroundColor: '#374151',
-              borderRadius: 8,
-              paddingVertical: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: '#D1D5DB', fontWeight: '600', fontSize: 14 }}>
-              Maybe Later
-            </Text>
+            <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>Not now</Text>
           </Pressable>
         </View>
       </View>
