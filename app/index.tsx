@@ -1,8 +1,9 @@
 import React from "react";
-import { View, Text, Pressable, Platform } from "react-native";
+import { View, Text, Pressable, Platform, ScrollView, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { AdConsentBanner } from "../src/lib/ads";
 
 const isWeb = Platform.OS === "web";
 
@@ -12,6 +13,7 @@ const games = [
     title: "MemeMatch",
     tagline: "Pick images. Match the statement. Vote. Laugh.",
     status: "Available now",
+    recommendedPlayers: "3-12 players",
     accent: "#38BDF8",
     description: "Multiplayer party game with room codes, realtime rounds, image uploads, voting, and results.",
     icon: require("../assets/Memematch.png"),
@@ -21,7 +23,8 @@ const games = [
     slug: "mafia",
     title: "Mafia",
     tagline: "Hidden roles, bluffing, and social deduction.",
-    status: "Starter ready",
+    status: "Available now",
+    recommendedPlayers: "5-20 players",
     accent: "#F43F5E",
     description: "Separate game module for role assignment, day and night phases, voting, and eliminations.",
     icon: require("../assets/mafia.png"),
@@ -29,20 +32,37 @@ const games = [
   },
 ];
 
+const footerLinks = [
+  { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Terms of Service", href: "/terms-of-service" },
+  { label: "Contact", href: "/contact" },
+];
+
 export default function GameLibraryHome() {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 560;
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14", padding: 20 }}>
+    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
       <StatusBar style="light" />
 
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <View style={{ width: "100%", maxWidth: isWeb ? 980 : 520, gap: 22 }}>
-          <View style={{ gap: 16, alignItems: isWeb ? "center" : "flex-start" }}>
-            <View style={{ alignItems: isWeb ? "center" : "flex-start", gap: 14 }}>
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: isCompact ? 16 : 20,
+          paddingTop: isCompact ? 26 : 36,
+          paddingBottom: isCompact ? 28 : 36,
+          alignItems: "center",
+        }}
+      >
+        <View style={{ width: "100%", maxWidth: isWeb ? 980 : 560, gap: isCompact ? 18 : 22 }}>
+          <View style={{ gap: isCompact ? 14 : 16, alignItems: isCompact ? "flex-start" : isWeb ? "center" : "flex-start" }}>
+            <View style={{ alignItems: isCompact ? "flex-start" : isWeb ? "center" : "flex-start", gap: 14 }}>
               <View
                 style={{
-                  width: isWeb ? 132 : 104,
-                  height: isWeb ? 132 : 104,
-                  borderRadius: 32,
+                  width: isCompact ? 92 : isWeb ? 132 : 104,
+                  height: isCompact ? 92 : isWeb ? 132 : 104,
+                  borderRadius: isCompact ? 24 : 32,
                   overflow: "hidden",
                   borderWidth: 1,
                   borderColor: "rgba(56,189,248,0.35)",
@@ -57,20 +77,20 @@ export default function GameLibraryHome() {
                 <Image source={require("../assets/icon.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
               </View>
 
-              <View style={{ gap: 4, alignItems: isWeb ? "center" : "flex-start" }}>
-                <Text style={{ color: "#F8FAFC", fontSize: isWeb ? 28 : 24, fontWeight: "900" }}>Picklo</Text>
+              <View style={{ gap: 4, alignItems: isCompact ? "flex-start" : isWeb ? "center" : "flex-start" }}>
+                <Text style={{ color: "#F8FAFC", fontSize: isCompact ? 22 : isWeb ? 28 : 24, fontWeight: "900" }}>Picklo</Text>
                 <Text style={{ color: "#94A3B8", fontSize: 13 }}>Party game collection</Text>
               </View>
             </View>
 
-            <Text style={{ color: "#F8FAFC", fontSize: isWeb ? 34 : 28, fontWeight: "800" }}>Game Library</Text>
+            <Text style={{ color: "#F8FAFC", fontSize: isCompact ? 24 : isWeb ? 34 : 28, fontWeight: "800" }}>Game Library</Text>
             <Text
               style={{
                 color: "#94A3B8",
-                fontSize: 16,
-                lineHeight: 24,
+                fontSize: isCompact ? 15 : 16,
+                lineHeight: isCompact ? 22 : 24,
                 maxWidth: 700,
-                textAlign: isWeb ? "center" : "left",
+                textAlign: isCompact ? "left" : isWeb ? "center" : "left",
               }}
             >
               Choose a game to launch. MemeMatch is available now, and this home screen is ready for more games over
@@ -81,11 +101,11 @@ export default function GameLibraryHome() {
           <View
             style={{
               backgroundColor: "#0F172A",
-              borderRadius: 28,
-              padding: 20,
+              borderRadius: isCompact ? 22 : 28,
+              padding: isCompact ? 14 : 20,
               borderWidth: 1,
               borderColor: "#1E293B",
-              gap: 16,
+              gap: isCompact ? 12 : 16,
             }}
           >
             <Text style={{ color: "#E2E8F0", fontSize: 16, fontWeight: "800" }}>Featured Games</Text>
@@ -105,18 +125,25 @@ export default function GameLibraryHome() {
               >
                 <View
                   style={{
-                    padding: 20,
-                    gap: 16,
+                    padding: isCompact ? 14 : 20,
+                    gap: isCompact ? 12 : 16,
                     backgroundColor: "rgba(15,23,42,0.92)",
                   }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 14, flex: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: isCompact ? "column" : "row",
+                      alignItems: isCompact ? "flex-start" : "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
                       <View
                         style={{
-                          width: 72,
-                          height: 72,
-                          borderRadius: 20,
+                          width: isCompact ? 58 : 72,
+                          height: isCompact ? 58 : 72,
+                          borderRadius: isCompact ? 16 : 20,
                           overflow: "hidden",
                           borderWidth: 1,
                           borderColor: game.accent,
@@ -127,13 +154,16 @@ export default function GameLibraryHome() {
                       </View>
 
                       <View style={{ flex: 1, gap: 6 }}>
-                        <Text style={{ color: "#F8FAFC", fontSize: 28, fontWeight: "900" }}>{game.title}</Text>
-                        <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 22 }}>{game.tagline}</Text>
+                        <Text style={{ color: "#F8FAFC", fontSize: isCompact ? 22 : 28, fontWeight: "900" }}>{game.title}</Text>
+                        <Text style={{ color: "#94A3B8", fontSize: isCompact ? 14 : 15, lineHeight: isCompact ? 20 : 22 }}>
+                          {game.tagline}
+                        </Text>
                       </View>
                     </View>
 
                     <View
                       style={{
+                        alignSelf: isCompact ? "flex-start" : "auto",
                         paddingVertical: 8,
                         paddingHorizontal: 12,
                         borderRadius: 999,
@@ -146,12 +176,30 @@ export default function GameLibraryHome() {
                     </View>
                   </View>
 
-                  <View style={{ flexDirection: isWeb ? "row" : "column", justifyContent: "space-between", gap: 12 }}>
-                    <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 22, flex: 1 }}>{game.description}</Text>
+                  <View style={{ flexDirection: "column", gap: 12 }}>
+                    <View
+                      style={{
+                        alignSelf: "flex-start",
+                        paddingVertical: 7,
+                        paddingHorizontal: 10,
+                        borderRadius: 999,
+                        backgroundColor: "#111827",
+                        borderWidth: 1,
+                        borderColor: "#1F2937",
+                      }}
+                    >
+                      <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 12 }}>
+                        Recommended: {game.recommendedPlayers}
+                      </Text>
+                    </View>
+
+                    <Text style={{ color: "#CBD5E1", fontSize: isCompact ? 13 : 14, lineHeight: isCompact ? 20 : 22, flex: 1 }}>
+                      {game.description}
+                    </Text>
 
                     <View
                       style={{
-                        alignSelf: isWeb ? "center" : "flex-start",
+                        alignSelf: "stretch",
                         paddingVertical: 12,
                         paddingHorizontal: 16,
                         borderRadius: 16,
@@ -165,8 +213,48 @@ export default function GameLibraryHome() {
               </Pressable>
             ))}
           </View>
+
+          <View
+            style={{
+              borderRadius: isCompact ? 20 : 24,
+              padding: isCompact ? 14 : 18,
+              backgroundColor: "#0B1222",
+              borderWidth: 1,
+              borderColor: "#182235",
+              gap: 12,
+            }}
+          >
+            <Text style={{ color: "#E2E8F0", fontSize: 15, fontWeight: "800" }}>Legal & Support</Text>
+            <View
+              style={{
+                flexDirection: isCompact ? "column" : "row",
+                flexWrap: "wrap",
+                gap: 10,
+              }}
+            >
+              {footerLinks.map((link) => (
+                <Pressable
+                  key={link.href}
+                  onPress={() => router.push(link.href as any)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 14,
+                    backgroundColor: "#111827",
+                    borderWidth: 1,
+                    borderColor: "#1F2937",
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 13 }}>{link.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <AdConsentBanner />
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
