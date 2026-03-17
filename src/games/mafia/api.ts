@@ -223,6 +223,13 @@ export async function submitNightAction(roomId: string, playerId: string, target
   );
   if (error) throw error;
 
+  const { error: resetContinueError } = await supabase
+    .from("mafia_room_players")
+    .update({ discussion_ready: false })
+    .eq("id", playerId)
+    .eq("room_id", roomId);
+  if (resetContinueError) throw resetContinueError;
+
   const { data: mafiaActions } = await supabase
     .from("mafia_night_actions")
     .select("*")
@@ -245,6 +252,30 @@ export async function submitNightAction(roomId: string, playerId: string, target
       .eq("actor_role", "mafia");
     if (lockError) throw lockError;
   }
+}
+
+export async function submitNightContinue(roomId: string, playerId: string) {
+  const room = await getRoom(roomId);
+  if (room.state !== "night") throw new Error("Night is not active");
+
+  const [{ data: player, error: playerError }, { data: role, error: roleError }, { data: action, error: actionError }] = await Promise.all([
+    supabase.from("mafia_room_players").select("*").eq("id", playerId).eq("room_id", roomId).single(),
+    supabase.from("mafia_player_roles").select("*").eq("player_id", playerId).single(),
+    supabase.from("mafia_night_actions").select("*").eq("actor_player_id", playerId).eq("room_id", roomId).eq("phase_number", room.phase_number).maybeSingle(),
+  ]);
+
+  if (playerError) throw playerError;
+  if (roleError) throw roleError;
+  if (actionError) throw actionError;
+  if (player.status !== "alive" || !role.is_alive) throw new Error("Only living players can continue");
+  if (!action?.confirmed) throw new Error("Confirm your night action first");
+
+  const { error } = await supabase
+    .from("mafia_room_players")
+    .update({ discussion_ready: true })
+    .eq("id", playerId)
+    .eq("room_id", roomId);
+  if (error) throw error;
 }
 
 export async function resolveNight(roomId: string, playerId: string) {

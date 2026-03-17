@@ -77,7 +77,9 @@ export type MafiaRoomState = {
   players: MafiaPlayerDto[];
   myPlayer: MafiaPlayerDto | null;
   myRole: MafiaRoleDto | null;
+  playerRoles: MafiaRoleDto[];
   myNightAction: MafiaNightActionDto | null;
+  currentNightActions: MafiaNightActionDto[];
   mafiaNightActions: MafiaNightActionDto[];
   myPoliceReports: MafiaPoliceReportDto[];
   myDayVote: MafiaDayVoteDto | null;

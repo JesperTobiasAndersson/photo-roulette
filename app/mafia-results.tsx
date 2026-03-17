@@ -11,11 +11,18 @@ function asString(v: unknown): string {
   return "";
 }
 
+function getRoleBadge(role: string | undefined) {
+  if (role === "mafia") return { label: "MAFIA", color: "#FDA4AF", backgroundColor: "rgba(244,63,94,0.12)", borderColor: "rgba(244,63,94,0.3)" };
+  if (role === "doctor") return { label: "DOCTOR", color: "#86EFAC", backgroundColor: "rgba(134,239,172,0.12)", borderColor: "rgba(134,239,172,0.3)" };
+  if (role === "police") return { label: "POLICE", color: "#93C5FD", backgroundColor: "rgba(147,197,253,0.12)", borderColor: "rgba(147,197,253,0.3)" };
+  return { label: "VILLAGER", color: "#E2E8F0", backgroundColor: "rgba(148,163,184,0.12)", borderColor: "rgba(148,163,184,0.3)" };
+}
+
 export default function MafiaResults() {
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
-  const { room, players, myRole, loading } = useMafiaRoom(roomId, playerId);
+  const { room, players, myRole, playerRoles, loading } = useMafiaRoom(roomId, playerId);
 
   if (loading || !room) {
     return (
@@ -58,14 +65,33 @@ export default function MafiaResults() {
 
         <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
           <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Final table</Text>
-          {players.map((player) => (
-            <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937" }}>
-              <Text style={{ color: "white", fontWeight: "900" }}>{player.display_name}</Text>
-              <Text style={{ color: player.status === "alive" ? "#86EFAC" : "#FCA5A5", marginTop: 4 }}>
-                {player.status === "alive" ? "Survived" : "Eliminated"}
-              </Text>
-            </View>
-          ))}
+          {players.map((player) => {
+            const playerRole = playerRoles.find((role) => role.player_id === player.id)?.role;
+            const roleBadge = getRoleBadge(playerRole);
+
+            return (
+              <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", gap: 8 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <Text style={{ color: "white", fontWeight: "900", flex: 1 }}>{player.display_name}</Text>
+                  <View
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      backgroundColor: roleBadge.backgroundColor,
+                      borderWidth: 1,
+                      borderColor: roleBadge.borderColor,
+                    }}
+                  >
+                    <Text style={{ color: roleBadge.color, fontWeight: "900", fontSize: 12 }}>{roleBadge.label}</Text>
+                  </View>
+                </View>
+                <Text style={{ color: player.status === "alive" ? "#86EFAC" : "#FCA5A5" }}>
+                  {player.status === "alive" ? "Survived" : "Eliminated"}
+                </Text>
+              </View>
+            );
+          })}
         </View>
 
         <Pressable

@@ -16,7 +16,9 @@ export function useMafiaRoom(roomId: string, playerId: string): MafiaRoomState {
   const [players, setPlayers] = useState<MafiaPlayerDto[]>([]);
   const [myPlayer, setMyPlayer] = useState<MafiaPlayerDto | null>(null);
   const [myRole, setMyRole] = useState<MafiaRoleDto | null>(null);
+  const [playerRoles, setPlayerRoles] = useState<MafiaRoleDto[]>([]);
   const [myNightAction, setMyNightAction] = useState<MafiaNightActionDto | null>(null);
+  const [currentNightActions, setCurrentNightActions] = useState<MafiaNightActionDto[]>([]);
   const [mafiaNightActions, setMafiaNightActions] = useState<MafiaNightActionDto[]>([]);
   const [myPoliceReports, setMyPoliceReports] = useState<MafiaPoliceReportDto[]>([]);
   const [myDayVote, setMyDayVote] = useState<MafiaDayVoteDto | null>(null);
@@ -42,10 +44,12 @@ export function useMafiaRoom(roomId: string, playerId: string): MafiaRoomState {
 
     if (selfPlayer && roomData) {
       const phaseNumber = (roomData as MafiaRoomDto).phase_number;
-      const [{ data: roleData }, { data: nightActionData }, { data: policeReportsData }, { data: voteData }, { data: currentVotesData }, { data: eventData }] =
+      const [{ data: roleData }, { data: allRolesData }, { data: nightActionData }, { data: currentNightActionsData }, { data: policeReportsData }, { data: voteData }, { data: currentVotesData }, { data: eventData }] =
         await Promise.all([
           supabase.from("mafia_player_roles").select("*").eq("player_id", selfPlayer.id).maybeSingle(),
+          supabase.from("mafia_player_roles").select("*").eq("room_id", roomId),
           supabase.from("mafia_night_actions").select("*").eq("actor_player_id", selfPlayer.id).eq("phase_number", phaseNumber).maybeSingle(),
+          supabase.from("mafia_night_actions").select("*").eq("room_id", roomId).eq("phase_number", phaseNumber),
           supabase.from("mafia_police_reports").select("*").eq("police_player_id", selfPlayer.id).order("created_at", { ascending: false }).limit(5),
           supabase.from("mafia_day_votes").select("phase_number,voter_player_id,target_player_id").eq("voter_player_id", selfPlayer.id).eq("phase_number", phaseNumber).maybeSingle(),
           supabase.from("mafia_day_votes").select("phase_number,voter_player_id,target_player_id").eq("room_id", roomId).eq("phase_number", phaseNumber),
@@ -53,7 +57,9 @@ export function useMafiaRoom(roomId: string, playerId: string): MafiaRoomState {
         ]);
 
       setMyRole((roleData as MafiaRoleDto) ?? null);
+      setPlayerRoles((allRolesData as MafiaRoleDto[]) ?? []);
       setMyNightAction((nightActionData as MafiaNightActionDto) ?? null);
+      setCurrentNightActions((currentNightActionsData as MafiaNightActionDto[]) ?? []);
       setMyPoliceReports((policeReportsData as MafiaPoliceReportDto[]) ?? []);
       setMyDayVote((voteData as MafiaDayVoteDto) ?? null);
       setCurrentDayVotes((currentVotesData as MafiaDayVoteDto[]) ?? []);
@@ -72,7 +78,9 @@ export function useMafiaRoom(roomId: string, playerId: string): MafiaRoomState {
       }
     } else {
       setMyRole(null);
+      setPlayerRoles([]);
       setMyNightAction(null);
+      setCurrentNightActions([]);
       setMyPoliceReports([]);
       setMyDayVote(null);
       setCurrentDayVotes([]);
@@ -126,7 +134,9 @@ export function useMafiaRoom(roomId: string, playerId: string): MafiaRoomState {
     players,
     myPlayer,
     myRole,
+    playerRoles,
     myNightAction,
+    currentNightActions,
     mafiaNightActions,
     myPoliceReports,
     myDayVote,

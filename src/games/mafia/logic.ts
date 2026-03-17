@@ -4,7 +4,7 @@ export function getRoleDescription(role: MafiaRole) {
   if (role === "mafia") return "Coordinate privately with the other mafia, choose a target, and confirm together.";
   if (role === "doctor") return "Choose one player to protect tonight.";
   if (role === "police") return "Investigate one player tonight. Only you will see the result.";
-  return "Stay active at night so nobody can guess your role. Tap ready and blend in.";
+  return "Stay active at night so nobody can guess your role. Keep private reads on who feels safe or suspicious, then blend in.";
 }
 
 export function getPhaseTitle(phase: MafiaPhase) {

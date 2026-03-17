@@ -1,10 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 
 const isWeb = Platform.OS === "web";
 const CONSENT_KEY = "picklo_ads_consent";
 const ADSENSE_CLIENT = process.env.EXPO_PUBLIC_ADSENSE_CLIENT;
 const ADSENSE_SLOT = process.env.EXPO_PUBLIC_ADSENSE_SLOT;
+
+declare global {
+  interface Window {
+    adsbygoogle?: unknown[];
+  }
+}
 
 function getStoredConsent(): boolean {
   if (!isWeb || typeof window === "undefined") return false;
@@ -87,35 +93,40 @@ export const AdConsentBanner: React.FC = () => {
 
 export const AdSenseAd: React.FC = () => {
   const [hasConsent, setHasConsent] = useState(false);
+  const adRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setHasConsent(getStoredConsent());
   }, []);
 
+  useEffect(() => {
+    if (!isWeb || !hasConsent || !ADSENSE_CLIENT || !ADSENSE_SLOT) return;
+    if (typeof window === "undefined" || !adRef.current) return;
+
+    try {
+      window.adsbygoogle = window.adsbygoogle || [];
+      window.adsbygoogle.push({});
+    } catch (error) {
+      console.error("AdSense push error:", error);
+    }
+  }, [hasConsent]);
+
   if (!isWeb || !hasConsent) return null;
   if (!ADSENSE_CLIENT || !ADSENSE_SLOT || ADSENSE_SLOT === "XXXXXXXXXX") return null;
 
-  let AdSense: any = null;
-  try {
-    AdSense = require("react-adsense").AdSense;
-  } catch (error) {
-    console.warn("AdSense library not available:", error);
-    return null;
-  }
-  if (!AdSense?.Google) return null;
-
-  try {
-    return (
-      <AdSense.Google
-        client={ADSENSE_CLIENT}
-        slot={ADSENSE_SLOT}
+  return (
+    <div style={{ display: "block", width: "100%" }}>
+      <ins
+        ref={(node) => {
+          adRef.current = node;
+        }}
+        className="adsbygoogle"
         style={{ display: "block" }}
-        format="auto"
-        responsive="true"
+        data-ad-client={ADSENSE_CLIENT}
+        data-ad-slot={ADSENSE_SLOT}
+        data-ad-format="auto"
+        data-full-width-responsive="true"
       />
-    );
-  } catch (error) {
-    console.error("AdSense component error:", error);
-    return null;
-  }
+    </div>
+  );
 };
