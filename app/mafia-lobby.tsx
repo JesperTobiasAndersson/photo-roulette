@@ -1,11 +1,10 @@
-import React, { Fragment, useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, Alert, Image } from "react-native";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Modal, View, Text, Pressable, ScrollView, Alert, Image } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
-  checkWinCondition,
   finishRoleReveal,
   resolveDayVote,
   resolveNight,
@@ -20,6 +19,7 @@ import {
 } from "../src/games/mafia/api";
 import { getPhaseTitle, getRoleDescription } from "../src/games/mafia/logic";
 import { useMafiaRoom } from "../src/games/mafia/useMafiaRoom";
+import { CopyToast } from "../src/components/CopyToast";
 
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -28,10 +28,43 @@ function asString(v: unknown): string {
 }
 
 const PRIVATE_READ_TAGS = [
-  { id: "safe", label: "Safe", color: "#86EFAC", backgroundColor: "rgba(134,239,172,0.12)", borderColor: "rgba(134,239,172,0.32)" },
-  { id: "suspicious", label: "Suspicious", color: "#FCA5A5", backgroundColor: "rgba(252,165,165,0.12)", borderColor: "rgba(252,165,165,0.32)" },
-  { id: "loud", label: "Loud yesterday", color: "#93C5FD", backgroundColor: "rgba(147,197,253,0.12)", borderColor: "rgba(147,197,253,0.32)" },
+  { id: "safe", label: "SAFE", color: "#86EFAC", backgroundColor: "rgba(134,239,172,0.12)", borderColor: "rgba(134,239,172,0.32)" },
+  { id: "suspicious", label: "SUSPICIOUS", color: "#FCA5A5", backgroundColor: "rgba(252,165,165,0.12)", borderColor: "rgba(252,165,165,0.32)" },
+  { id: "loud", label: "LOUD YESTERDAY",  color: "#93C5FD", backgroundColor: "rgba(147,197,253,0.12)", borderColor: "rgba(147,197,253,0.32)" },
 ] as const;
+
+function getRoleInstructionTheme(role: "mafia" | "doctor" | "police" | "villager") {
+  if (role === "mafia") {
+    return {
+      label: "YOUR MISSION",
+      color: "#FCA5A5",
+      backgroundColor: "rgba(127,29,29,0.22)",
+      borderColor: "rgba(252,165,165,0.32)",
+    };
+  }
+  if (role === "doctor") {
+    return {
+      label: "YOUR ACTION TONIGHT",
+      color: "#86EFAC",
+      backgroundColor: "rgba(21,128,61,0.18)",
+      borderColor: "rgba(134,239,172,0.32)",
+    };
+  }
+  if (role === "police") {
+    return {
+      label: "YOUR ACTION TONIGHT",
+      color: "#93C5FD",
+      backgroundColor: "rgba(30,64,175,0.18)",
+      borderColor: "rgba(147,197,253,0.32)",
+    };
+  }
+  return {
+    label: "HOW TO PLAY THIS ROLE",
+    color: "#FDE68A",
+    backgroundColor: "rgba(161,98,7,0.18)",
+    borderColor: "rgba(253,230,138,0.3)",
+  };
+}
 
 type PrivateReadTagId = (typeof PRIVATE_READ_TAGS)[number]["id"];
 type PrivateReads = Record<string, PrivateReadTagId>;
@@ -44,8 +77,28 @@ export default function MafiaRoomScreen() {
   const [now, setNow] = useState(Date.now());
   const [privateReads, setPrivateReads] = useState<PrivateReads>({});
   const [selectedReadPlayerId, setSelectedReadPlayerId] = useState<string | null>(null);
+  const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [showNightResultModal, setShowNightResultModal] = useState(false);
+  const [shownNightResultKey, setShownNightResultKey] = useState<string | null>(null);
+  const [showEndgameRevealModal, setShowEndgameRevealModal] = useState(false);
+  const [hasNavigatedToResults, setHasNavigatedToResults] = useState(false);
+  const [shownEndgameRevealKey, setShownEndgameRevealKey] = useState<string | null>(null);
   const { room, players, myPlayer, myRole, myNightAction, currentNightActions, mafiaNightActions, myPoliceReports, myDayVote, currentDayVotes, events, loading, refresh } =
     useMafiaRoom(roomId, playerId);
+  const nightResultOpacity = useRef(new Animated.Value(0)).current;
+  const nightResultScale = useRef(new Animated.Value(0.9)).current;
+  const nightResultTranslateY = useRef(new Animated.Value(28)).current;
+  const endgameRevealOpacity = useRef(new Animated.Value(0)).current;
+  const endgameRevealScale = useRef(new Animated.Value(0.92)).current;
+  const endgameRevealTranslateY = useRef(new Animated.Value(32)).current;
+  const endgamePulseScale = useRef(new Animated.Value(0.72)).current;
+  const endgamePulseOpacity = useRef(new Animated.Value(0)).current;
+  const endgameVerdictOpacity = useRef(new Animated.Value(0)).current;
+  const endgameVerdictTranslateY = useRef(new Animated.Value(14)).current;
+  const endgameWinnerOpacity = useRef(new Animated.Value(0)).current;
+  const endgameWinnerTranslateY = useRef(new Animated.Value(24)).current;
+  const endgameSubtitleOpacity = useRef(new Animated.Value(0)).current;
+  const endgameSubtitleTranslateY = useRef(new Animated.Value(18)).current;
 
   const isHost = !!room && !!myPlayer && room.host_player_id === myPlayer.id;
   const alivePlayers = useMemo(() => players.filter((player) => player.status === "alive"), [players]);
@@ -56,9 +109,13 @@ export default function MafiaRoomScreen() {
   const phaseMinutesText = `${Math.floor(phaseSecondsLeft / 60)}:${String(phaseSecondsLeft % 60).padStart(2, "0")}`;
   const latestEliminatedPlayerId = typeof latestEvent?.payload?.eliminatedPlayerId === "string" ? latestEvent.payload.eliminatedPlayerId : null;
   const latestEliminatedPlayer = latestEliminatedPlayerId ? players.find((player) => player.id === latestEliminatedPlayerId) ?? null : null;
+  const doctorSaved = latestEvent?.payload?.doctorSaved === true;
+  const savedPlayerId = typeof latestEvent?.payload?.doctorSavedPlayerId === "string" ? latestEvent.payload.doctorSavedPlayerId : null;
+  const savedPlayer = savedPlayerId ? players.find((player) => player.id === savedPlayerId) ?? null : null;
   const selectedTargetId = myNightAction?.target_player_id ?? null;
   const voteTargetId = myDayVote?.target_player_id ?? null;
   const role = myRole?.role ?? "villager";
+  const roleInstructionTheme = getRoleInstructionTheme(role);
   const privateReadsKey = `mafia-private-reads:${roomId}:${playerId}`;
   const aliveNightActions = useMemo(
     () => currentNightActions.filter((action) => alivePlayers.some((player) => player.id === action.actor_player_id)),
@@ -129,6 +186,16 @@ export default function MafiaRoomScreen() {
 
   useEffect(() => {
     if (!room || !isHost) return;
+    if (room.state !== "night_result") return;
+    if (!room.phase_ends_at) return;
+    if (phaseSecondsLeft > 0) return;
+    if (busy) return;
+
+    run("auto-start-discussion", () => startDayDiscussion(roomId, playerId));
+  }, [busy, isHost, phaseSecondsLeft, playerId, room, roomId]);
+
+  useEffect(() => {
+    if (!room || !isHost) return;
     if (room.state !== "day_voting") return;
     if (busy) return;
 
@@ -182,6 +249,227 @@ export default function MafiaRoomScreen() {
     setSelectedReadPlayerId(null);
   }, [selectedReadPlayerId, villagerReadTargets]);
 
+  useEffect(() => {
+    if (!room) return;
+    if (room.state !== "night_result") return;
+
+    const modalKey =
+      latestEvent?.event_type === "night_result"
+        ? `${room.phase_number}-${latestEliminatedPlayerId ?? "none"}-${savedPlayerId ?? "none"}-${doctorSaved ? "saved" : "lost"}`
+        : null;
+    if (!modalKey || shownNightResultKey === modalKey) return;
+
+    setShownNightResultKey(modalKey);
+    setShowNightResultModal(true);
+    nightResultOpacity.setValue(0);
+    nightResultScale.setValue(0.9);
+    nightResultTranslateY.setValue(28);
+
+    Animated.parallel([
+      Animated.timing(nightResultOpacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(nightResultScale, {
+        toValue: 1,
+        tension: 72,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+      Animated.timing(nightResultTranslateY, {
+        toValue: 0,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [
+    latestEliminatedPlayerId,
+    latestEvent?.event_type,
+    nightResultOpacity,
+    nightResultScale,
+    nightResultTranslateY,
+    room,
+    shownNightResultKey,
+  ]);
+
+  useEffect(() => {
+    if (!room) return;
+    if (room.state !== "ended") {
+      setHasNavigatedToResults(false);
+      return;
+    }
+
+    const revealKey = `${room.id}-${room.phase_number}-${room.winner ?? "unknown"}`;
+    if (shownEndgameRevealKey === revealKey || hasNavigatedToResults) return;
+
+    setShownEndgameRevealKey(revealKey);
+    setShowEndgameRevealModal(true);
+    endgameRevealOpacity.setValue(0);
+    endgameRevealScale.setValue(0.92);
+    endgameRevealTranslateY.setValue(32);
+    endgamePulseScale.setValue(0.72);
+    endgamePulseOpacity.setValue(0);
+    endgameVerdictOpacity.setValue(0);
+    endgameVerdictTranslateY.setValue(14);
+    endgameWinnerOpacity.setValue(0);
+    endgameWinnerTranslateY.setValue(24);
+    endgameSubtitleOpacity.setValue(0);
+    endgameSubtitleTranslateY.setValue(18);
+
+    Animated.parallel([
+      Animated.timing(endgameRevealOpacity, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(endgameRevealScale, {
+        toValue: 1,
+        tension: 74,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+      Animated.timing(endgameRevealTranslateY, {
+        toValue: 0,
+        duration: 340,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(endgamePulseScale, {
+            toValue: 1.24,
+            duration: 920,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(endgamePulseOpacity, {
+            toValue: 0.32,
+            duration: 260,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(endgamePulseScale, {
+            toValue: 1.42,
+            duration: 260,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(endgamePulseOpacity, {
+            toValue: 0,
+            duration: 260,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(endgamePulseScale, {
+          toValue: 0.72,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+      { iterations: 3 }
+    ).start();
+
+    Animated.sequence([
+      Animated.delay(280),
+      Animated.parallel([
+        Animated.timing(endgameVerdictOpacity, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(endgameVerdictTranslateY, {
+          toValue: 0,
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(180),
+      Animated.parallel([
+        Animated.timing(endgameWinnerOpacity, {
+          toValue: 1,
+          duration: 320,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(endgameWinnerTranslateY, {
+          toValue: 0,
+          duration: 340,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(140),
+      Animated.parallel([
+        Animated.timing(endgameSubtitleOpacity, {
+          toValue: 1,
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(endgameSubtitleTranslateY, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+  }, [
+    endgameRevealOpacity,
+    endgamePulseOpacity,
+    endgamePulseScale,
+    endgameRevealScale,
+    endgameSubtitleOpacity,
+    endgameSubtitleTranslateY,
+    endgameRevealTranslateY,
+    endgameVerdictOpacity,
+    endgameVerdictTranslateY,
+    endgameWinnerOpacity,
+    endgameWinnerTranslateY,
+    hasNavigatedToResults,
+    playerId,
+    room,
+    roomId,
+    shownEndgameRevealKey,
+  ]);
+
+  useEffect(() => {
+    if (!showEndgameRevealModal) return;
+    if (!room || room.state !== "ended") return;
+    if (hasNavigatedToResults) return;
+
+    const timeoutId = setTimeout(() => {
+      setShowEndgameRevealModal(false);
+      setHasNavigatedToResults(true);
+      router.replace({ pathname: "/mafia-results", params: { roomId, playerId } });
+    }, 4400);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasNavigatedToResults, playerId, room, roomId, showEndgameRevealModal]);
+
+  useEffect(() => {
+    if (!showNightResultModal) return;
+
+    const timeoutId = setTimeout(() => {
+      setShowNightResultModal(false);
+    }, 3200);
+
+    return () => clearTimeout(timeoutId);
+  }, [showNightResultModal]);
+
   if (loading || !room || !myPlayer) {
     return (
       <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
@@ -227,12 +515,13 @@ export default function MafiaRoomScreen() {
     );
   }
 
-  if (room.state === "ended") {
-    router.replace({ pathname: "/mafia-results", params: { roomId, playerId } });
-  }
-
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://picklo.app";
   const inviteUrl = `${baseUrl}/mafia?code=${room.code}`;
+  const copyInviteLink = async () => {
+    await Clipboard.setStringAsync(inviteUrl);
+    setShowCopiedToast(true);
+    setTimeout(() => setShowCopiedToast(false), 1400);
+  };
   const showIdentityCard = room.state !== "lobby" && !!myRole;
   const nightTargets =
     role === "mafia"
@@ -256,6 +545,196 @@ export default function MafiaRoomScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#070B14" }}>
       <StatusBar style="light" />
+      <Modal visible={showNightResultModal} transparent animationType="fade" onRequestClose={() => setShowNightResultModal(false)}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(2,6,23,0.68)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              borderRadius: 28,
+              padding: 24,
+              backgroundColor: "#140A0C",
+              borderWidth: 1,
+              borderColor: "rgba(252,165,165,0.4)",
+              shadowColor: "#F87171",
+              shadowOpacity: 0.3,
+              shadowRadius: 30,
+              shadowOffset: { width: 0, height: 16 },
+              elevation: 18,
+              alignItems: "center",
+              opacity: nightResultOpacity,
+              transform: [{ scale: nightResultScale }, { translateY: nightResultTranslateY }],
+            }}
+          >
+            <View
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: doctorSaved ? "rgba(21,128,61,0.24)" : "rgba(127,29,29,0.32)",
+                borderWidth: 1,
+                borderColor: doctorSaved ? "rgba(134,239,172,0.35)" : "rgba(252,165,165,0.35)",
+                marginBottom: 18,
+              }}
+            >
+              <Text style={{ color: doctorSaved ? "#86EFAC" : "#FCA5A5", fontSize: 42 }}>{doctorSaved ? "✚" : "☠"}</Text>
+            </View>
+            <Text style={{ color: doctorSaved ? "#86EFAC" : "#FCA5A5", fontWeight: "900", fontSize: 13, letterSpacing: 2 }}>
+              {doctorSaved ? "DOCTOR SAVE" : "NIGHT RESULT"}
+            </Text>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center", marginTop: 12 }}>
+              {doctorSaved ? savedPlayer?.display_name ?? "A player" : latestEliminatedPlayer ? latestEliminatedPlayer.display_name : "No one"}
+            </Text>
+            <Text style={{ color: "#E2E8F0", fontWeight: "800", fontSize: 16, textAlign: "center", marginTop: 10 }}>
+              {doctorSaved
+                ? "was attacked during the night but was saved"
+                : latestEliminatedPlayer
+                  ? "died during the night"
+                  : "made it through the night"}
+            </Text>
+            <Text style={{ color: "#94A3B8", lineHeight: 22, textAlign: "center", marginTop: 12 }}>
+              {doctorSaved ? "The doctor prevented the elimination. Day discussion is about to begin." : "The room is moving into daylight. Get ready for discussion."}
+            </Text>
+          </Animated.View>
+        </View>
+      </Modal>
+      <Modal visible={showEndgameRevealModal} transparent animationType="fade" onRequestClose={() => undefined}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(3,7,18,0.82)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 430,
+              borderRadius: 30,
+              paddingHorizontal: 24,
+              paddingVertical: 28,
+              backgroundColor: room?.winner === "mafia" ? "#17090B" : "#08131F",
+              borderWidth: 1,
+              borderColor: room?.winner === "mafia" ? "rgba(252,165,165,0.36)" : "rgba(125,211,252,0.34)",
+              shadowColor: room?.winner === "mafia" ? "#FB7185" : "#38BDF8",
+              shadowOpacity: 0.34,
+              shadowRadius: 34,
+              shadowOffset: { width: 0, height: 18 },
+              elevation: 20,
+              alignItems: "center",
+              opacity: endgameRevealOpacity,
+              transform: [{ scale: endgameRevealScale }, { translateY: endgameRevealTranslateY }],
+              gap: 10,
+            }}
+          >
+            <Animated.View
+              style={{
+                position: "absolute",
+                width: 188,
+                height: 188,
+                borderRadius: 999,
+                backgroundColor: room?.winner === "mafia" ? "rgba(251,113,133,0.24)" : "rgba(56,189,248,0.22)",
+                opacity: endgamePulseOpacity,
+                transform: [{ scale: endgamePulseScale }],
+              }}
+            />
+            <View
+              style={{
+                width: 108,
+                height: 108,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: room?.winner === "mafia" ? "rgba(127,29,29,0.34)" : "rgba(8,47,73,0.42)",
+                borderWidth: 1,
+                borderColor: room?.winner === "mafia" ? "rgba(252,165,165,0.3)" : "rgba(125,211,252,0.32)",
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: room?.winner === "mafia" ? "#FCA5A5" : "#7DD3FC", fontSize: 46, fontWeight: "900" }}>
+                {room?.winner === "mafia" ? "M" : "V"}
+              </Text>
+            </View>
+            <Animated.Text
+              style={{
+                color: room?.winner === "mafia" ? "#FCA5A5" : "#7DD3FC",
+                fontWeight: "900",
+                fontSize: 12,
+                letterSpacing: 2.2,
+                textTransform: "uppercase",
+                opacity: endgameVerdictOpacity,
+                transform: [{ translateY: endgameVerdictTranslateY }],
+              }}
+            >
+              Final verdict
+            </Animated.Text>
+            <Animated.Text
+              style={{
+                color: "#F8FAFC",
+                fontWeight: "900",
+                fontSize: 32,
+                textAlign: "center",
+                opacity: endgameWinnerOpacity,
+                transform: [{ translateY: endgameWinnerTranslateY }, { scale: endgameWinnerOpacity }],
+              }}
+            >
+              {room?.winner === "mafia" ? "MAFIA WINS" : "VILLAGE WINS"}
+            </Animated.Text>
+            <Animated.Text
+              style={{
+                color: "#CBD5E1",
+                lineHeight: 22,
+                textAlign: "center",
+                maxWidth: 320,
+                opacity: endgameSubtitleOpacity,
+                transform: [{ translateY: endgameSubtitleTranslateY }],
+              }}
+            >
+              {room?.winner === "mafia"
+                ? "The table lost control. The mafia outnumbered the village."
+                : "The village held together and eliminated every mafia player."}
+            </Animated.Text>
+            <View
+              style={{
+                marginTop: 10,
+                alignSelf: "stretch",
+                height: 8,
+                borderRadius: 999,
+                backgroundColor: "rgba(15,23,42,0.85)",
+                overflow: "hidden",
+              }}
+            >
+              <Animated.View
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: room?.winner === "mafia" ? "#FB7185" : "#38BDF8",
+                  transform: [
+                    {
+                      scaleX: endgameRevealOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.2, 1],
+                      }),
+                    },
+                  ],
+                }}
+              />
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
         <View style={{ gap: 6 }}>
           <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>Mafia</Text>
@@ -268,7 +747,22 @@ export default function MafiaRoomScreen() {
           <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
             <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Your identity</Text>
             <Text style={{ color: role === "mafia" ? "#FDA4AF" : "#E2E8F0", fontWeight: "900", fontSize: 22 }}>{role.toUpperCase()}</Text>
-            <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{getRoleDescription(role)}</Text>
+            <View
+              style={{
+                borderRadius: 16,
+                paddingHorizontal: 14,
+                paddingVertical: 13,
+                backgroundColor: roleInstructionTheme.backgroundColor,
+                borderWidth: 1,
+                borderColor: roleInstructionTheme.borderColor,
+                gap: 6,
+              }}
+            >
+              <Text style={{ color: roleInstructionTheme.color, fontWeight: "900", fontSize: 11, letterSpacing: 1.1 }}>
+                {roleInstructionTheme.label}
+              </Text>
+              <Text style={{ color: "#F8FAFC", lineHeight: 22, fontWeight: "800", fontSize: 15 }}>{getRoleDescription(role)}</Text>
+            </View>
             {myPlayer.status === "eliminated" ? <Text style={{ color: "#FCA5A5", fontWeight: "900" }}>You are eliminated but can still follow the game.</Text> : null}
             {latestReport ? (
               <View style={{ backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937" }}>
@@ -313,7 +807,7 @@ export default function MafiaRoomScreen() {
                 </View>
               ))}
               <Pressable
-                onPress={() => Clipboard.setStringAsync(inviteUrl)}
+                onPress={copyInviteLink}
                 style={({ pressed }) => ({
                   height: 46,
                   borderRadius: 14,
@@ -325,8 +819,9 @@ export default function MafiaRoomScreen() {
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900" }}>Copy invite link</Text>
+                <Text style={{ color: "white", fontWeight: "900" }}>COPY INVITE LINK</Text>
               </Pressable>
+              {showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
               {isHost ? (
                 <Pressable
                   onPress={() => run("start", () => startMafiaGame(roomId, playerId))}
@@ -340,7 +835,7 @@ export default function MafiaRoomScreen() {
                     opacity: busy === "start" || players.length < 4 ? 0.5 : pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900" }}>Start the game</Text>
+                  <Text style={{ color: "white", fontWeight: "900" }}>START THE GAME</Text>
                 </Pressable>
               ) : (
                 <Text style={{ color: "#94A3B8" }}>Waiting for the host to start the game.</Text>
@@ -365,17 +860,15 @@ export default function MafiaRoomScreen() {
                 opacity: myPlayer.role_reveal_ready ? 0.6 : pressed ? 0.92 : 1,
               })}
             >
-              <Text style={{ color: "white", fontWeight: "900" }}>{myPlayer.role_reveal_ready ? "Ready" : "I saw my role"}</Text>
+              <Text style={{ color: "white", textTransform: "uppercase", fontWeight: "900" }}>{myPlayer.role_reveal_ready ? "Ready" : "I saw my role"}</Text>
             </Pressable>
           </View>
         ) : null}
 
         {room.state === "night" ? (
           <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Night actions</Text>
-            <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-              Everyone has an active-looking night screen so roles do not stand out from how the phone is used.
-            </Text>
+            <Text style={{ color: "#F8FAFC", textTransform: "uppercase",  fontWeight: "900", fontSize: 17 }}>Night actions</Text>
+       
 
             {role === "villager" ? (
               <View style={{ gap: 12 }}>
@@ -458,7 +951,7 @@ export default function MafiaRoomScreen() {
                     opacity: myNightAction?.confirmed ? 0.6 : pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900" }}>{myNightAction?.confirmed ? "Ready" : "Finish night notes"}</Text>
+                  <Text style={{ color: "white", textTransform: "uppercase", fontWeight: "900" }}>{myNightAction?.confirmed ? "Ready" : "Finish night notes"}</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -494,20 +987,24 @@ export default function MafiaRoomScreen() {
                     opacity: !selectedTargetId ? 0.5 : pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900" }}>{myNightAction?.confirmed ? "Confirmed" : "Confirm choice"}</Text>
+                  <Text style={{ color: "white", textTransform: "uppercase", fontWeight: "900" }}>{myNightAction?.confirmed ? "Confirmed" : "Confirm choice"}</Text>
                 </Pressable>
               </View>
             ) : null}
 
             {role === "mafia" && mafiaNightActions.length > 0 ? (
               <View style={{ gap: 8, backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937" }}>
-                <Text style={{ color: "#FDA4AF", fontWeight: "900" }}>Mafia coordination</Text>
+                <Text style={{ color: "#FDA4AF", textTransform: "uppercase", fontWeight: "900" }}>Mafia coordination</Text>
                 {mafiaNightActions.map((action) => {
                   const teammate = players.find((player) => player.id === action.actor_player_id);
                   const target = players.find((player) => player.id === action.target_player_id);
                   return (
                     <Text key={action.actor_player_id} style={{ color: "#E5E7EB", lineHeight: 20 }}>
-                      {teammate?.display_name ?? "Teammate"}: {target?.display_name ?? "No target"} {action.confirmed ? "· confirmed" : "· choosing"}
+                      {teammate?.display_name ?? "Teammate"} selected{" "}
+                      <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>
+                        {target?.display_name ?? "no player yet"}
+                      </Text>{" "}
+                      as the kill target {action.confirmed ? "· locked in" : "· not confirmed yet"}
                     </Text>
                   );
                 })}
@@ -530,6 +1027,7 @@ export default function MafiaRoomScreen() {
                     style={({ pressed }) => ({
                       height: 52,
                       borderRadius: 16,
+                      textTransform: "uppercase",
                       alignItems: "center",
                       justifyContent: "center",
                       backgroundColor: "#000000",
@@ -561,7 +1059,7 @@ export default function MafiaRoomScreen() {
                   opacity: !allAlivePlayersLockedNightAction || nightContinueCount !== alivePlayers.length ? 0.5 : pressed ? 0.92 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900" }}>Resolve night</Text>
+                <Text style={{ color: "white", textTransform: "uppercase", fontWeight: "900" }}>Resolve night</Text>
               </Pressable>
             ) : (
               <Text style={{ color: "#94A3B8" }}>Waiting for everyone to press continue.</Text>
@@ -571,10 +1069,17 @@ export default function MafiaRoomScreen() {
 
         {room.state === "night_result" ? (
           <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Night result</Text>
-            <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
-            {latestEvent?.event_type === "night_result" ? <Text style={{ color: "#94A3B8", lineHeight: 21 }}>Night actions have been resolved.</Text> : null}
-            {latestEliminatedPlayer ? <Text style={{ color: "#FCA5A5", fontWeight: "800" }}>{latestEliminatedPlayer.display_name} was eliminated.</Text> : null}
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>After the night</Text>
+            <Text style={{ color: "#94A3B8", lineHeight: 22 }}>
+              {doctorSaved
+                ? `${savedPlayer?.display_name ?? "A player"} was attacked during the night, but the doctor saved them.`
+                : latestEliminatedPlayer
+                  ? `${latestEliminatedPlayer.display_name} died during the night.`
+                  : "No one died during the night."}
+            </Text>
+            <Text style={{ color: "#CBD5E1", fontWeight: "800" }}>
+              Discussion starts automatically in {phaseSecondsLeft}s if the host does not continue manually.
+            </Text>
             {isHost ? (
               <Pressable
                 onPress={() => run("discussion", () => startDayDiscussion(roomId, playerId))}
@@ -588,7 +1093,7 @@ export default function MafiaRoomScreen() {
                   opacity: pressed ? 0.92 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900" }}>Continue to discussion</Text>
+                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>Continue to discussion</Text>
               </Pressable>
             ) : (
               <Text style={{ color: "#94A3B8" }}>Waiting for the host to move into discussion.</Text>
@@ -620,7 +1125,7 @@ export default function MafiaRoomScreen() {
                   opacity: myPlayer.discussion_ready ? 0.6 : pressed ? 0.92 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900" }}>{myPlayer.discussion_ready ? "Ready to vote" : "I'm ready to vote"}</Text>
+                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>READY TO VOTE</Text>
               </Pressable>
             ) : (
               <Text style={{ color: "#94A3B8" }}>Eliminated players can watch the discussion, but only living players can mark ready.</Text>
@@ -640,7 +1145,7 @@ export default function MafiaRoomScreen() {
                   opacity: pressed ? 0.92 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900" }}>Open voting now</Text>
+                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>OPEN VOTING NOW</Text>
               </Pressable>
             ) : null}
           </View>
@@ -711,22 +1216,6 @@ export default function MafiaRoomScreen() {
             {isHost ? (
               <Fragment>
                 <Pressable
-                  onPress={() => run("check-win", () => checkWinCondition(roomId))}
-                  disabled={busy === "check-win"}
-                  style={({ pressed }) => ({
-                    height: 48,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#111827",
-                    borderWidth: 1,
-                    borderColor: "#1F2937",
-                    opacity: pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "900" }}>Check winner</Text>
-                </Pressable>
-                <Pressable
                   onPress={() => run("next-night", () => startNextNight(roomId, playerId))}
                   disabled={busy === "next-night"}
                   style={({ pressed }) => ({
@@ -738,7 +1227,7 @@ export default function MafiaRoomScreen() {
                     opacity: pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900" }}>Continue to next night</Text>
+                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>CONTINUE TO NEXT NIGHT</Text>
                 </Pressable>
               </Fragment>
             ) : (
@@ -839,7 +1328,7 @@ export default function MafiaRoomScreen() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900" }}>Back to games</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
         </Pressable>
       </ScrollView>
     </View>

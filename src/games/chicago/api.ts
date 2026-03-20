@@ -4,7 +4,7 @@ import {
   cardId,
   comparePokerEvaluations,
   evaluatePokerHand,
-  getPokerWinner,
+  getPokerWinnerWithTie,
   makeDeck,
   resolveTrick,
   shuffleDeck,
@@ -331,53 +331,98 @@ export async function submitChicagoDraw(roomId: string, playerId: string, discar
   return { ok: true, trickId: trick.id };
 }
 
-export async function advanceChicagoPokerScore(roomId: string, playerId: string) {
-  const room = await requireHost(roomId, playerId);
+export async function advanceChicagoPokerScore(roomId: string, _playerId: string) {
+  const room = await getRoom(roomId);
   if (!["poker_score_1", "poker_score_2"].includes(room.state)) throw new Error("Poker scoring is not active");
 
-  const { data: hands, error: handsError } = await supabase.from("chicago_player_hands").select("*").eq("room_id", roomId);
-  if (handsError) throw handsError;
-  if (!hands || hands.length === 0) throw new Error("No hands found");
-
-  const winner = getPokerWinner(hands.map((hand) => ({ playerId: hand.player_id, cards: hand.cards })));
-  if (!winner) throw new Error("Could not determine poker winner");
-
-  const { error: handError } = await supabase
-    .from("chicago_player_hands")
-    .update({
-      last_poker_hand_name: winner.evaluation.name,
-      last_poker_points: winner.evaluation.points,
-    })
-    .eq("player_id", winner.playerId);
-  if (handError) throw handError;
-
-  const nextScore = await addScore(winner.playerId, winner.evaluation.points);
-  if (winner.evaluation.points >= 52 || nextScore >= 52) {
-    await maybeFinishGame(roomId);
-    return { ok: true };
+  const lockIsStale =
+    !!room.phase_ends_at && Date.now() - new Date(room.phase_ends_at).getTime() > 15000;
+  if (lockIsStale) {
+    await supabase
+      .from("chicago_rooms")
+      .update({ phase_ends_at: null })
+      .eq("id", roomId)
+      .eq("state", room.state)
+      .eq("phase_ends_at", room.phase_ends_at);
   }
 
-  const round = await getCurrentRound(roomId);
-  if (!round) throw new Error("No active round");
-
-  const nextState = room.state === "poker_score_1" ? "draw_phase_2" : "draw_phase_3";
-  const nextDrawNumber = room.state === "poker_score_1" ? 2 : 3;
-  await supabase.from("chicago_rounds").update({ active_phase: nextState, draw_number: nextDrawNumber }).eq("id", round.id);
-
-  const { error: roomError } = await supabase
+  const freshRoom = lockIsStale ? await getRoom(roomId) : room;
+  const lockToken = new Date().toISOString();
+  const { data: claimedRoom, error: claimError } = await supabase
     .from("chicago_rooms")
-    .update({
-      state: nextState,
-      phase_number: room.phase_number + 1,
-      public_message:
-        room.state === "poker_score_1"
-          ? `${winner.evaluation.label} wins ${winner.evaluation.points} point${winner.evaluation.points === 1 ? "" : "s"} in the first scoring.`
-          : `${winner.evaluation.label} wins ${winner.evaluation.points} point${winner.evaluation.points === 1 ? "" : "s"} in the second scoring.`,
-    })
-    .eq("id", roomId);
-  if (roomError) throw roomError;
+    .update({ phase_ends_at: lockToken })
+    .eq("id", roomId)
+    .eq("state", freshRoom.state)
+    .is("phase_ends_at", null)
+    .select("*")
+    .maybeSingle();
+  if (claimError) throw claimError;
+  if (!claimedRoom) {
+    return { ok: true, waiting: true };
+  }
 
-  return { ok: true };
+  try {
+    const { data: hands, error: handsError } = await supabase.from("chicago_player_hands").select("*").eq("room_id", roomId);
+    if (handsError) throw handsError;
+    if (!hands || hands.length === 0) throw new Error("No hands found");
+
+    const { winner, tied } = getPokerWinnerWithTie(hands.map((hand) => ({ playerId: hand.player_id, cards: hand.cards })));
+    if (!winner) throw new Error("Could not determine poker winner");
+    const players = await getPlayers(roomId);
+    const winnerPlayer = players.find((player) => player.id === winner.playerId) ?? null;
+    const winnerName = winnerPlayer?.display_name ?? "A player";
+
+    const { error: handError } = await supabase
+      .from("chicago_player_hands")
+      .update({
+        last_poker_hand_name: winner.evaluation.name,
+        last_poker_points: winner.evaluation.points,
+      })
+      .eq("player_id", winner.playerId);
+    if (handError) throw handError;
+
+    const shouldAwardPoints = !tied && winner.evaluation.points > 0;
+    const nextScore = shouldAwardPoints ? await addScore(winner.playerId, winner.evaluation.points) : winnerPlayer?.score ?? 0;
+    if (shouldAwardPoints && (winner.evaluation.points >= 52 || nextScore >= 52)) {
+      await maybeFinishGame(roomId);
+      await supabase.from("chicago_rooms").update({ phase_ends_at: null }).eq("id", roomId);
+      return { ok: true };
+    }
+
+    const round = await getCurrentRound(roomId);
+    if (!round) throw new Error("No active round");
+
+    const nextState = freshRoom.state === "poker_score_1" ? "draw_phase_2" : "draw_phase_3";
+    const nextDrawNumber = freshRoom.state === "poker_score_1" ? 2 : 3;
+    await supabase.from("chicago_rounds").update({ active_phase: nextState, draw_number: nextDrawNumber }).eq("id", round.id);
+
+    const { error: roomError } = await supabase
+      .from("chicago_rooms")
+      .update({
+        state: nextState,
+        phase_number: freshRoom.phase_number + 1,
+        phase_ends_at: null,
+        public_message:
+          freshRoom.state === "poker_score_1"
+            ? tied
+              ? "The first poker scoring tied. No points were awarded."
+              : winner.evaluation.points > 0
+                ? `${winnerName} wins the first scoring with ${winner.evaluation.label} for ${winner.evaluation.points} point${winner.evaluation.points === 1 ? "" : "s"}.`
+                : `${winnerName} had the best high card in the first scoring. No points were awarded.`
+            : tied
+              ? "The second poker scoring tied. No points were awarded."
+              : winner.evaluation.points > 0
+                ? `${winnerName} wins the second scoring with ${winner.evaluation.label} for ${winner.evaluation.points} point${winner.evaluation.points === 1 ? "" : "s"}.`
+                : `${winnerName} had the best high card in the second scoring. No points were awarded.`,
+      })
+      .eq("id", roomId);
+    if (roomError) throw roomError;
+
+    return { ok: true };
+  } catch (error) {
+    await supabase.from("chicago_rooms").update({ phase_ends_at: null }).eq("id", roomId);
+    throw error;
+  }
 }
 
 export async function declareChicago(roomId: string, playerId: string) {
@@ -386,13 +431,22 @@ export async function declareChicago(roomId: string, playerId: string) {
 
   const { data: player, error: playerError } = await supabase.from("chicago_room_players").select("*").eq("id", playerId).single();
   if (playerError) throw playerError;
-  if ((player?.score ?? 0) < 15) throw new Error("You need at least 15 points to declare Chicago");
   if (player.chicago_declared) throw new Error("You already declared Chicago this round");
 
   const round = await getCurrentRound(roomId);
   if (!round) throw new Error("No active round");
+  if (round.chicago_declared_by) throw new Error("Chicago has already been claimed this round");
 
-  await supabase.from("chicago_rounds").update({ chicago_declared_by: playerId }).eq("id", round.id);
+  const { data: claimedRound, error: claimError } = await supabase
+    .from("chicago_rounds")
+    .update({ chicago_declared_by: playerId })
+    .eq("id", round.id)
+    .is("chicago_declared_by", null)
+    .select("id")
+    .maybeSingle();
+  if (claimError) throw claimError;
+  if (!claimedRound) throw new Error("Another player claimed CHICAGO first");
+
   await supabase.from("chicago_room_players").update({ chicago_declared: true }).eq("id", playerId);
   await supabase.from("chicago_rooms").update({ public_message: `${player.display_name} declared CHICAGO.` }).eq("id", roomId);
   return { ok: true };

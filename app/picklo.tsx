@@ -11,7 +11,7 @@ import {
   Keyboard,
   ActivityIndicator,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -25,10 +25,18 @@ function makeCode(len = 4) {
   return s;
 }
 
+function asString(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0];
+  return "";
+}
+
 export default function MemeMatchHome() {
+  const params = useLocalSearchParams();
+  const codeFromUrl = asString(params.code).trim().toUpperCase();
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [mode, setMode] = useState<"create" | "join">("create");
+  const [code, setCode] = useState(codeFromUrl);
+  const [mode, setMode] = useState<"create" | "join">(codeFromUrl ? "join" : "create");
   const [loading, setLoading] = useState(false);
 
   const trimmedName = useMemo(() => name.trim(), [name]);
@@ -139,7 +147,7 @@ export default function MemeMatchHome() {
       })}
     >
       {loading ? <ActivityIndicator color="white" /> : null}
-      <Text style={{ color: "white", fontWeight: "900", fontSize: 18, letterSpacing: 0.3 }}>{title}</Text>
+      <Text style={{ color: "white", fontWeight: "900", fontSize: 18, letterSpacing: 0.3, textTransform: "uppercase" }}>{title}</Text>
     </Pressable>
   );
 
@@ -185,6 +193,12 @@ export default function MemeMatchHome() {
               Add to Home Screen for an app-like experience.
             </Text>
           )}
+
+          {codeFromUrl ? (
+            <Text style={{ color: "#BAE6FD", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13, fontWeight: "800" }}>
+              INVITE CODE DETECTED: {codeFromUrl}
+            </Text>
+          ) : null}
         </View>
 
         <View
@@ -200,13 +214,13 @@ export default function MemeMatchHome() {
           {isWeb && (
             <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
               <Pressable onPress={() => setMode("create")}>
-                <Text style={{ color: mode === "create" ? "#38BDF8" : "#94A3B8", fontWeight: "800", fontSize: 14 }}>
+                <Text style={{ color: mode === "create" ? "#38BDF8" : "#94A3B8", fontWeight: "800", textTransform: "uppercase", fontSize: 14 }}>
                   Create Room
                 </Text>
               </Pressable>
               <Text style={{ color: "#94A3B8" }}>|</Text>
               <Pressable onPress={() => setMode("join")}>
-                <Text style={{ color: mode === "join" ? "#38BDF8" : "#94A3B8", fontWeight: "800", fontSize: 14 }}>
+                <Text style={{ color: mode === "join" ? "#38BDF8" : "#94A3B8", fontWeight: "800", textTransform: "uppercase", fontSize: 14 }}>
                   Join Room
                 </Text>
               </Pressable>
@@ -230,6 +244,7 @@ export default function MemeMatchHome() {
                 fontSize: 16,
                 backgroundColor: "#0B1222",
                 borderWidth: 1,
+                
                 borderColor: "#1F2937",
                 color: "white",
                 fontWeight: "700",
@@ -281,14 +296,14 @@ export default function MemeMatchHome() {
 
           {mode === "create" ? (
             <PrimaryButton
-              title={loading ? "Creating..." : "Create room"}
+              title={loading ? "Creating..." : "Create MemeMatch Room"}
               onPress={createRoom}
               disabled={!canCreate}
               variant="primary"
             />
           ) : (
             <PrimaryButton
-              title={loading ? "Joining..." : "Join room"}
+              title={loading ? "Joining..." : "Join MemeMatch Room"}
               onPress={joinRoom}
               disabled={!canJoin}
               variant="secondary"
@@ -308,9 +323,10 @@ export default function MemeMatchHome() {
             borderWidth: 1,
             borderColor: "#1F2937",
             opacity: pressed ? 0.9 : 1,
+            
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900" }}>Back to games</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
         </Pressable>
 
         <Text style={{ color: "#64748B", textAlign: "center", marginTop: 14, fontSize: 12 }}>

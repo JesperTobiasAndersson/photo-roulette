@@ -90,11 +90,11 @@ export default function MafiaHome() {
         <View style={{ backgroundColor: "#0F172A", borderRadius: 22, padding: 20, borderWidth: 1, borderColor: "#1E293B", gap: 16 }}>
           <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
             <Pressable onPress={() => setMode("create")} disabled={loading}>
-              <Text style={{ color: mode === "create" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", fontSize: 14 }}>Create Room</Text>
+              <Text style={{ color: mode === "create" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Create Room</Text>
             </Pressable>
             <Text style={{ color: "#475569" }}>|</Text>
             <Pressable onPress={() => setMode("join")} disabled={loading}>
-              <Text style={{ color: mode === "join" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", fontSize: 14 }}>Join Room</Text>
+              <Text style={{ color: mode === "join" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Join Room</Text>
             </Pressable>
           </View>
 
@@ -156,7 +156,7 @@ export default function MafiaHome() {
             })}
           >
             {loading ? <ActivityIndicator color="white" /> : null}
-            <Text style={{ color: "white", fontWeight: "900", fontSize: 17 }}>
+            <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase", fontSize: 18 }}>
               {mode === "create" ? "Create Mafia room" : "Join Mafia room"}
             </Text>
           </Pressable>
@@ -176,7 +176,7 @@ export default function MafiaHome() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900" }}>Back to games</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
         </Pressable>
       </View>
     </View>

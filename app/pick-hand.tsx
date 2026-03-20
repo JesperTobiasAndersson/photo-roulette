@@ -228,7 +228,7 @@ export default function PickHandScreen() {
         <View style={{ flex: 1, padding: 16, gap: 12 }}>
           {/* Header */}
           <View style={{ gap: 10 }}>
-            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Choose your 5 pics</Text>
+            <Text style={{ color: "white", fontSize: 24, textTransform: "uppercase", fontWeight: "900" }}>Choose your images</Text>
 
             <View
               style={{
@@ -241,7 +241,7 @@ export default function PickHandScreen() {
               }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ color: "#CBD5E1", fontWeight: "800" }}>Progress</Text>
+                <Text style={{ color: "#CBD5E1", textTransform: "uppercase", fontWeight: "800" }}>Progress</Text>
 
                 <View
                   style={{
@@ -267,10 +267,10 @@ export default function PickHandScreen() {
               {busy && (
                 <View style={{ gap: 10, marginTop: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <Text style={{ color: "white", fontWeight: "900" }}>
+                    <Text style={{ color: "white",  fontWeight: "900" }}>
                       Uploading {uploadDone}/{uploadTotal}
                     </Text>
-                    <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>
+                    <Text style={{ color: "#9CA3AF",  fontWeight: "900" }}>
                       {Math.round(progress * 100)}%
                     </Text>
                   </View>
@@ -304,25 +304,21 @@ export default function PickHandScreen() {
 
           {/* Buttons */}
           <View style={{ gap: 10 }}>
-            <Button
-              title={
-                hand.length >= MAX_IMAGES
-                  ? "Hand is full"
-                  : remainingToPick === MAX_IMAGES
-                  ? `Pick ${MAX_IMAGES} images`
-                  : "Pick more images"
-              }
-              onPress={pickAndUploadMany}
-              disabled={busy}
-              variant="primary"
-            />
-
-            <Button
-              title="Continue"
-              onPress={goNext}
-              disabled={busy || !canContinue}
-              variant="secondary"
-            />
+            {canContinue ? (
+              <Button
+                title="Continue"
+                onPress={goNext}
+                disabled={busy}
+                variant="primary"
+              />
+            ) : (
+              <Button
+                title={remainingToPick === MAX_IMAGES ? `Pick ${MAX_IMAGES} images` : "Pick more images"}
+                onPress={pickAndUploadMany}
+                disabled={busy}
+                variant="primary"
+              />
+            )}
           </View>
 
           {/* Grid */}

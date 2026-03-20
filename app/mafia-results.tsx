@@ -64,7 +64,7 @@ export default function MafiaResults() {
         <Text style={{ color: "#CBD5E1" }}>Your role: {myRole?.role?.toUpperCase() ?? "UNKNOWN"}</Text>
 
         <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-          <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Final table</Text>
+          <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>FINAL TABLE</Text>
           {players.map((player) => {
             const playerRole = playerRoles.find((role) => role.player_id === player.id)?.role;
             const roleBadge = getRoleBadge(playerRole);
@@ -107,7 +107,7 @@ export default function MafiaResults() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900" }}>Back to Mafia home</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO MAFIA HOME</Text>
         </Pressable>
       </ScrollView>
     </View>

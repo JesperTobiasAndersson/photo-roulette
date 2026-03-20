@@ -127,7 +127,7 @@ export default function JoinScreen() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 14 }}>Back to MemeMatch</Text>
+          <Text style={{ color: "white", fontWeight: "900", fontSize: 14, textTransform: "uppercase" }}>BACK TO MEMEMATCH</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

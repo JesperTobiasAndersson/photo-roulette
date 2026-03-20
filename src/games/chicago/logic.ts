@@ -205,6 +205,36 @@ export function getPokerWinner<T extends { playerId: string; cards: ChicagoCard[
   return winner;
 }
 
+export function getPokerWinnerWithTie<T extends { playerId: string; cards: ChicagoCard[] }>(entries: T[]) {
+  const evaluated = entries.map((entry) => ({
+    playerId: entry.playerId,
+    evaluation: evaluatePokerHand(entry.cards),
+  }));
+
+  let winner = evaluated[0] ?? null;
+  let tied = false;
+
+  for (const current of evaluated.slice(1)) {
+    if (!winner) {
+      winner = current;
+      tied = false;
+      continue;
+    }
+
+    const comparison = comparePokerEvaluations(current.evaluation, winner.evaluation);
+    if (comparison > 0) {
+      winner = current;
+      tied = false;
+      continue;
+    }
+    if (comparison === 0) {
+      tied = true;
+    }
+  }
+
+  return { winner, tied };
+}
+
 export function getNextChicagoPhase(current: ChicagoPhase): ChicagoPhase {
   if (current === "draw_phase_1") return "poker_score_1";
   if (current === "poker_score_1") return "draw_phase_2";

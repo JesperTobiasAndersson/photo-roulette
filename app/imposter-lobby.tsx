@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Animated, Easing, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "react-native";
 import { AnimatedEntrance } from "../src/components/AnimatedEntrance";
+import { CopyToast } from "../src/components/CopyToast";
 import { IMPOSTER_CATEGORIES } from "../src/games/imposter/data";
 import {
   finishImposterReveal,
@@ -35,9 +36,30 @@ export default function ImposterLobbyScreen() {
   const playerId = asString(params.playerId);
   const [busy, setBusy] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [showRoundContinueModal, setShowRoundContinueModal] = useState(false);
   const [shownRoundContinueKey, setShownRoundContinueKey] = useState<string | null>(null);
+  const [showVoteRevealModal, setShowVoteRevealModal] = useState(false);
+  const [shownVoteRevealKey, setShownVoteRevealKey] = useState<string | null>(null);
+  const [showEndgameRevealModal, setShowEndgameRevealModal] = useState(false);
+  const [shownEndgameRevealKey, setShownEndgameRevealKey] = useState<string | null>(null);
+  const [hasNavigatedToResults, setHasNavigatedToResults] = useState(false);
   const { room, players, myPlayer, myRole, playerRoles, myVote, currentVotes, loading, refresh } = useImposterRoom(roomId, playerId);
+  const previousStatusesRef = useRef<Record<string, "alive" | "eliminated">>({});
+  const voteRevealOpacity = useRef(new Animated.Value(0)).current;
+  const voteRevealScale = useRef(new Animated.Value(0.9)).current;
+  const voteRevealTranslateY = useRef(new Animated.Value(28)).current;
+  const endgameRevealOpacity = useRef(new Animated.Value(0)).current;
+  const endgameRevealScale = useRef(new Animated.Value(0.92)).current;
+  const endgameRevealTranslateY = useRef(new Animated.Value(32)).current;
+  const endgamePulseScale = useRef(new Animated.Value(0.72)).current;
+  const endgamePulseOpacity = useRef(new Animated.Value(0)).current;
+  const endgameVerdictOpacity = useRef(new Animated.Value(0)).current;
+  const endgameVerdictTranslateY = useRef(new Animated.Value(14)).current;
+  const endgameWinnerOpacity = useRef(new Animated.Value(0)).current;
+  const endgameWinnerTranslateY = useRef(new Animated.Value(24)).current;
+  const endgameSubtitleOpacity = useRef(new Animated.Value(0)).current;
+  const endgameSubtitleTranslateY = useRef(new Animated.Value(18)).current;
 
   const isHost = !!room && !!myPlayer && room.host_player_id === myPlayer.id;
   const alivePlayers = useMemo(() => players.filter((player) => player.status === "alive"), [players]);
@@ -57,6 +79,13 @@ export default function ImposterLobbyScreen() {
   const discussionReadyCount = useMemo(() => alivePlayers.filter((player) => player.discussion_ready).length, [alivePlayers]);
   const phaseSecondsLeft = room?.phase_ends_at ? Math.max(0, Math.ceil((new Date(room.phase_ends_at).getTime() - now) / 1000)) : 0;
   const phaseMinutesText = `${Math.floor(phaseSecondsLeft / 60)}:${String(phaseSecondsLeft % 60).padStart(2, "0")}`;
+  const revealedVotedOutPlayer =
+    room && shownVoteRevealKey?.startsWith(`${room.phase_number}-`)
+      ? players.find((player) => shownVoteRevealKey.includes(player.id)) ?? null
+      : null;
+  const revealedVotedOutRole = revealedVotedOutPlayer
+    ? playerRoles.find((role) => role.player_id === revealedVotedOutPlayer.id)?.role ?? null
+    : null;
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
@@ -114,6 +143,226 @@ export default function ImposterLobbyScreen() {
     };
   }, [showRoundContinueModal]);
 
+  useEffect(() => {
+    if (!room || players.length === 0) return;
+
+    const previousStatuses = previousStatusesRef.current;
+    const newlyEliminatedPlayer =
+      room.state !== "voting"
+        ? players.find((player) => previousStatuses[player.id] === "alive" && player.status === "eliminated") ?? null
+        : null;
+
+    const nextStatuses = Object.fromEntries(players.map((player) => [player.id, player.status])) as Record<string, "alive" | "eliminated">;
+    previousStatusesRef.current = nextStatuses;
+
+    if (!newlyEliminatedPlayer) return;
+
+    const revealKey = `${room.phase_number}-${newlyEliminatedPlayer.id}-${room.state}`;
+    if (shownVoteRevealKey === revealKey) return;
+
+    setShownVoteRevealKey(revealKey);
+    setShowVoteRevealModal(true);
+    voteRevealOpacity.setValue(0);
+    voteRevealScale.setValue(0.9);
+    voteRevealTranslateY.setValue(28);
+
+    Animated.parallel([
+      Animated.timing(voteRevealOpacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(voteRevealScale, {
+        toValue: 1,
+        tension: 72,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+      Animated.timing(voteRevealTranslateY, {
+        toValue: 0,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [players, room, shownVoteRevealKey, voteRevealOpacity, voteRevealScale, voteRevealTranslateY]);
+
+  useEffect(() => {
+    if (!showVoteRevealModal) return;
+
+    const timeoutId = setTimeout(() => {
+      setShowVoteRevealModal(false);
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, [showVoteRevealModal]);
+
+  useEffect(() => {
+    if (!room) return;
+    if (room.state !== "ended") {
+      setHasNavigatedToResults(false);
+      return;
+    }
+    if (showVoteRevealModal || showEndgameRevealModal || hasNavigatedToResults) return;
+
+    const revealKey = `${room.id}-${room.phase_number}-${room.winner ?? "unknown"}`;
+    if (shownEndgameRevealKey === revealKey) return;
+
+    setShownEndgameRevealKey(revealKey);
+    setShowEndgameRevealModal(true);
+    endgameRevealOpacity.setValue(0);
+    endgameRevealScale.setValue(0.92);
+    endgameRevealTranslateY.setValue(32);
+    endgamePulseScale.setValue(0.72);
+    endgamePulseOpacity.setValue(0);
+    endgameVerdictOpacity.setValue(0);
+    endgameVerdictTranslateY.setValue(14);
+    endgameWinnerOpacity.setValue(0);
+    endgameWinnerTranslateY.setValue(24);
+    endgameSubtitleOpacity.setValue(0);
+    endgameSubtitleTranslateY.setValue(18);
+
+    Animated.parallel([
+      Animated.timing(endgameRevealOpacity, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(endgameRevealScale, {
+        toValue: 1,
+        tension: 74,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+      Animated.timing(endgameRevealTranslateY, {
+        toValue: 0,
+        duration: 340,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(endgamePulseScale, {
+            toValue: 1.24,
+            duration: 920,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(endgamePulseOpacity, {
+            toValue: 0.32,
+            duration: 260,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(endgamePulseScale, {
+            toValue: 1.42,
+            duration: 260,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(endgamePulseOpacity, {
+            toValue: 0,
+            duration: 260,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(endgamePulseScale, {
+          toValue: 0.72,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+      { iterations: 3 }
+    ).start();
+
+    Animated.sequence([
+      Animated.delay(280),
+      Animated.parallel([
+        Animated.timing(endgameVerdictOpacity, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(endgameVerdictTranslateY, {
+          toValue: 0,
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(180),
+      Animated.parallel([
+        Animated.timing(endgameWinnerOpacity, {
+          toValue: 1,
+          duration: 320,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(endgameWinnerTranslateY, {
+          toValue: 0,
+          duration: 340,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(140),
+      Animated.parallel([
+        Animated.timing(endgameSubtitleOpacity, {
+          toValue: 1,
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(endgameSubtitleTranslateY, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [
+    endgamePulseOpacity,
+    endgamePulseScale,
+    endgameRevealOpacity,
+    endgameRevealScale,
+    endgameRevealTranslateY,
+    endgameSubtitleOpacity,
+    endgameSubtitleTranslateY,
+    endgameVerdictOpacity,
+    endgameVerdictTranslateY,
+    endgameWinnerOpacity,
+    endgameWinnerTranslateY,
+    hasNavigatedToResults,
+    room,
+    showEndgameRevealModal,
+    showVoteRevealModal,
+    shownEndgameRevealKey,
+  ]);
+
+  useEffect(() => {
+    if (!showEndgameRevealModal) return;
+    if (!room || room.state !== "ended") return;
+    if (hasNavigatedToResults) return;
+
+    const timeoutId = setTimeout(() => {
+      setShowEndgameRevealModal(false);
+      setHasNavigatedToResults(true);
+      router.replace({ pathname: "/imposter-results", params: { roomId, playerId } });
+    }, 4400);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasNavigatedToResults, playerId, room, roomId, showEndgameRevealModal]);
+
   if (loading || !room || !myPlayer) {
     return (
       <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
@@ -142,12 +391,13 @@ export default function ImposterLobbyScreen() {
     );
   }
 
-  if (room.state === "ended") {
-    router.replace({ pathname: "/imposter-results", params: { roomId, playerId } });
-  }
-
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://picklo.app";
   const inviteUrl = `${baseUrl}/imposter?code=${room.code}`;
+  const copyInviteLink = async () => {
+    await Clipboard.setStringAsync(inviteUrl);
+    setShowCopiedToast(true);
+    setTimeout(() => setShowCopiedToast(false), 1400);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: "#070B14" }}>
@@ -183,6 +433,206 @@ export default function ImposterLobbyScreen() {
           </AnimatedEntrance>
         </View>
       </Modal>
+      <Modal visible={showVoteRevealModal} transparent animationType="fade" onRequestClose={() => setShowVoteRevealModal(false)}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(2,6,23,0.7)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              borderRadius: 28,
+              padding: 24,
+              backgroundColor: revealedVotedOutRole === "imposter" ? "#1A1104" : "#140A0C",
+              borderWidth: 1,
+              borderColor: revealedVotedOutRole === "imposter" ? "rgba(251,191,36,0.38)" : "rgba(252,165,165,0.4)",
+              shadowColor: revealedVotedOutRole === "imposter" ? "#F59E0B" : "#F87171",
+              shadowOpacity: 0.3,
+              shadowRadius: 30,
+              shadowOffset: { width: 0, height: 16 },
+              elevation: 18,
+              alignItems: "center",
+              opacity: voteRevealOpacity,
+              transform: [{ scale: voteRevealScale }, { translateY: voteRevealTranslateY }],
+            }}
+          >
+            <View
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: revealedVotedOutRole === "imposter" ? "rgba(217,119,6,0.24)" : "rgba(127,29,29,0.32)",
+                borderWidth: 1,
+                borderColor: revealedVotedOutRole === "imposter" ? "rgba(251,191,36,0.35)" : "rgba(252,165,165,0.35)",
+                marginBottom: 18,
+              }}
+            >
+              <Text style={{ color: revealedVotedOutRole === "imposter" ? "#FCD34D" : "#FCA5A5", fontSize: 40, fontWeight: "900" }}>
+                {revealedVotedOutRole === "imposter" ? "!" : "X"}
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: revealedVotedOutRole === "imposter" ? "#FCD34D" : "#FCA5A5",
+                fontWeight: "900",
+                fontSize: 13,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+              }}
+            >
+              Vote result
+            </Text>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center", marginTop: 12 }}>
+              {revealedVotedOutPlayer?.display_name ?? "A player"}
+            </Text>
+            <Text style={{ color: "#E2E8F0", fontWeight: "800", fontSize: 16, textAlign: "center", marginTop: 10 }}>
+              {revealedVotedOutRole === "imposter" ? "was revealed as the imposter" : "was voted out by the group"}
+            </Text>
+            <Text style={{ color: "#94A3B8", lineHeight: 22, textAlign: "center", marginTop: 12 }}>
+              {revealedVotedOutRole === "imposter"
+                ? "The crew made the right call. The round outcome is being revealed."
+                : room.state === "ended"
+                  ? "That vote ended the game. Final results are about to appear."
+                  : "The group lost a crew member. The next discussion begins now."}
+            </Text>
+          </Animated.View>
+        </View>
+      </Modal>
+      <Modal visible={showEndgameRevealModal} transparent animationType="fade" onRequestClose={() => undefined}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(3,7,18,0.82)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 430,
+              borderRadius: 30,
+              paddingHorizontal: 24,
+              paddingVertical: 28,
+              backgroundColor: room?.winner === "imposter" ? "#17090B" : "#1A1104",
+              borderWidth: 1,
+              borderColor: room?.winner === "imposter" ? "rgba(252,165,165,0.36)" : "rgba(251,191,36,0.34)",
+              shadowColor: room?.winner === "imposter" ? "#FB7185" : "#F59E0B",
+              shadowOpacity: 0.34,
+              shadowRadius: 34,
+              shadowOffset: { width: 0, height: 18 },
+              elevation: 20,
+              alignItems: "center",
+              opacity: endgameRevealOpacity,
+              transform: [{ scale: endgameRevealScale }, { translateY: endgameRevealTranslateY }],
+              gap: 10,
+            }}
+          >
+            <Animated.View
+              style={{
+                position: "absolute",
+                width: 188,
+                height: 188,
+                borderRadius: 999,
+                backgroundColor: room?.winner === "imposter" ? "rgba(251,113,133,0.24)" : "rgba(251,191,36,0.22)",
+                opacity: endgamePulseOpacity,
+                transform: [{ scale: endgamePulseScale }],
+              }}
+            />
+            <View
+              style={{
+                width: 108,
+                height: 108,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: room?.winner === "imposter" ? "rgba(127,29,29,0.34)" : "rgba(146,64,14,0.34)",
+                borderWidth: 1,
+                borderColor: room?.winner === "imposter" ? "rgba(252,165,165,0.3)" : "rgba(251,191,36,0.32)",
+                marginBottom: 8,
+              }}
+            >
+              <Text style={{ color: room?.winner === "imposter" ? "#FCA5A5" : "#FCD34D", fontSize: 46, fontWeight: "900" }}>
+                {room?.winner === "imposter" ? "I" : "C"}
+              </Text>
+            </View>
+            <Animated.Text
+              style={{
+                color: room?.winner === "imposter" ? "#FCA5A5" : "#FCD34D",
+                fontWeight: "900",
+                fontSize: 12,
+                letterSpacing: 2.2,
+                textTransform: "uppercase",
+                opacity: endgameVerdictOpacity,
+                transform: [{ translateY: endgameVerdictTranslateY }],
+              }}
+            >
+              Final verdict
+            </Animated.Text>
+            <Animated.Text
+              style={{
+                color: "#F8FAFC",
+                fontWeight: "900",
+                fontSize: 32,
+                textAlign: "center",
+                opacity: endgameWinnerOpacity,
+                transform: [{ translateY: endgameWinnerTranslateY }, { scale: endgameWinnerOpacity }],
+              }}
+            >
+              {room?.winner === "imposter" ? "IMPOSTER WINS" : "CREW WINS"}
+            </Animated.Text>
+            <Animated.Text
+              style={{
+                color: "#CBD5E1",
+                lineHeight: 22,
+                textAlign: "center",
+                maxWidth: 320,
+                opacity: endgameSubtitleOpacity,
+                transform: [{ translateY: endgameSubtitleTranslateY }],
+              }}
+            >
+              {room?.winner === "imposter"
+                ? "The imposter survived the accusations and took control of the round."
+                : "The crew read the room correctly and exposed the imposter."}
+            </Animated.Text>
+            <View
+              style={{
+                marginTop: 10,
+                alignSelf: "stretch",
+                height: 8,
+                borderRadius: 999,
+                backgroundColor: "rgba(15,23,42,0.85)",
+                overflow: "hidden",
+              }}
+            >
+              <Animated.View
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: room?.winner === "imposter" ? "#FB7185" : "#F59E0B",
+                  transform: [
+                    {
+                      scaleX: endgameRevealOpacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.2, 1],
+                      }),
+                    },
+                  ],
+                }}
+              />
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
         <AnimatedEntrance enterKey={`header-${room.state}`} delay={20}>
           <View style={{ gap: 6 }}>
@@ -206,7 +656,7 @@ export default function ImposterLobbyScreen() {
         {room.state === "lobby" ? (
           <AnimatedEntrance enterKey="phase-lobby" delay={70}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Lobby</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>LOBBY</Text>
               <Text style={{ color: "#94A3B8", lineHeight: 22 }}>
                 Join the room, pick a category, and start once everyone is ready.
               </Text>
@@ -266,7 +716,7 @@ export default function ImposterLobbyScreen() {
               </View>
 
               <Pressable
-                onPress={() => Clipboard.setStringAsync(inviteUrl)}
+                onPress={copyInviteLink}
                 style={({ pressed }) => ({
                   height: 46,
                   borderRadius: 14,
@@ -278,8 +728,9 @@ export default function ImposterLobbyScreen() {
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900" }}>Copy invite link</Text>
+                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>COPY INVITE LINK</Text>
               </Pressable>
+              {showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
 
               {isHost ? (
                 <Pressable
@@ -294,7 +745,7 @@ export default function ImposterLobbyScreen() {
                     opacity: busy === "start" || players.length < 3 || !room.category_id ? 0.5 : pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900" }}>Start the game</Text>
+                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>START THE GAME</Text>
                 </Pressable>
               ) : (
                 <Text style={{ color: "#94A3B8" }}>Waiting for the host to start the game.</Text>
@@ -306,7 +757,7 @@ export default function ImposterLobbyScreen() {
         {room.state === "role_reveal" ? (
           <AnimatedEntrance enterKey="phase-role-reveal" delay={70}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Private reveal</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>PRIVATE REVEAL</Text>
               <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
                 Read your card privately, then tap ready so the round can move to discussion.
               </Text>
@@ -322,7 +773,9 @@ export default function ImposterLobbyScreen() {
                   opacity: myPlayer.role_reveal_ready ? 0.6 : pressed ? 0.92 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900" }}>{myPlayer.role_reveal_ready ? "Ready" : "I saw my card"}</Text>
+                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
+                  {myPlayer.role_reveal_ready ? "READY" : "I SAW MY CARD"}
+                </Text>
               </Pressable>
             </View>
           </AnimatedEntrance>
@@ -331,7 +784,7 @@ export default function ImposterLobbyScreen() {
         {room.state === "discussion" ? (
           <AnimatedEntrance enterKey={`phase-discussion-${room.phase_number}`} delay={70}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Discussion</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>DISCUSSION</Text>
               <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
               <View style={{ backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937", gap: 6 }}>
                 <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>Time left</Text>
@@ -353,7 +806,7 @@ export default function ImposterLobbyScreen() {
                 })}
               >
                 <Text style={{ color: "white", fontWeight: "900" }}>
-                  {myPlayer.status !== "alive" ? "You are out" : myPlayer.discussion_ready ? "Ready to vote" : "I'm ready to vote"}
+                  {myPlayer.status !== "alive" ? "YOU ARE OUT" : "READY TO VOTE"}
                 </Text>
               </Pressable>
               {isHost ? (
@@ -371,7 +824,7 @@ export default function ImposterLobbyScreen() {
                     opacity: pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900" }}>Open voting now</Text>
+                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>OPEN VOTING NOW</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -406,7 +859,7 @@ export default function ImposterLobbyScreen() {
 
               {voteTallies.length > 0 ? (
                 <View style={{ gap: 8, backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937" }}>
-                  <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>Votes so far</Text>
+                  <Text style={{ color: "#F8FAFC", fontWeight: "900", textTransform: "uppercase" }}>VOTES SO FAR</Text>
                   {voteTallies.map((entry) => (
                     <Text key={entry.player?.id ?? `vote-${entry.count}`} style={{ color: "#CBD5E1", lineHeight: 20 }}>
                       {entry.player?.display_name ?? "Unknown"}: {entry.count}
@@ -430,7 +883,7 @@ export default function ImposterLobbyScreen() {
                     opacity: pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900" }}>Resolve vote</Text>
+                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>RESOLVE VOTE</Text>
                 </Pressable>
               ) : (
                 <Text style={{ color: "#94A3B8" }}>Waiting for the host to resolve the vote.</Text>
@@ -489,7 +942,7 @@ export default function ImposterLobbyScreen() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900" }}>Back to games</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
         </Pressable>
       </ScrollView>
     </View>

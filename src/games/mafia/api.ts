@@ -321,7 +321,12 @@ export async function resolveNight(roomId: string, playerId: string) {
     phase: "night_result",
     visible_to: "all",
     event_type: "night_result",
-    payload: { summary: result.summary, eliminatedPlayerId: result.eliminatedPlayerId },
+    payload: {
+      summary: result.summary,
+      eliminatedPlayerId: result.eliminatedPlayerId,
+      doctorSaved: result.doctorSaved,
+      doctorSavedPlayerId: result.doctorSavedPlayerId,
+    },
   });
 
   const { error: updateError } = await supabase

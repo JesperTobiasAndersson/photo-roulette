@@ -13,6 +13,7 @@ import {
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import * as Clipboard from "expo-clipboard";
+import { CopyToast } from "../src/components/CopyToast";
 
 
 
@@ -31,16 +32,18 @@ export default function Lobby() {
   const [phase, setPhase] = useState<"lobby" | "picking" | "playing" | "finished">("lobby");
   const [players, setPlayers] = useState<{ id: string; name: string }[]>([]);
   const [handCount, setHandCount] = useState<number>(0);
+  const [showCopiedToast, setShowCopiedToast] = useState(false);
 
 const baseUrl = Platform.OS === "web" ? window.location.origin : "https://picklo.app";
-const inviteUrl = roomCode ? `${baseUrl}/join?code=${roomCode}` : "";
+const inviteUrl = roomCode ? `${baseUrl}/picklo?code=${roomCode}` : "";
 
 
 
 const copyInvite = async () => {
   if (!inviteUrl) return Alert.alert("Wait", "Room code is loading...");
   await Clipboard.setStringAsync(inviteUrl);
-  Alert.alert("Copied!", inviteUrl);
+  setShowCopiedToast(true);
+  setTimeout(() => setShowCopiedToast(false), 1400);
 };
 
 
@@ -342,7 +345,7 @@ const startRound = async () => {
         <View style={{ flex: 1, padding: 16, gap: 12 }}>
           <View style={{ gap: 10 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Lobby</Text>
+              <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>LOBBY</Text>
 
               <View
                 style={{
@@ -378,10 +381,11 @@ const startRound = async () => {
     opacity: !roomCode ? 0.5 : pressed ? 0.9 : 1,
   })}
 >
-  <Text style={{ color: "white", fontWeight: "900", textAlign: "center" }}>
+  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase", textAlign: "center" }}>
     Copy invitation link 🔗
   </Text>
 </Pressable>
+{showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
 
             <View
               style={{
@@ -420,9 +424,9 @@ const startRound = async () => {
               renderItem={({ item }) => <PlayerRow name={item.name} isHostRow={item.id === hostId} />}
             />
 
-           {isHost && phase === "lobby" && <Button title="Start – pick 5 images 🖼️" onPress={startPicking} />}
-           {isHost && phase === "picking" && <Button title="Start game 🚀" onPress={startRound} />}  
-            {isHost && phase === "playing" && <Button title="Start new round 🚀" onPress={startRound} />}
+           {isHost && phase === "lobby" && <Button title="CONTINUE TO IMAGES" onPress={startPicking} />}
+           {isHost && phase === "picking" && <Button title="START GAME 🚀" onPress={startRound} />}  
+            {isHost && phase === "playing" && <Button title="START NEW ROUND 🚀" onPress={startRound} />}
 
           </View>
 

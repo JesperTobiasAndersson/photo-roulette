@@ -77,7 +77,7 @@ export default function ImposterResults() {
 
         <AnimatedEntrance enterKey={`table-${players.length}`} delay={80}>
           <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Final table</Text>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>FINAL TABLE</Text>
             {players.map((player, index) => {
               const role = playerRoles.find((entry) => entry.player_id === player.id)?.role;
               const badge = getRoleBadge(role);
@@ -121,7 +121,7 @@ export default function ImposterResults() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900" }}>Back to Imposter home</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO IMPOSTER HOME</Text>
         </Pressable>
       </ScrollView>
     </View>

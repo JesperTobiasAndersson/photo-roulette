@@ -88,6 +88,7 @@ export function resolveNightActions(actions: MafiaNightActionDto[], roles: Mafia
   }
 
   const doctorTarget = doctorAction?.target_player_id ?? null;
+  const doctorSavedPlayerId = killTarget && killTarget === doctorTarget ? killTarget : null;
   const eliminatedPlayerId = killTarget && killTarget !== doctorTarget ? killTarget : null;
   const policeTarget = policeAction?.target_player_id ?? null;
   const policeAlignment =
@@ -95,6 +96,8 @@ export function resolveNightActions(actions: MafiaNightActionDto[], roles: Mafia
 
   return {
     eliminatedPlayerId,
+    doctorSavedPlayerId,
+    doctorSaved: !!doctorSavedPlayerId,
     policeTarget,
     policeAlignment: policeTarget ? policeAlignment : null,
     summary: eliminatedPlayerId ? "Someone was eliminated during the night." : "Nobody was eliminated during the night.",
