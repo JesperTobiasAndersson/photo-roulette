@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "react-native";
 import { createImposterRoom, joinImposterRoom } from "../src/games/imposter/api";
+import { useI18n } from "../src/lib/i18n";
 
 const isWeb = Platform.OS === "web";
 
@@ -25,6 +26,7 @@ function asString(v: unknown): string {
 }
 
 export default function ImposterHome() {
+  const { language, t } = useI18n();
   const params = useLocalSearchParams();
   const codeFromUrl = asString(params.code).trim().toUpperCase();
   const [name, setName] = useState("");
@@ -35,27 +37,56 @@ export default function ImposterHome() {
   const trimmedName = useMemo(() => name.trim(), [name]);
   const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
 
+  const copy =
+    language === "sv"
+      ? {
+          description: "Partyspel med rumskod där alla får samma ord utom en dold imposter.",
+          create: "Skapa rum",
+          join: "Gå med i rum",
+          name: "Ditt namn",
+          code: "Rumskod",
+          createRoom: "Skapa Imposter-rum",
+          joinRoom: "Gå med i Imposter-rum",
+          enterName: "Skriv ditt namn",
+          createFailed: "Kunde inte skapa rum",
+          enterNameCode: "Skriv ditt namn och rumskod",
+          joinFailed: "Kunde inte gå med i rum",
+        }
+      : {
+          description: "Room-code party game where everyone gets the same word except one hidden imposter.",
+          create: "Create Room",
+          join: "Join Room",
+          name: "Your name",
+          code: "Room code",
+          createRoom: "Create Imposter Room",
+          joinRoom: "Join Imposter Room",
+          enterName: "Enter your name",
+          createFailed: "Could not create room",
+          enterNameCode: "Enter your name and room code",
+          joinFailed: "Could not join room",
+        };
+
   const goCreate = async () => {
-    if (!trimmedName) return Alert.alert("Enter your name");
+    if (!trimmedName) return Alert.alert(copy.enterName);
     setLoading(true);
     try {
       const data = await createImposterRoom(trimmedName);
       router.push({ pathname: "/imposter-lobby", params: { roomId: data.roomId, playerId: data.playerId } });
     } catch (error) {
-      Alert.alert("Could not create room", String((error as Error)?.message ?? error));
+      Alert.alert(copy.createFailed, String((error as Error)?.message ?? error));
     } finally {
       setLoading(false);
     }
   };
 
   const goJoin = async () => {
-    if (!trimmedName || !trimmedCode) return Alert.alert("Enter your name and room code");
+    if (!trimmedName || !trimmedCode) return Alert.alert(copy.enterNameCode);
     setLoading(true);
     try {
       const data = await joinImposterRoom(trimmedCode, trimmedName);
       router.push({ pathname: "/imposter-lobby", params: { roomId: data.roomId, playerId: data.playerId } });
     } catch (error) {
-      Alert.alert("Could not join room", String((error as Error)?.message ?? error));
+      Alert.alert(copy.joinFailed, String((error as Error)?.message ?? error));
     } finally {
       setLoading(false);
     }
@@ -81,25 +112,25 @@ export default function ImposterHome() {
           </View>
           <Text style={{ color: "white", fontSize: 40, fontWeight: "900", marginTop: 14 }}>Imposter</Text>
           <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 24, textAlign: "center", marginTop: 8 }}>
-            Room-code party game where everyone gets the same word except one hidden imposter.
+            {copy.description}
           </Text>
         </View>
 
         <View style={{ backgroundColor: "#0F172A", borderRadius: 22, padding: 20, borderWidth: 1, borderColor: "#1E293B", gap: 16 }}>
           <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
             <Pressable onPress={() => setMode("create")} disabled={loading}>
-              <Text style={{ color: mode === "create" ? "#FCD34D" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Create Room</Text>
+              <Text style={{ color: mode === "create" ? "#FCD34D" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>{copy.create}</Text>
             </Pressable>
             <Text style={{ color: "#475569" }}>|</Text>
             <Pressable onPress={() => setMode("join")} disabled={loading}>
-              <Text style={{ color: mode === "join" ? "#FCD34D" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Join Room</Text>
+              <Text style={{ color: mode === "join" ? "#FCD34D" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>{copy.join}</Text>
             </Pressable>
           </View>
 
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Your name"
+            placeholder={copy.name}
             placeholderTextColor="#64748B"
             style={{
               height: 56,
@@ -119,7 +150,7 @@ export default function ImposterHome() {
             <TextInput
               value={code}
               onChangeText={setCode}
-              placeholder="Room code"
+              placeholder={copy.code}
               placeholderTextColor="#64748B"
               autoCapitalize="characters"
               style={{
@@ -153,10 +184,10 @@ export default function ImposterHome() {
               gap: 10,
             })}
           >
-            {loading ? <ActivityIndicator color="white" /> : null}
-            <Text style={{ color: "white", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>
-              {mode === "create" ? "Create Imposter Room" : "Join Imposter Room"}
-            </Text>
+              {loading ? <ActivityIndicator color="white" /> : null}
+              <Text style={{ color: "white", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>
+              {mode === "create" ? copy.createRoom : copy.joinRoom}
+              </Text>
           </Pressable>
         </View>
 
@@ -174,7 +205,7 @@ export default function ImposterHome() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games")}</Text>
         </Pressable>
       </View>
     </View>

@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { useI18n } from "../src/lib/i18n";
 
 const isWeb = Platform.OS === "web";
 
@@ -32,12 +33,61 @@ function asString(v: unknown): string {
 }
 
 export default function MemeMatchHome() {
+  const { language, t } = useI18n();
   const params = useLocalSearchParams();
   const codeFromUrl = asString(params.code).trim().toUpperCase();
   const [name, setName] = useState("");
   const [code, setCode] = useState(codeFromUrl);
   const [mode, setMode] = useState<"create" | "join">(codeFromUrl ? "join" : "create");
   const [loading, setLoading] = useState(false);
+  const copy =
+    language === "sv"
+      ? {
+          enterName: "Skriv ditt namn",
+          unknownError: "Okänt fel",
+          createError: "Fel när rummet skapades",
+          playerError: "Fel (spelare)",
+          failedCreate: "Det gick inte att skapa rum",
+          enterRoomCode: "Skriv rumskod",
+          roomNotFound: "Rummet hittades inte",
+          tagline: "Välj bilder. Matcha påståendet. Rösta. Skratta.",
+          addHomeScreen: "Lägg till på hemskärmen för en mer appliktig upplevelse.",
+          inviteDetected: "INBJUDNINGSKOD HITTADE:",
+          create: "Skapa rum",
+          join: "Gå med i rum",
+          yourName: "Ditt namn",
+          exampleName: "t.ex. Alex",
+          roomCode: "Rumskod",
+          codeTip: "Tips: Koden är 4 tecken (A-Z, 2-9)",
+          creating: "Skapar...",
+          createRoom: "Skapa MemeMatch-rum",
+          joining: "Går med...",
+          joinRoom: "Gå med i MemeMatch-rum",
+          consent: "Genom att fortsätta godkänner du att spelet får använda bilderna du väljer i rummet.",
+        }
+      : {
+          enterName: "Enter your name",
+          unknownError: "Unknown error",
+          createError: "Error creating room",
+          playerError: "Error (players)",
+          failedCreate: "Failed to create room",
+          enterRoomCode: "Enter room code",
+          roomNotFound: "Room not found",
+          tagline: "Pick images. Match the statement. Vote. Laugh.",
+          addHomeScreen: "Add to Home Screen for an app-like experience.",
+          inviteDetected: "INVITE CODE DETECTED:",
+          create: "Create Room",
+          join: "Join Room",
+          yourName: "Your name",
+          exampleName: "e.g. Alex",
+          roomCode: "Room code",
+          codeTip: "Tip: Code is 4 characters (A-Z, 2-9)",
+          creating: "Creating...",
+          createRoom: "Create MemeMatch Room",
+          joining: "Joining...",
+          joinRoom: "Join MemeMatch Room",
+          consent: "By continuing you agree that the game may use the images you select in the room.",
+        };
 
   const trimmedName = useMemo(() => name.trim(), [name]);
   const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
@@ -47,7 +97,7 @@ export default function MemeMatchHome() {
 
   const createRoom = async () => {
     const n = trimmedName;
-    if (!n) return Alert.alert("Enter your name");
+    if (!n) return Alert.alert(copy.enterName);
 
     setLoading(true);
     try {
@@ -60,8 +110,8 @@ export default function MemeMatchHome() {
         .single();
 
       if (roomErr) {
-        const msg = roomErr.message || "Unknown error";
-        Alert.alert("Error creating room", msg);
+        const msg = roomErr.message || copy.unknownError;
+        Alert.alert(copy.createError, msg);
         console.error("createRoom - rooms error", JSON.stringify(roomErr, null, 2));
         return;
       }
@@ -73,7 +123,7 @@ export default function MemeMatchHome() {
         .single();
 
       if (playerErr) {
-        Alert.alert("Error (players)", playerErr.message);
+        Alert.alert(copy.playerError, playerErr.message);
         console.error("createRoom - players error", playerErr);
         return;
       }
@@ -86,7 +136,7 @@ export default function MemeMatchHome() {
       });
     } catch (error) {
       console.error("createRoom failed", error);
-      Alert.alert("Failed to create room", String(error));
+      Alert.alert(copy.failedCreate, String(error));
     } finally {
       setLoading(false);
     }
@@ -95,13 +145,13 @@ export default function MemeMatchHome() {
   const joinRoom = async () => {
     const n = trimmedName;
     const c = trimmedCode;
-    if (!n) return Alert.alert("Enter your name");
-    if (!c) return Alert.alert("Enter room code");
+    if (!n) return Alert.alert(copy.enterName);
+    if (!c) return Alert.alert(copy.enterRoomCode);
 
     setLoading(true);
     try {
       const { data: room, error: roomErr } = await supabase.from("rooms").select("*").eq("code", c).single();
-      if (roomErr) return Alert.alert("Room not found", roomErr.message);
+      if (roomErr) return Alert.alert(copy.roomNotFound, roomErr.message);
 
       const { data: player, error: playerErr } = await supabase
         .from("players")
@@ -109,7 +159,7 @@ export default function MemeMatchHome() {
         .select()
         .single();
 
-      if (playerErr) return Alert.alert("Error (players)", playerErr.message);
+      if (playerErr) return Alert.alert(copy.playerError, playerErr.message);
 
       router.push({
         pathname: "/lobby",
@@ -185,18 +235,18 @@ export default function MemeMatchHome() {
 
           <Text style={{ color: "white", fontSize: 40, fontWeight: "900", letterSpacing: 0.5 }}>MemeMatch</Text>
           <Text style={{ color: "#9CA3AF", marginTop: 10, textAlign: "center", lineHeight: 24, fontSize: 15 }}>
-            Pick images. Match the statement. Vote. Laugh.
+            {copy.tagline}
           </Text>
 
           {isWeb && (
             <Text style={{ color: "#94A3B8", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13 }}>
-              Add to Home Screen for an app-like experience.
+              {copy.addHomeScreen}
             </Text>
           )}
 
           {codeFromUrl ? (
             <Text style={{ color: "#BAE6FD", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13, fontWeight: "800" }}>
-              INVITE CODE DETECTED: {codeFromUrl}
+              {copy.inviteDetected} {codeFromUrl}
             </Text>
           ) : null}
         </View>
@@ -215,24 +265,24 @@ export default function MemeMatchHome() {
             <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
               <Pressable onPress={() => setMode("create")}>
                 <Text style={{ color: mode === "create" ? "#38BDF8" : "#94A3B8", fontWeight: "800", textTransform: "uppercase", fontSize: 14 }}>
-                  Create Room
+                  {copy.create}
                 </Text>
               </Pressable>
               <Text style={{ color: "#94A3B8" }}>|</Text>
               <Pressable onPress={() => setMode("join")}>
                 <Text style={{ color: mode === "join" ? "#38BDF8" : "#94A3B8", fontWeight: "800", textTransform: "uppercase", fontSize: 14 }}>
-                  Join Room
+                  {copy.join}
                 </Text>
               </Pressable>
             </View>
           )}
 
           <View style={{ gap: 8 }}>
-            <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Your name</Text>
+            <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>{copy.yourName}</Text>
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="e.g. Alex"
+              placeholder={copy.exampleName}
               placeholderTextColor="#64748B"
               editable={!loading}
               autoCorrect={false}
@@ -260,7 +310,7 @@ export default function MemeMatchHome() {
 
           {mode === "join" && (
             <View style={{ gap: 8 }}>
-              <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>Room code</Text>
+              <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 14 }}>{copy.roomCode}</Text>
               <TextInput
                 value={code}
                 onChangeText={setCode}
@@ -290,20 +340,20 @@ export default function MemeMatchHome() {
                     : null),
                 }}
               />
-              <Text style={{ color: "#94A3B8", fontSize: 12 }}>Tip: Code is 4 characters (A-Z, 2-9)</Text>
+              <Text style={{ color: "#94A3B8", fontSize: 12 }}>{copy.codeTip}</Text>
             </View>
           )}
 
           {mode === "create" ? (
             <PrimaryButton
-              title={loading ? "Creating..." : "Create MemeMatch Room"}
+              title={loading ? copy.creating : copy.createRoom}
               onPress={createRoom}
               disabled={!canCreate}
               variant="primary"
             />
           ) : (
             <PrimaryButton
-              title={loading ? "Joining..." : "Join MemeMatch Room"}
+              title={loading ? copy.joining : copy.joinRoom}
               onPress={joinRoom}
               disabled={!canJoin}
               variant="secondary"
@@ -326,11 +376,11 @@ export default function MemeMatchHome() {
             
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games")}</Text>
         </Pressable>
 
         <Text style={{ color: "#64748B", textAlign: "center", marginTop: 14, fontSize: 12 }}>
-          By continuing you agree that the game may use the images you select in the room.
+          {copy.consent}
         </Text>
       </View>
     </View>

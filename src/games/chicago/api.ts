@@ -437,6 +437,15 @@ export async function declareChicago(roomId: string, playerId: string) {
   if (!round) throw new Error("No active round");
   if (round.chicago_declared_by) throw new Error("Chicago has already been claimed this round");
 
+  const { data: trickIdsData, error: trickIdsError } = await supabase.from("chicago_tricks").select("id").eq("round_id", round.id);
+  if (trickIdsError) throw trickIdsError;
+  const trickIds = (trickIdsData ?? []).map((entry) => entry.id);
+  if (trickIds.length > 0) {
+    const { data: playedRows, error: playedError } = await supabase.from("chicago_cards_played").select("id").in("trick_id", trickIds).limit(1);
+    if (playedError) throw playedError;
+    if ((playedRows?.length ?? 0) > 0) throw new Error("Chicago must be declared before the first card is played");
+  }
+
   const { data: claimedRound, error: claimError } = await supabase
     .from("chicago_rounds")
     .update({ chicago_declared_by: playerId })
@@ -448,7 +457,14 @@ export async function declareChicago(roomId: string, playerId: string) {
   if (!claimedRound) throw new Error("Another player claimed CHICAGO first");
 
   await supabase.from("chicago_room_players").update({ chicago_declared: true }).eq("id", playerId);
-  await supabase.from("chicago_rooms").update({ public_message: `${player.display_name} declared CHICAGO.` }).eq("id", roomId);
+  await supabase
+    .from("chicago_rooms")
+    .update({
+      lead_player_id: playerId,
+      current_turn_player_id: playerId,
+      public_message: `${player.display_name} declared CHICAGO and leads the first trick.`,
+    })
+    .eq("id", roomId);
   return { ok: true };
 }
 

@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Text } from "react-native";
+import { useI18n } from "../lib/i18n";
 
-export function CopyToast({ visible, message = "Invitation link copied" }: { visible: boolean; message?: string }) {
+export function CopyToast({ visible, message }: { visible: boolean; message?: string }) {
+  const { t } = useI18n();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-4)).current;
   const [isMounted, setIsMounted] = useState(visible);
+  const resolvedMessage = message ?? t("common.invitation_link_copied");
 
   useEffect(() => {
     if (visible) {
@@ -68,7 +71,7 @@ export function CopyToast({ visible, message = "Invitation link copied" }: { vis
           borderColor: "#334155",
         }}
       >
-        <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 12, textAlign: "center" }}>{message}</Text>
+        <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 12, textAlign: "center" }}>{resolvedMessage}</Text>
       </Animated.View>
     </Animated.View>
   );

@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "react-native";
 import { createChicagoRoom, joinChicagoRoom } from "../src/games/chicago/api";
+import { useI18n } from "../src/lib/i18n";
 
 const isWeb = Platform.OS === "web";
 
@@ -25,6 +26,7 @@ function asString(v: unknown): string {
 }
 
 export default function ChicagoHome() {
+  const { t } = useI18n();
   const params = useLocalSearchParams();
   const codeFromUrl = asString(params.code).trim().toUpperCase();
   const [name, setName] = useState("");
@@ -36,26 +38,26 @@ export default function ChicagoHome() {
   const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
 
   const goCreate = async () => {
-    if (!trimmedName) return Alert.alert("Enter your name");
+    if (!trimmedName) return Alert.alert(t("alert.enter_name"));
     setLoading(true);
     try {
       const data = await createChicagoRoom(trimmedName);
       router.push({ pathname: "/chicago-room", params: { roomId: data.roomId, playerId: data.playerId } });
     } catch (error) {
-      Alert.alert("Could not create Chicago room", String((error as Error)?.message ?? error));
+      Alert.alert(t("alert.create_failed"), String((error as Error)?.message ?? error));
     } finally {
       setLoading(false);
     }
   };
 
   const goJoin = async () => {
-    if (!trimmedName || !trimmedCode) return Alert.alert("Enter your name and room code");
+    if (!trimmedName || !trimmedCode) return Alert.alert(t("alert.enter_name_code"));
     setLoading(true);
     try {
       const data = await joinChicagoRoom(trimmedCode, trimmedName);
       router.push({ pathname: "/chicago-room", params: { roomId: data.roomId, playerId: data.playerId } });
     } catch (error) {
-      Alert.alert("Could not join Chicago room", String((error as Error)?.message ?? error));
+      Alert.alert(t("alert.join_failed"), String((error as Error)?.message ?? error));
     } finally {
       setLoading(false);
     }
@@ -81,25 +83,25 @@ export default function ChicagoHome() {
           </View>
           <Text style={{ color: "white", fontSize: 40, fontWeight: "900" }}>Chicago</Text>
           <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 24, textAlign: "center" }}>
-            Multiplayer card game with draw rounds, poker scoring, trick-taking, and Chicago calls.
+            {t("chicago.home.description")}
           </Text>
         </View>
 
         <View style={{ backgroundColor: "#0F172A", borderRadius: 22, padding: 20, borderWidth: 1, borderColor: "#1E293B", gap: 16 }}>
           <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
             <Pressable onPress={() => setMode("create")} disabled={loading}>
-              <Text style={{ color: mode === "create" ? "#7DD3FC" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Create Room</Text>
+              <Text style={{ color: mode === "create" ? "#7DD3FC" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>{t("chicago.mode.create")}</Text>
             </Pressable>
             <Text style={{ color: "#475569" }}>|</Text>
             <Pressable onPress={() => setMode("join")} disabled={loading}>
-              <Text style={{ color: mode === "join" ? "#7DD3FC" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Join Room</Text>
+              <Text style={{ color: mode === "join" ? "#7DD3FC" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>{t("chicago.mode.join")}</Text>
             </Pressable>
           </View>
 
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Your name"
+            placeholder={t("chicago.input.name")}
             placeholderTextColor="#64748B"
             style={{
               height: 56,
@@ -119,7 +121,7 @@ export default function ChicagoHome() {
             <TextInput
               value={code}
               onChangeText={setCode}
-              placeholder="Room code"
+              placeholder={t("chicago.input.code")}
               placeholderTextColor="#64748B"
               autoCapitalize="characters"
               style={{
@@ -155,7 +157,7 @@ export default function ChicagoHome() {
           >
             {loading ? <ActivityIndicator color="white" /> : null}
             <Text style={{ color: "white", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>
-              {mode === "create" ? "Create Chicago Room" : "Join Chicago Room"}
+              {mode === "create" ? t("chicago.button.create") : t("chicago.button.join")}
             </Text>
           </Pressable>
         </View>
@@ -174,7 +176,7 @@ export default function ChicagoHome() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games")}</Text>
         </Pressable>
       </View>
     </View>

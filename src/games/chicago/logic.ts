@@ -107,6 +107,10 @@ export function evaluatePokerHand(cards: ChicagoCard[]): ChicagoPokerEvaluation 
   const rankCounts = countRanks(cards);
   const sortedDesc = [...values].sort((a, b) => b - a);
 
+  if (cards.length !== 5 || rankCounts.length === 0) {
+    return { name: "high_card", label: HAND_SCORES.high_card.label, points: 0, tiebreak: [HAND_SCORES.high_card.weight, ...sortedDesc] };
+  }
+
   if (flush && straightHigh === 14 && values.join(",") === "10,11,12,13,14") {
     return { name: "royal_straight_flush", label: HAND_SCORES.royal_straight_flush.label, points: 52, tiebreak: [HAND_SCORES.royal_straight_flush.weight, 14] };
   }

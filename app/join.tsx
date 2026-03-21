@@ -1,9 +1,9 @@
-// app/join.tsx
 import React, { useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { supabase } from "../src/lib/supabase";
 import { StatusBar } from "expo-status-bar";
+import { supabase } from "../src/lib/supabase";
+import { useI18n } from "../src/lib/i18n";
 
 const isWeb = Platform.OS === "web";
 
@@ -14,31 +14,53 @@ function asString(v: unknown): string | undefined {
 }
 
 export default function JoinScreen() {
+  const { language } = useI18n();
   const params = useLocalSearchParams();
   const codeFromUrl = (asString(params.code) ?? "").trim().toUpperCase();
 
+  const copy =
+    language === "sv"
+      ? {
+          title: "MemeMatch",
+          joinRoom: "Gå med i rum:",
+          missingCode: "Rumskod saknas. Öppna länken från värden (.../join?code=XXXX).",
+          name: "Ditt namn",
+          enterName: "Skriv ditt namn",
+          missingRoomCode: "Rumskod saknas",
+          roomNotFound: "Rummet hittades inte",
+          playerError: "Fel (spelare)",
+          join: "Gå med",
+          back: "Tillbaka till MemeMatch",
+        }
+      : {
+          title: "MemeMatch",
+          joinRoom: "Join room:",
+          missingCode: "Missing code. Open link from host (.../join?code=XXXX).",
+          name: "Your name",
+          enterName: "Enter your name",
+          missingRoomCode: "Missing room code",
+          roomNotFound: "Room not found",
+          playerError: "Error (players)",
+          join: "Join",
+          back: "Back to MemeMatch",
+        };
+
   const [name, setName] = useState("");
   const trimmedName = useMemo(() => name.trim(), [name]);
-
   const canJoin = trimmedName.length > 0 && codeFromUrl.length > 0;
 
   const joinRoom = async () => {
     const n = trimmedName;
     const c = codeFromUrl;
 
-    if (!n) return Alert.alert("Enter your name");
-    if (!c) return Alert.alert("Missing room code");
+    if (!n) return Alert.alert(copy.enterName);
+    if (!c) return Alert.alert(copy.missingRoomCode);
 
     const { data: room, error: roomErr } = await supabase.from("rooms").select("*").eq("code", c).single();
-    if (roomErr) return Alert.alert("Room not found", roomErr.message);
+    if (roomErr) return Alert.alert(copy.roomNotFound, roomErr.message);
 
-    const { data: player, error: playerErr } = await supabase
-      .from("players")
-      .insert({ room_id: room.id, name: n })
-      .select()
-      .single();
-
-    if (playerErr) return Alert.alert("Error (players)", playerErr.message);
+    const { data: player, error: playerErr } = await supabase.from("players").insert({ room_id: room.id, name: n }).select().single();
+    if (playerErr) return Alert.alert(copy.playerError, playerErr.message);
 
     router.replace({
       pathname: "/lobby",
@@ -60,22 +82,20 @@ export default function JoinScreen() {
     >
       <StatusBar style="light" />
       <View style={{ gap: 14, width: "100%", maxWidth: isWeb ? 420 : undefined }}>
-        <Text style={{ color: "white", fontSize: 32, fontWeight: "900" }}>MemeMatch</Text>
+        <Text style={{ color: "white", fontSize: 32, fontWeight: "900" }}>{copy.title}</Text>
 
         {codeFromUrl ? (
           <Text style={{ color: "#94A3B8" }}>
-            Join room: <Text style={{ color: "white", fontWeight: "900" }}>{codeFromUrl}</Text>
+            {copy.joinRoom} <Text style={{ color: "white", fontWeight: "900" }}>{codeFromUrl}</Text>
           </Text>
         ) : (
-          <Text style={{ color: "#FCA5A5", fontWeight: "800" }}>
-            Missing code. Open link from host (…/join?code=XXXX).
-          </Text>
+          <Text style={{ color: "#FCA5A5", fontWeight: "800" }}>{copy.missingCode}</Text>
         )}
 
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Your name"
+          placeholder={copy.name}
           placeholderTextColor="#64748B"
           editable={!!codeFromUrl}
           autoCorrect={false}
@@ -89,12 +109,7 @@ export default function JoinScreen() {
             borderColor: "#1F2937",
             color: "white",
             fontWeight: "700",
-            ...(isWeb
-              ? ({
-                  outlineStyle: "none",
-                  boxSizing: "border-box",
-                } as any)
-              : null),
+            ...(isWeb ? ({ outlineStyle: "none", boxSizing: "border-box" } as any) : null),
             opacity: codeFromUrl ? 1 : 0.6,
           }}
         />
@@ -111,7 +126,7 @@ export default function JoinScreen() {
             opacity: !canJoin ? 0.5 : pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Join</Text>
+          <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>{copy.join}</Text>
         </Pressable>
 
         <Pressable
@@ -127,7 +142,7 @@ export default function JoinScreen() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 14, textTransform: "uppercase" }}>BACK TO MEMEMATCH</Text>
+          <Text style={{ color: "white", fontWeight: "900", fontSize: 14, textTransform: "uppercase" }}>{copy.back}</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

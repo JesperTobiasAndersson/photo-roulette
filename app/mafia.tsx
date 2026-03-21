@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { createMafiaRoom, joinMafiaRoom } from "../src/games/mafia/api";
+import { useI18n } from "../src/lib/i18n";
 
 const isWeb = Platform.OS === "web";
 
@@ -25,6 +26,7 @@ function asString(v: unknown): string {
 }
 
 export default function MafiaHome() {
+  const { language, t } = useI18n();
   const params = useLocalSearchParams();
   const codeFromUrl = asString(params.code).trim().toUpperCase();
   const [name, setName] = useState("");
@@ -35,29 +37,60 @@ export default function MafiaHome() {
   const trimmedName = useMemo(() => name.trim(), [name]);
   const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
 
+  const copy =
+    language === "sv"
+      ? {
+          description: "Partyspel utan spelledare med livefaser och privatkänsla i mafiasamordningen.",
+          create: "Skapa rum",
+          join: "Gå med i rum",
+          name: "Ditt namn",
+          code: "Rumskod",
+          createRoom: "Skapa Mafia-rum",
+          joinRoom: "Gå med i Mafia-rum",
+          enterName: "Skriv ditt namn",
+          noRoomResponse: "Inget rumsvar mottogs",
+          createFailed: "Kunde inte skapa rum",
+          enterNameCode: "Skriv ditt namn och rumskod",
+          joinFailed: "Kunde inte gå med i rum",
+        }
+      : {
+          description: "Narratorless party game with live phase updates and private-feeling mafia coordination.",
+          create: "Create Room",
+          join: "Join Room",
+          name: "Your name",
+          code: "Room code",
+          createRoom: "Create Mafia room",
+          joinRoom: "Join Mafia room",
+          enterName: "Enter your name",
+          noRoomResponse: "No room response received",
+          createFailed: "Could not create room",
+          enterNameCode: "Enter your name and room code",
+          joinFailed: "Could not join room",
+        };
+
   const goCreate = async () => {
-    if (!trimmedName) return Alert.alert("Enter your name");
+    if (!trimmedName) return Alert.alert(copy.enterName);
     setLoading(true);
     try {
       const data = await createMafiaRoom(trimmedName);
-      if (!data) throw new Error("No room response received");
+      if (!data) throw new Error(copy.noRoomResponse);
       router.push({ pathname: "/mafia-lobby", params: { roomId: data.roomId, playerId: data.playerId } });
     } catch (err) {
-      Alert.alert("Could not create room", String((err as Error)?.message ?? err));
+      Alert.alert(copy.createFailed, String((err as Error)?.message ?? err));
     } finally {
       setLoading(false);
     }
   };
 
   const goJoin = async () => {
-    if (!trimmedName || !trimmedCode) return Alert.alert("Enter your name and room code");
+    if (!trimmedName || !trimmedCode) return Alert.alert(copy.enterNameCode);
     setLoading(true);
     try {
       const data = await joinMafiaRoom(trimmedCode, trimmedName);
-      if (!data) throw new Error("No room response received");
+      if (!data) throw new Error(copy.noRoomResponse);
       router.push({ pathname: "/mafia-lobby", params: { roomId: data.roomId, playerId: data.playerId } });
     } catch (err) {
-      Alert.alert("Could not join room", String((err as Error)?.message ?? err));
+      Alert.alert(copy.joinFailed, String((err as Error)?.message ?? err));
     } finally {
       setLoading(false);
     }
@@ -83,25 +116,25 @@ export default function MafiaHome() {
           </View>
           <Text style={{ color: "white", fontSize: 40, fontWeight: "900", marginTop: 14 }}>Mafia</Text>
           <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 24, textAlign: "center", marginTop: 8 }}>
-            Narratorless party game with live phase updates and private-feeling mafia coordination.
+            {copy.description}
           </Text>
         </View>
 
         <View style={{ backgroundColor: "#0F172A", borderRadius: 22, padding: 20, borderWidth: 1, borderColor: "#1E293B", gap: 16 }}>
           <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
             <Pressable onPress={() => setMode("create")} disabled={loading}>
-              <Text style={{ color: mode === "create" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Create Room</Text>
+              <Text style={{ color: mode === "create" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>{copy.create}</Text>
             </Pressable>
             <Text style={{ color: "#475569" }}>|</Text>
             <Pressable onPress={() => setMode("join")} disabled={loading}>
-              <Text style={{ color: mode === "join" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>Join Room</Text>
+              <Text style={{ color: mode === "join" ? "#FDA4AF" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 14 }}>{copy.join}</Text>
             </Pressable>
           </View>
 
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Your name"
+            placeholder={copy.name}
             placeholderTextColor="#64748B"
             style={{
               height: 56,
@@ -121,7 +154,7 @@ export default function MafiaHome() {
             <TextInput
               value={code}
               onChangeText={setCode}
-              placeholder="Room code"
+              placeholder={copy.code}
               placeholderTextColor="#64748B"
               autoCapitalize="characters"
               style={{
@@ -157,7 +190,7 @@ export default function MafiaHome() {
           >
             {loading ? <ActivityIndicator color="white" /> : null}
             <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase", fontSize: 18 }}>
-              {mode === "create" ? "Create Mafia room" : "Join Mafia room"}
+              {mode === "create" ? copy.createRoom : copy.joinRoom}
             </Text>
           </Pressable>
         </View>
@@ -176,7 +209,7 @@ export default function MafiaHome() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games")}</Text>
         </Pressable>
       </View>
     </View>

@@ -12,63 +12,78 @@ import {
 import { router } from "expo-router";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { useI18n } from "../src/lib/i18n";
 
 const isWeb = Platform.OS === "web";
 const GAME_ENTRY_DELAY_MS = 180;
 
-const games = [
-  {
-    slug: "picklo",
-    title: "MemeMatch",
-    tagline: "Pick images. Match the statement.",
-    recommendedPlayers: "3-12 players",
-    accent: "#38BDF8",
-    description: "Multiplayer party game with room codes, realtime rounds, image uploads, voting, and results.",
-    icon: require("../assets/Memematch.png"),
-    cta: "Play MemeMatch",
-  },
-  {
-    slug: "mafia",
-    title: "Mafia",
-    tagline: "Hidden roles, bluffing, and social deduction.",
-    recommendedPlayers: "5-20 players",
-    accent: "#F43F5E",
-    description: "Separate game module for role assignment, day and night phases, voting, and eliminations.",
-    icon: require("../assets/mafia.png"),
-    cta: "Play Mafia",
-  },
-  {
-    slug: "imposter",
-    title: "Imposter",
-    tagline: "Blend in, improvise, and expose the fake.",
-    recommendedPlayers: "4-12 players",
-    accent: "#F59E0B",
-    description: "Room-code bluffing game where one player is the imposter and everyone else shares the same secret word.",
-    icon: require("../assets/imposter.png"),
-    cta: "Play Imposter",
-  },
-  {
-    slug: "chicago",
-    title: "Chicago",
-    tagline: "Poker scoring, bold calls, and one last trick that matters.",
-    recommendedPlayers: "2-6 players",
-    accent: "#38BDF8",
-    description: "Turn-based multiplayer card game with draw phases, poker scoring, trick play, and race-to-52 scoring.",
-    icon: require("../assets/chicago.png"),
-    cta: "Play Chicago",
-  },
-];
-
-const footerLinks = [
-  { label: "Privacy Policy", href: "/privacy-policy" },
-  { label: "Terms of Service", href: "/terms-of-service" },
-  { label: "Community Guidelines", href: "/community-guidelines" },
-  { label: "Contact", href: "/contact" },
-];
-
 export default function GameLibraryHome() {
+  const { t } = useI18n();
   const { width } = useWindowDimensions();
   const isCompact = width < 560;
+  const games = [
+    {
+      slug: "picklo",
+      title: "MemeMatch",
+      tagline: t("game.memematch.tagline"),
+      recommendedPlayers: "3-12 players",
+      accent: "#38BDF8",
+      description: t("game.memematch.description"),
+      icon: require("../assets/Memematch.png"),
+      cta: t("game.memematch.cta"),
+      comingSoon: false,
+    },
+    {
+      slug: "mafia",
+      title: "Mafia",
+      tagline: t("game.mafia.tagline"),
+      recommendedPlayers: "5-20 players",
+      accent: "#F43F5E",
+      description: t("game.mafia.description"),
+      icon: require("../assets/mafia.png"),
+      cta: t("game.mafia.cta"),
+      comingSoon: false,
+    },
+    {
+      slug: "imposter",
+      title: "Imposter",
+      tagline: t("game.imposter.tagline"),
+      recommendedPlayers: "4-12 players",
+      accent: "#F59E0B",
+      description: t("game.imposter.description"),
+      icon: require("../assets/imposter.png"),
+      cta: t("game.imposter.cta"),
+      comingSoon: false,
+    },
+    {
+      slug: "chicago",
+      title: "Chicago",
+      tagline: t("game.chicago.tagline"),
+      recommendedPlayers: "2-6 players",
+      accent: "#38BDF8",
+      description: t("game.chicago.description"),
+      icon: require("../assets/chicago.png"),
+      cta: t("game.chicago.cta"),
+      comingSoon: false,
+    },
+    {
+      slug: "music-quiz",
+      title: "Music Quiz",
+      tagline: t("game.music.tagline"),
+      recommendedPlayers: "2-20 players",
+      accent: "#22C55E",
+      description: t("game.music.description"),
+      icon: require("../assets/musicquiz.png"),
+      cta: t("home.coming_soon"),
+      comingSoon: true,
+    },
+  ] as const;
+  const footerLinks = [
+    { label: t("home.legal.privacy"), href: "/privacy-policy" },
+    { label: t("home.legal.terms"), href: "/terms-of-service" },
+    { label: t("home.legal.guidelines"), href: "/community-guidelines" },
+    { label: t("home.legal.contact"), href: "/contact" },
+  ];
   const [transitioningGame, setTransitioningGame] = useState<(typeof games)[number] | null>(null);
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const contentScale = useRef(new Animated.Value(1)).current;
@@ -171,7 +186,7 @@ export default function GameLibraryHome() {
                 </View>
               </View>
 
-              <Text
+                <Text
                 style={{
                   color: "#94A3B8",
                   fontSize: isCompact ? 15 : 16,
@@ -181,8 +196,8 @@ export default function GameLibraryHome() {
                   marginTop: isCompact ? -4 : -8,
                   textAlign: isCompact || isWeb ? "center" : "left",
                 }}
-              >
-                Choose a game to get started. This home screen will expand with more games over time.
+                >
+                {t("home.subtitle")}
               </Text>
             </View>
 
@@ -196,7 +211,7 @@ export default function GameLibraryHome() {
                 gap: isCompact ? 12 : 16,
               }}
             >
-              <Text style={{ color: "#E2E8F0", fontSize: 16, fontWeight: "800" }}>Featured Games</Text>
+              <Text style={{ color: "#E2E8F0", fontSize: 16, fontWeight: "800" }}>{t("home.featured")}</Text>
 
               {games.map((game) => (
                 <Pressable
@@ -210,7 +225,7 @@ export default function GameLibraryHome() {
                     borderWidth: 1,
                     borderColor: pressed ? game.accent : "#1F2937",
                     transform: [{ scale: pressed ? 0.99 : 1 }],
-                    opacity: 1,
+                    opacity: game.comingSoon ? 0.92 : 1,
                   })}
                 >
                   <View
@@ -251,6 +266,24 @@ export default function GameLibraryHome() {
                         </View>
                       </View>
 
+                      {game.comingSoon ? (
+                        <View
+                          style={{
+                            alignSelf: isCompact ? "flex-start" : "center",
+                            paddingVertical: 7,
+                            paddingHorizontal: 10,
+                            borderRadius: 999,
+                            backgroundColor: "rgba(34,197,94,0.16)",
+                            borderWidth: 1,
+                            borderColor: "rgba(134,239,172,0.32)",
+                          }}
+                        >
+                          <Text style={{ color: "#BBF7D0", fontWeight: "900", fontSize: 12, textTransform: "uppercase" }}>
+                            {t("home.coming_soon")}
+                          </Text>
+                        </View>
+                      ) : null}
+
                     </View>
 
                     <View style={{ flexDirection: "column", gap: 12 }}>
@@ -266,7 +299,7 @@ export default function GameLibraryHome() {
                         }}
                       >
                         <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 12 }}>
-                          Recommended: {game.recommendedPlayers}
+                          {t("home.recommended", { players: game.recommendedPlayers })}
                         </Text>
                       </View>
 
@@ -280,12 +313,12 @@ export default function GameLibraryHome() {
                           paddingVertical: 12,
                           paddingHorizontal: 16,
                           borderRadius: 16,
-                          backgroundColor: "#000000",
-                          borderColor:"#f2f2f2",
+                          backgroundColor: game.comingSoon ? "#0F172A" : "#000000",
+                          borderColor: game.comingSoon ? game.accent : "#f2f2f2",
                           borderWidth: 1,
                         }}
                       >
-                        <Text style={{ color: "white", fontWeight: "900", textAlign: "center", fontSize: 14 }}>{game.cta}</Text>
+                        <Text style={{ color: "white", fontWeight: "900", textAlign: "center", fontSize: 14, textTransform: game.comingSoon ? "uppercase" : "none" }}>{game.cta}</Text>
                       </View>
                     </View>
                   </View>
@@ -304,9 +337,9 @@ export default function GameLibraryHome() {
               }}
             >
               <View style={{ gap: 6 }}>
-                <Text style={{ color: "#E2E8F0", fontSize: 14, fontWeight: "900" }}>Legal & Support</Text>
+                <Text style={{ color: "#E2E8F0", fontSize: 14, fontWeight: "900" }}>{t("home.legal.title")}</Text>
                 <Text style={{ color: "#64748B", fontSize: 13, lineHeight: 20 }}>
-                  Policies, contact information, and app support for Picklo.
+                  {t("home.legal.body")}
                 </Text>
               </View>
 
@@ -340,7 +373,7 @@ export default function GameLibraryHome() {
               </View>
 
               <Text style={{ color: "#475569", fontSize: 12, lineHeight: 18 }}>
-                Picklo is a party game collection for web and mobile.
+                {t("home.footer")}
               </Text>
             </View>
           </View>
@@ -416,7 +449,7 @@ export default function GameLibraryHome() {
                 marginTop: 8,
               }}
             >
-              Opening game room...
+              {t("home.opening")}
             </Text>
           </Animated.View>
         </Animated.View>

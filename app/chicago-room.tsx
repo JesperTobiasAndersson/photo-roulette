@@ -15,6 +15,9 @@ import {
 import { cardId, evaluatePokerHand } from "../src/games/chicago/logic";
 import type { ChicagoCard, ChicagoSuit } from "../src/games/chicago/types";
 import { useChicagoRoom } from "../src/games/chicago/useChicagoRoom";
+import { useI18n } from "../src/lib/i18n";
+
+const BUY_STOP_SCORE = 46;
 
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -101,6 +104,7 @@ function PlayingCard({
 }
 
 export default function ChicagoRoomScreen() {
+  const { t, translateChicagoPublicMessage, translatePokerName } = useI18n();
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
@@ -109,25 +113,38 @@ export default function ChicagoRoomScreen() {
   const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [showPokerRevealModal, setShowPokerRevealModal] = useState(false);
   const [shownPokerRevealKey, setShownPokerRevealKey] = useState<string | null>(null);
-  const [scheduledPokerScoreKey, setScheduledPokerScoreKey] = useState<string | null>(null);
   const [showTrickWinnerModal, setShowTrickWinnerModal] = useState(false);
   const [shownTrickWinnerKey, setShownTrickWinnerKey] = useState<string | null>(null);
-  const { room, players, myPlayer, myHand, playedCards, loading, refresh } = useChicagoRoom(roomId, playerId);
+  const [buyStopEvent, setBuyStopEvent] = useState<{ title: string; message: string; tone: "warning" | "penalty" } | null>(null);
+  const { room, players, myPlayer, round, myHand, playedCards, loading, refresh } = useChicagoRoom(roomId, playerId);
   const previousRoomStateRef = useRef<string | null>(null);
+  const previousScoresRef = useRef<Record<string, number>>({});
+  const scheduledPokerScoreKeyRef = useRef<string | null>(null);
+  const pokerScoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pokerRevealOpacity = useRef(new Animated.Value(0)).current;
   const pokerRevealScale = useRef(new Animated.Value(0.9)).current;
   const pokerRevealTranslateY = useRef(new Animated.Value(28)).current;
   const trickWinnerOpacity = useRef(new Animated.Value(0)).current;
   const trickWinnerScale = useRef(new Animated.Value(0.92)).current;
   const trickWinnerTranslateY = useRef(new Animated.Value(24)).current;
+  const buyStopOpacity = useRef(new Animated.Value(0)).current;
+  const buyStopScale = useRef(new Animated.Value(0.88)).current;
+  const buyStopRotate = useRef(new Animated.Value(-0.06)).current;
 
   const isHost = !!room && !!myPlayer && room.host_player_id === myPlayer.id;
   const isMyTurn = room?.current_turn_player_id === playerId;
+  const isBuyStopped = (myPlayer?.score ?? 0) >= BUY_STOP_SCORE;
   const myEvaluation = myHand ? evaluatePokerHand(myHand.cards) : null;
   const chicagoCaller = players.find((player) => player.chicago_declared) ?? null;
-  const canDeclareChicago = room?.state === "trick_phase" && !players.some((player) => player.chicago_declared);
+  const canDeclareChicago =
+    room?.state === "trick_phase" &&
+    round?.trick_number === 1 &&
+    playedCards.length === 0 &&
+    !players.some((player) => player.chicago_declared);
+  const currentTurnPlayer = players.find((player) => player.id === room?.current_turn_player_id) ?? null;
   const trickWinnerMatch = room?.public_message?.match(/^Trick (\d+) resolved\. (.+) leads next\.$/);
   const trickWinnerName = trickWinnerMatch?.[2] ?? null;
+  const translatedPublicMessage = translateChicagoPublicMessage(room?.public_message) ?? t("common.waiting_next_move");
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
@@ -136,7 +153,7 @@ export default function ChicagoRoomScreen() {
       setSelectedCards([]);
       await refresh();
     } catch (error) {
-      Alert.alert("Action failed", String((error as Error)?.message ?? error));
+      Alert.alert(t("common.action_failed"), String((error as Error)?.message ?? error));
     } finally {
       setBusy(null);
     }
@@ -152,29 +169,40 @@ export default function ChicagoRoomScreen() {
     if (!["poker_score_1", "poker_score_2"].includes(room.state)) return;
     if (busy) return;
     const phaseKey = `${room.state}-${room.phase_number}`;
-    if (scheduledPokerScoreKey === phaseKey) return;
+    if (scheduledPokerScoreKeyRef.current === phaseKey) return;
 
-    setScheduledPokerScoreKey(phaseKey);
-    const timeoutId = setTimeout(() => {
+    scheduledPokerScoreKeyRef.current = phaseKey;
+    pokerScoreTimeoutRef.current = setTimeout(() => {
       setBusy("score-phase");
       advanceChicagoPokerScore(roomId, playerId)
         .then(() => refresh())
         .catch((error) => {
-          Alert.alert("Action failed", String((error as Error)?.message ?? error));
+          Alert.alert(t("common.action_failed"), String((error as Error)?.message ?? error));
         })
         .finally(() => {
-          setScheduledPokerScoreKey(null);
+          scheduledPokerScoreKeyRef.current = null;
+          pokerScoreTimeoutRef.current = null;
           setBusy(null);
         });
     }, 1800);
 
-    return () => clearTimeout(timeoutId);
-  }, [busy, playerId, refresh, room, roomId, scheduledPokerScoreKey]);
+    return () => {
+      if (pokerScoreTimeoutRef.current) {
+        clearTimeout(pokerScoreTimeoutRef.current);
+        pokerScoreTimeoutRef.current = null;
+        scheduledPokerScoreKeyRef.current = null;
+      }
+    };
+  }, [busy, playerId, refresh, room?.phase_number, room?.state, roomId]);
 
   useEffect(() => {
     if (!room) return;
     if (["poker_score_1", "poker_score_2"].includes(room.state)) return;
-    setScheduledPokerScoreKey(null);
+    if (pokerScoreTimeoutRef.current) {
+      clearTimeout(pokerScoreTimeoutRef.current);
+      pokerScoreTimeoutRef.current = null;
+    }
+    scheduledPokerScoreKeyRef.current = null;
   }, [room]);
 
   useEffect(() => {
@@ -222,11 +250,34 @@ export default function ChicagoRoomScreen() {
     if (!showPokerRevealModal) return;
 
     const timeoutId = setTimeout(() => {
-      setShowPokerRevealModal(false);
+      Animated.parallel([
+        Animated.timing(pokerRevealOpacity, {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pokerRevealScale, {
+          toValue: 0.96,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pokerRevealTranslateY, {
+          toValue: 14,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setShowPokerRevealModal(false);
+        }
+      });
     }, 4300);
 
     return () => clearTimeout(timeoutId);
-  }, [showPokerRevealModal]);
+  }, [pokerRevealOpacity, pokerRevealScale, pokerRevealTranslateY, showPokerRevealModal]);
 
   useEffect(() => {
     if (!room) return;
@@ -274,11 +325,96 @@ export default function ChicagoRoomScreen() {
     return () => clearTimeout(timeoutId);
   }, [showTrickWinnerModal]);
 
+  useEffect(() => {
+    if (players.length === 0) return;
+
+    const previousScores = previousScoresRef.current;
+    let nextEvent: { title: string; message: string; tone: "warning" | "penalty" } | null = null;
+
+    for (const player of players) {
+      const previousScore = previousScores[player.id];
+      if (typeof previousScore === "number" && previousScore < BUY_STOP_SCORE && player.score >= BUY_STOP_SCORE) {
+        nextEvent = {
+          title: t("modal.buy_stop"),
+          message: t("modal.buy_stop_message", { name: player.display_name, score: BUY_STOP_SCORE }),
+          tone: "warning",
+        };
+      }
+      if (typeof previousScore === "number" && previousScore >= BUY_STOP_SCORE && player.score === 0) {
+        nextEvent = {
+          title: t("modal.uh_oh"),
+          message: t("modal.buy_stop_penalty", { name: player.display_name }),
+          tone: "penalty",
+        };
+      }
+    }
+
+    previousScoresRef.current = Object.fromEntries(players.map((player) => [player.id, player.score]));
+
+    if (!nextEvent) return;
+
+    setBuyStopEvent(nextEvent);
+    buyStopOpacity.setValue(0);
+    buyStopScale.setValue(0.88);
+    buyStopRotate.setValue(-0.06);
+
+    Animated.parallel([
+      Animated.timing(buyStopOpacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(buyStopScale, {
+        toValue: 1,
+        tension: 78,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.timing(buyStopRotate, {
+          toValue: 0.04,
+          duration: 130,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(buyStopRotate, {
+          toValue: -0.025,
+          duration: 120,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(buyStopRotate, {
+          toValue: 0,
+          duration: 110,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [buyStopOpacity, buyStopRotate, buyStopScale, players, t]);
+
+  useEffect(() => {
+    if (!buyStopEvent) return;
+
+    const timeoutId = setTimeout(() => {
+      setBuyStopEvent(null);
+    }, 3200);
+
+    return () => clearTimeout(timeoutId);
+  }, [buyStopEvent]);
+
+  useEffect(() => {
+    if (!isBuyStopped) return;
+    if (selectedCards.length === 0) return;
+    setSelectedCards([]);
+  }, [isBuyStopped, selectedCards.length]);
+
   if (loading || !room || !myPlayer) {
     return (
       <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
         <StatusBar style="light" />
-        <Text style={{ color: "white", fontSize: 32, fontWeight: "900" }}>Loading Chicago</Text>
+        <Text style={{ color: "white", fontSize: 32, fontWeight: "900" }}>{t("common.loading_chicago")}</Text>
       </View>
     );
   }
@@ -341,13 +477,13 @@ export default function ChicagoRoomScreen() {
               <Text style={{ color: "#7DD3FC", fontSize: 42, fontWeight: "900" }}>H</Text>
             </View>
             <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 13, letterSpacing: 2, textTransform: "uppercase" }}>
-              Best hand revealed
+              {t("modal.best_hand_revealed")}
             </Text>
             <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center", marginTop: 12 }}>
-              POKER SCORING
+              {t("modal.poker_scoring").toUpperCase()}
             </Text>
             <Text style={{ color: "#E2E8F0", fontWeight: "800", fontSize: 16, textAlign: "center", marginTop: 10 }}>
-              {room.public_message ?? "The table is revealing the winning hand."}
+              {translatedPublicMessage ?? t("modal.poker_fallback")}
             </Text>
           </Animated.View>
         </View>
@@ -385,13 +521,67 @@ export default function ChicagoRoomScreen() {
             }}
           >
             <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase" }}>
-              Trick winner
+              {t("modal.trick_winner")}
             </Text>
             <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center" }}>
               {trickWinnerName ?? "A player"}
             </Text>
             <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 15, textAlign: "center" }}>
-              WON THIS TRICK
+              {t("modal.won_this_trick").toUpperCase()}
+            </Text>
+          </Animated.View>
+        </View>
+      ) : null}
+      {buyStopEvent ? (
+        <View
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 21,
+            backgroundColor: "rgba(2,6,23,0.58)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              borderRadius: 28,
+              paddingVertical: 26,
+              paddingHorizontal: 24,
+              backgroundColor: buyStopEvent.tone === "penalty" ? "#2A0F16" : "#1E1B0E",
+              borderWidth: 1,
+              borderColor: buyStopEvent.tone === "penalty" ? "rgba(251,113,133,0.42)" : "rgba(251,191,36,0.38)",
+              shadowColor: buyStopEvent.tone === "penalty" ? "#FB7185" : "#FBBF24",
+              shadowOpacity: 0.32,
+              shadowRadius: 30,
+              shadowOffset: { width: 0, height: 18 },
+              elevation: 20,
+              alignItems: "center",
+              gap: 10,
+              opacity: buyStopOpacity,
+              transform: [{ scale: buyStopScale }, { rotate: buyStopRotate.interpolate({ inputRange: [-1, 1], outputRange: ["-1rad", "1rad"] }) }],
+            }}
+          >
+            <Text style={{ fontSize: 52 }}>{buyStopEvent.tone === "penalty" ? "\ud83d\udca5" : "\ud83d\uded2" }</Text>
+            <Text
+              style={{
+                color: buyStopEvent.tone === "penalty" ? "#FDA4AF" : "#FCD34D",
+                fontWeight: "900",
+                fontSize: 13,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+              }}
+            >
+              {buyStopEvent.title}
+            </Text>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center" }}>
+              {buyStopEvent.tone === "penalty" ? t("modal.no_swap_only_chaos") : t("modal.buy_stop_activated")}
+            </Text>
+            <Text style={{ color: "#E2E8F0", fontWeight: "800", fontSize: 16, textAlign: "center", lineHeight: 24 }}>
+              {buyStopEvent.message}
             </Text>
           </Animated.View>
         </View>
@@ -400,20 +590,20 @@ export default function ChicagoRoomScreen() {
         <AnimatedEntrance enterKey={`header-${room.state}-${room.phase_number}`}>
           <View style={{ gap: 6 }}>
             <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>Chicago</Text>
-            <Text style={{ color: "#94A3B8" }}>Room {room.code} - Round {room.current_round || 0}</Text>
-            <Text style={{ color: "#CBD5E1" }}>{room.public_message ?? "Waiting for the next move."}</Text>
+            <Text style={{ color: "#94A3B8" }}>{t("room.room_code", { code: room.code, round: room.current_round || 0 })}</Text>
+            <Text style={{ color: "#CBD5E1" }}>{translatedPublicMessage}</Text>
           </View>
         </AnimatedEntrance>
 
         {room.state === "lobby" ? (
           <AnimatedEntrance enterKey="lobby-card" delay={40}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Players</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.players")}</Text>
               {players.map((player) => (
                 <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between" }}>
                   <Text style={{ color: "white", fontWeight: "800" }}>{player.display_name}</Text>
                   <Text style={{ color: player.id === room.host_player_id ? "#7DD3FC" : "#64748B", fontWeight: "800" }}>
-                    {player.id === room.host_player_id ? "HOST" : `${player.score} PTS`}
+                    {player.id === room.host_player_id ? t("common.host").toUpperCase() : `${player.score} PTS`}
                   </Text>
                 </View>
               ))}
@@ -430,7 +620,7 @@ export default function ChicagoRoomScreen() {
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>COPY INVITE LINK</Text>
+                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.copy_invite_link").toUpperCase()}</Text>
               </Pressable>
               {showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
               {isHost ? (
@@ -446,19 +636,19 @@ export default function ChicagoRoomScreen() {
                     opacity: busy === "start-round" || players.length < 2 ? 0.5 : pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>DEAL ROUND</Text>
+                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("room.deal_round").toUpperCase()}</Text>
                 </Pressable>
               ) : (
-                <Text style={{ color: "#94A3B8" }}>Waiting for the host to start the round.</Text>
+                <Text style={{ color: "#94A3B8" }}>{t("room.wait_host_start")}</Text>
               )}
             </View>
           </AnimatedEntrance>
         ) : null}
 
-        {myHand ? (
+        {myHand && room.state !== "trick_phase" && room.state !== "result" ? (
           <AnimatedEntrance enterKey={`hand-${room.phase_number}`} delay={60}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Your hand</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.your_hand")}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {myHand.cards.map((card) => {
                   const selected = selectedCards.includes(cardId(card));
@@ -468,7 +658,7 @@ export default function ChicagoRoomScreen() {
                       card={card}
                       selected={selected}
                       onPress={
-                        room.state === "draw_phase_1" || room.state === "draw_phase_2" || room.state === "draw_phase_3"
+                        (room.state === "draw_phase_1" || room.state === "draw_phase_2" || room.state === "draw_phase_3") && !isBuyStopped
                           ? () =>
                               setSelectedCards((current) =>
                                 current.includes(cardId(card)) ? current.filter((id) => id !== cardId(card)) : [...current, cardId(card)]
@@ -481,7 +671,7 @@ export default function ChicagoRoomScreen() {
               </View>
               {myEvaluation ? (
                 <Text style={{ color: "#94A3B8" }}>
-                  Current read: <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>{myEvaluation.label.toUpperCase()}</Text>
+                  {t("room.current_read")} <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>{translatePokerName(myEvaluation.name).toUpperCase()}</Text>
                 </Text>
               ) : null}
             </View>
@@ -491,10 +681,28 @@ export default function ChicagoRoomScreen() {
         {room.state === "draw_phase_1" || room.state === "draw_phase_2" || room.state === "draw_phase_3" ? (
           <AnimatedEntrance enterKey={`draw-${room.state}`} delay={80}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>DRAW CARDS</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.draw_cards").toUpperCase()}</Text>
               <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                Select 0-5 cards to exchange, then submit your draw. Everyone draws at the same time.
+                {t("room.draw_help")}
               </Text>
+              {isBuyStopped ? (
+                <View
+                  style={{
+                    borderRadius: 16,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    backgroundColor: "rgba(251,191,36,0.14)",
+                    borderWidth: 1,
+                    borderColor: "rgba(251,191,36,0.34)",
+                    gap: 4,
+                  }}
+                >
+                  <Text style={{ color: "#FCD34D", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>{t("room.buy_stop_active")}</Text>
+                  <Text style={{ color: "#F8FAFC", lineHeight: 21 }}>
+                    {t("room.buy_stop_body", { score: BUY_STOP_SCORE })}
+                  </Text>
+                </View>
+              ) : null}
               {myPlayer.draw_ready ? (
                 <View
                   style={{
@@ -508,18 +716,18 @@ export default function ChicagoRoomScreen() {
                   }}
                 >
                   <Text style={{ color: "#7DD3FC", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>
-                    Decision locked in
+                    {t("room.decision_locked")}
                   </Text>
                   <Text style={{ color: "#E2E8F0", lineHeight: 21 }}>
                     {selectedDiscardCards.length > 0
-                      ? `You chose to exchange ${selectedDiscardCards.length} card${selectedDiscardCards.length === 1 ? "" : "s"}.`
-                      : "You chose to keep your current hand."} Waiting for the rest of the table.
+                      ? t("room.exchange_waiting", { count: selectedDiscardCards.length, cards: selectedDiscardCards.length === 1 ? "card" : "cards" })
+                      : t("room.waiting_table")}
                   </Text>
                 </View>
               ) : null}
               {selectedDiscardCards.length === 0 ? (
                 <Text style={{ color: "#7DD3FC", fontWeight: "800" }}>
-                  No cards selected means you will keep your current hand and continue.
+                  {t("room.no_cards_selected")}
                 </Text>
               ) : null}
               <Pressable
@@ -536,10 +744,12 @@ export default function ChicagoRoomScreen() {
               >
                 <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
                   {myPlayer.draw_ready
-                    ? "EXCHANGE SUBMITTED"
+                    ? t("room.exchange_submitted").toUpperCase()
+                    : isBuyStopped
+                      ? t("room.buy_stop_keep").toUpperCase()
                     : selectedDiscardCards.length === 0
-                      ? "KEEP CURRENT HAND"
-                      : `EXCHANGE ${selectedDiscardCards.length} CARD${selectedDiscardCards.length === 1 ? "" : "S"}`}
+                      ? t("room.keep_current").toUpperCase()
+                      : t("room.exchange_cards", { count: selectedDiscardCards.length, cards_upper: selectedDiscardCards.length === 1 ? "CARD" : "CARDS" }).toUpperCase()}
                 </Text>
               </Pressable>
             </View>
@@ -549,12 +759,12 @@ export default function ChicagoRoomScreen() {
         {room.state === "poker_score_1" || room.state === "poker_score_2" ? (
           <AnimatedEntrance enterKey={`score-${room.state}`} delay={80}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>BEST HAND SCORING</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.best_hand_scoring").toUpperCase()}</Text>
               <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                The table is scoring automatically. A reveal will appear as soon as the best hand is confirmed.
+                {t("room.best_hand_body")}
               </Text>
               <Text style={{ color: "#7DD3FC", fontWeight: "800" }}>
-                Giving everyone a quick moment to settle before the winning hand is revealed.
+                {t("room.best_hand_wait")}
               </Text>
               <View
                 style={{
@@ -569,11 +779,11 @@ export default function ChicagoRoomScreen() {
                 }}
               >
                 <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
-                  REVEALING BEST HAND...
+                  {t("room.revealing_best_hand").toUpperCase()}
                 </Text>
               </View>
               <Text style={{ color: "#94A3B8", lineHeight: 21 }}>
-                Any open player screen can trigger this automatically, so the round should keep moving even if one client misses the timing.
+                {t("room.best_hand_hint")}
               </Text>
               <Pressable
                 onPress={() => run("score-phase", () => advanceChicagoPokerScore(roomId, playerId))}
@@ -589,7 +799,7 @@ export default function ChicagoRoomScreen() {
                   opacity: busy === "score-phase" ? 0.6 : pressed ? 0.92 : 1,
                 })}
               >
-                <Text style={{ color: "#E2E8F0", fontWeight: "900", textTransform: "uppercase" }}>REVEAL BEST HAND NOW</Text>
+                <Text style={{ color: "#E2E8F0", fontWeight: "900", textTransform: "uppercase" }}>{t("room.reveal_now").toUpperCase()}</Text>
               </Pressable>
             </View>
           </AnimatedEntrance>
@@ -598,13 +808,65 @@ export default function ChicagoRoomScreen() {
         {room.state === "trick_phase" ? (
           <AnimatedEntrance enterKey={`tricks-${room.phase_number}`} delay={80}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>TRICK PHASE</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.trick_phase").toUpperCase()}</Text>
               <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                Only the last trick matters for normal scoring. Any player can press CHICAGO once per round. The first player to claim it must win every trick or they lose 15 points.
+                {t("room.trick_body")}
               </Text>
-              <Text style={{ color: isMyTurn ? "#7DD3FC" : "#94A3B8" }}>
-                {isMyTurn ? "It is your turn to play." : "Wait for the current player."}
-              </Text>
+              <View
+                style={{
+                  borderRadius: 18,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  backgroundColor: isMyTurn ? "rgba(56,189,248,0.14)" : "rgba(148,163,184,0.1)",
+                  borderWidth: 1,
+                  borderColor: isMyTurn ? "rgba(125,211,252,0.34)" : "rgba(148,163,184,0.2)",
+                  gap: 4,
+                }}
+              >
+                <Text style={{ color: isMyTurn ? "#7DD3FC" : "#CBD5E1", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>
+                  {isMyTurn ? t("room.your_turn") : t("room.waiting")}
+                </Text>
+                <Text style={{ color: "#F8FAFC", fontWeight: "800", lineHeight: 22 }}>
+                  {isMyTurn
+                    ? t("room.your_turn_body")
+                    : t("room.waiting_body", { name: currentTurnPlayer?.display_name ?? t("common.player") })}
+                </Text>
+              </View>
+              {canDeclareChicago ? (
+                <View
+                  style={{
+                    borderRadius: 18,
+                    padding: 14,
+                    backgroundColor: "rgba(124,45,18,0.2)",
+                    borderWidth: 1,
+                    borderColor: "rgba(251,146,60,0.3)",
+                    gap: 8,
+                  }}
+                >
+                  <Text style={{ color: "#FDBA74", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>{t("room.chicago_open")}</Text>
+                  <Text style={{ color: "#F8FAFC", lineHeight: 21 }}>
+                    {t("room.chicago_open_body")}
+                  </Text>
+                  <Pressable
+                    onPress={() => run("declare-chicago", () => declareChicago(roomId, playerId))}
+                    disabled={busy === "declare-chicago"}
+                    style={({ pressed }) => ({
+                      minHeight: 52,
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#7C2D12",
+                      borderWidth: 1,
+                      borderColor: "rgba(251,146,60,0.26)",
+                      opacity: busy === "declare-chicago" ? 0.6 : pressed ? 0.92 : 1,
+                    })}
+                  >
+                    <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
+                      {t("room.call_chicago").toUpperCase()}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {chicagoCaller ? (
                 <View
                   style={{
@@ -617,56 +879,62 @@ export default function ChicagoRoomScreen() {
                     gap: 4,
                   }}
                 >
-                  <Text style={{ color: "#FDBA74", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>Chicago claimed</Text>
+                  <Text style={{ color: "#FDBA74", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>{t("room.chicago_claimed")}</Text>
                   <Text style={{ color: "#E2E8F0", lineHeight: 21 }}>
-                    {chicagoCaller.display_name} has CHICAGO. They must win every trick in this round or lose 15 points.
+                    {t("room.chicago_claimed_body", { name: chicagoCaller.display_name })}
                   </Text>
                 </View>
               ) : null}
-              {canDeclareChicago ? (
-                <Pressable
-                  onPress={() => run("declare-chicago", () => declareChicago(roomId, playerId))}
-                  disabled={busy === "declare-chicago"}
-                  style={({ pressed }) => ({
-                    height: 50,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#7C2D12",
-                    opacity: pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>CHICAGO</Text>
-                </Pressable>
-              ) : null}
               <View style={{ gap: 8 }}>
-                <Text style={{ color: "#CBD5E1", fontWeight: "900" }}>Current trick</Text>
-                {playedCards.length === 0 ? <Text style={{ color: "#94A3B8" }}>No cards played yet.</Text> : null}
+                <Text style={{ color: "#CBD5E1", fontWeight: "900" }}>{t("room.current_trick")}</Text>
+                {playedCards.length === 0 ? <Text style={{ color: "#94A3B8" }}>{t("room.no_cards_played")}</Text> : null}
                 {playedCards.map((entry) => {
                   const player = players.find((candidate) => candidate.id === entry.player_id);
                   return (
                     <View key={`${entry.trick_id}-${entry.player_id}`} style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={{ color: "white", fontWeight: "800", flex: 1 }}>{player?.display_name ?? "Player"}</Text>
+                      <Text style={{ color: "white", fontWeight: "800", flex: 1 }}>{player?.display_name ?? t("common.player")}</Text>
                       <PlayingCard card={entry.card} compact />
                     </View>
                   );
                 })}
               </View>
-              {isMyTurn ? (
-                <View style={{ gap: 8 }}>
-                  <Text style={{ color: "#CBD5E1", fontWeight: "900" }}>Play a card</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                    {(myHand?.cards ?? []).map((card) => (
-                      <PlayingCard
-                        key={`play-${cardId(card)}`}
-                        card={card}
-                        compact
-                        onPress={() => run(`play-${cardId(card)}`, () => playChicagoCard(roomId, playerId, card))}
-                      />
-                    ))}
-                  </View>
+              <View
+                style={{
+                  gap: 10,
+                  borderRadius: 20,
+                  padding: 14,
+                  backgroundColor: isMyTurn ? "rgba(2,132,199,0.12)" : "rgba(15,23,42,0.82)",
+                  borderWidth: 1,
+                  borderColor: isMyTurn ? "rgba(125,211,252,0.34)" : "#243041",
+                  shadowColor: isMyTurn ? "#38BDF8" : "#020617",
+                  shadowOpacity: isMyTurn ? 0.18 : 0.08,
+                  shadowRadius: 18,
+                  shadowOffset: { width: 0, height: 8 },
+                  elevation: isMyTurn ? 8 : 4,
+                }}
+              >
+                <Text style={{ color: isMyTurn ? "#7DD3FC" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>
+                  {isMyTurn ? t("room.use_these_cards") : t("room.cards_standby")}
+                </Text>
+                <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 18 }}>
+                  {isMyTurn ? t("room.tap_card") : t("room.cards_standby_title")}
+                </Text>
+                <Text style={{ color: isMyTurn ? "#CFFAFE" : "#CBD5E1", lineHeight: 21 }}>
+                  {isMyTurn
+                    ? t("room.use_cards_body")
+                    : t("room.cards_standby_body")}
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {(myHand?.cards ?? []).map((card) => (
+                    <PlayingCard
+                      key={`play-${cardId(card)}`}
+                      card={card}
+                      compact
+                      onPress={isMyTurn ? () => run(`play-${cardId(card)}`, () => playChicagoCard(roomId, playerId, card)) : undefined}
+                    />
+                  ))}
                 </View>
-              ) : null}
+              </View>
             </View>
           </AnimatedEntrance>
         ) : null}
@@ -674,8 +942,8 @@ export default function ChicagoRoomScreen() {
         {room.state === "result" ? (
           <AnimatedEntrance enterKey={`result-${room.phase_number}`} delay={80}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Round result</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.round_result").toUpperCase()}</Text>
+              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{translatedPublicMessage}</Text>
               {isHost ? (
                 <Pressable
                   onPress={() => run("next-round", () => startChicagoRound(roomId, playerId))}
@@ -689,10 +957,10 @@ export default function ChicagoRoomScreen() {
                     opacity: pressed ? 0.92 : 1,
                   })}
                 >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>DEAL NEXT ROUND</Text>
+                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("room.deal_next_round").toUpperCase()}</Text>
                 </Pressable>
               ) : (
-                <Text style={{ color: "#94A3B8" }}>Waiting for the host to deal the next round.</Text>
+                <Text style={{ color: "#94A3B8" }}>{t("room.wait_host_next")}</Text>
               )}
             </View>
           </AnimatedEntrance>
@@ -701,10 +969,10 @@ export default function ChicagoRoomScreen() {
         {room.state === "game_over" ? (
           <AnimatedEntrance enterKey={`game-over-${room.phase_number}`} delay={80}>
             <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Game over</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.game_over")}</Text>
+              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{translatedPublicMessage}</Text>
               <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 18 }}>
-                Winner: {players.find((player) => player.id === room.winner_player_id)?.display_name ?? "Unknown"}
+                {t("room.winner")} {players.find((player) => player.id === room.winner_player_id)?.display_name ?? t("common.unknown")}
               </Text>
             </View>
           </AnimatedEntrance>
@@ -712,14 +980,23 @@ export default function ChicagoRoomScreen() {
 
         <AnimatedEntrance enterKey={`scores-${players.length}`} delay={100}>
           <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Scoreboard</Text>
+            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.scoreboard")}</Text>
             {players.map((player) => (
               <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <View style={{ gap: 4 }}>
                   <Text style={{ color: "white", fontWeight: "800" }}>{player.display_name}</Text>
-                  <Text style={{ color: "#64748B" }}>{player.id === room.host_player_id ? "Host" : `Seat ${player.seat_order}`}</Text>
+                  <Text style={{ color: "#64748B" }}>
+                    {player.score >= BUY_STOP_SCORE ? t("room.buy_stop_row", { score: BUY_STOP_SCORE }) : player.id === room.host_player_id ? t("common.host") : t("room.seat", { seat: player.seat_order })}
+                  </Text>
                 </View>
-                <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 18 }}>{player.score}</Text>
+                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                  {player.score >= BUY_STOP_SCORE ? (
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(251,191,36,0.16)", borderWidth: 1, borderColor: "rgba(251,191,36,0.3)" }}>
+                      <Text style={{ color: "#FCD34D", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>{t("room.no_swaps")}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 18 }}>{player.score}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -738,7 +1015,7 @@ export default function ChicagoRoomScreen() {
             opacity: pressed ? 0.9 : 1,
           })}
         >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
+          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games").toUpperCase()}</Text>
         </Pressable>
       </ScrollView>
     </View>

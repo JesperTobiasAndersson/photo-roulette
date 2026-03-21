@@ -92,6 +92,10 @@ export function evaluatePokerHand(cards: ChicagoCard[]) {
   const rankCounts = countRanks(cards);
   const desc = [...values].sort((a, b) => b - a);
 
+  if (cards.length !== 5 || rankCounts.length === 0) {
+    return { name: "high_card", points: 0, tiebreak: [0, ...desc] };
+  }
+
   if (flush && straightHigh === 14 && values.join(",") === "10,11,12,13,14") {
     return { name: "royal_straight_flush", points: 52, tiebreak: [9, 14] };
   }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
+import { useI18n } from "./i18n";
 
 declare global {
   interface WindowEventMap {
@@ -25,6 +26,7 @@ function isStandaloneMode() {
 
 export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
   const isWeb = Platform.OS === "web";
+  const { t } = useI18n();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstall, setShowInstall] = useState(false);
 
@@ -124,17 +126,12 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
           gap: 12,
         }}
       >
-        <Text style={{ color: "#F8FAFC", fontSize: 16, fontWeight: "900", textAlign: "center" }}>Install Picklo</Text>
+        <Text style={{ color: "#F8FAFC", fontSize: 16, fontWeight: "900", textAlign: "center" }}>{t("pwa.title")}</Text>
 
         {shouldShowIosInstructions ? (
-          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>
-            In Safari, tap the Share button and then choose{" "}
-            <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>Add to Home Screen</Text>.
-          </Text>
+          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>{t("pwa.ios")}</Text>
         ) : (
-          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>
-            Save Picklo to your home screen for the full app experience.
-          </Text>
+          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>{t("pwa.body")}</Text>
         )}
 
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -151,11 +148,11 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
                 opacity: pressed ? 0.92 : 1,
               })}
             >
-              <Text style={{ color: "white", fontWeight: "900" }}>Install</Text>
+              <Text style={{ color: "white", fontWeight: "900" }}>{t("pwa.install")}</Text>
             </Pressable>
           ) : (
             <View style={{ flex: 1, minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#111827", borderWidth: 1, borderColor: "#1F2937" }}>
-              <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>Use Safari Share</Text>
+              <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>{t("pwa.safari")}</Text>
             </View>
           )}
 
@@ -173,7 +170,7 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
               opacity: pressed ? 0.92 : 1,
             })}
           >
-            <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>Not now</Text>
+            <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>{t("pwa.not_now")}</Text>
           </Pressable>
         </View>
       </View>
