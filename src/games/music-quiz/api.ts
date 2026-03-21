@@ -28,13 +28,33 @@ async function requireHost(roomId: string, playerId: string) {
   return room;
 }
 
+function getErrorText(error: unknown) {
+  if (!error || typeof error !== "object") return String(error ?? "");
+  const parts = [
+    "message" in error ? String((error as { message?: unknown }).message ?? "") : "",
+    "details" in error ? String((error as { details?: unknown }).details ?? "") : "",
+    "hint" in error ? String((error as { hint?: unknown }).hint ?? "") : "",
+  ];
+  return parts.join(" ").toLowerCase();
+}
+
+function isMissingMusicQuizColumnError(error: unknown, column: string) {
+  const text = getErrorText(error);
+  return text.includes(column.toLowerCase()) && (text.includes("column") || text.includes("schema cache") || text.includes("could not find"));
+}
+
+function isCompletedStateConstraintError(error: unknown) {
+  const text = getErrorText(error);
+  return text.includes("completed") && (text.includes("check constraint") || text.includes("violates") || text.includes("invalid input value") || text.includes("state"));
+}
+
 export async function createMusicQuizRoom(displayName: string) {
   const trimmedName = displayName.trim();
   if (!trimmedName) throw new Error("Enter a player name");
 
   const { data: room, error: roomError } = await supabase
     .from("music_quiz_rooms")
-    .insert({ code: makeRoomCode(), state: "lobby", public_message: "Waiting for the host to load a Spotify song." })
+    .insert({ code: makeRoomCode(), state: "lobby", public_message: "Waiting for the host to choose a category." })
     .select("*")
     .single();
   if (roomError) throw roomError;
@@ -81,11 +101,13 @@ export async function startMusicQuizRound(
   roomId: string,
   playerId: string,
   input: {
+    songPool: MusicQuizSongPool;
     promptType: MusicQuizPromptType;
     spotifyUrl: string;
     spotifyTrackId: string;
     songTitle: string;
     artistName: string;
+    artistSpotifyUrl?: string;
     coverImageUrl: string | null;
     pointValue: number;
   }
@@ -114,6 +136,7 @@ export async function startMusicQuizRound(
       spotify_track_id: input.spotifyTrackId,
       song_title: input.songTitle,
       artist_name: input.artistName,
+      artist_spotify_url: input.artistSpotifyUrl ?? null,
       cover_image_url: input.coverImageUrl,
       point_value: pointValue,
       state: "question",
@@ -123,16 +146,30 @@ export async function startMusicQuizRound(
   if (roundError) throw roundError;
 
   const promptText = input.promptType === "artist" ? "Guess the artist" : "Guess the song title";
+  const nextRoomValues = {
+    state: "question",
+    current_round_id: round.id,
+    selected_pool: input.songPool,
+    phase_number: room.phase_number + 1,
+    public_message: `${promptText}. Round ${round.round_number} is live.`,
+  };
   const { error: roomUpdateError } = await supabase
     .from("music_quiz_rooms")
-    .update({
-      state: "question",
-      current_round_id: round.id,
-      phase_number: room.phase_number + 1,
-      public_message: `${promptText}. Everyone answers in the app.`,
-    })
+    .update(nextRoomValues)
     .eq("id", roomId);
-  if (roomUpdateError) throw roomUpdateError;
+  if (roomUpdateError) {
+    if (!isMissingMusicQuizColumnError(roomUpdateError, "selected_pool")) throw roomUpdateError;
+    const { error: fallbackError } = await supabase
+      .from("music_quiz_rooms")
+      .update({
+        state: "question",
+        current_round_id: round.id,
+        phase_number: room.phase_number + 1,
+        public_message: `${promptText}. Round ${round.round_number} is live.`,
+      })
+      .eq("id", roomId);
+    if (fallbackError) throw fallbackError;
+  }
 }
 
 export async function loadRandomMusicQuizTrack(roomId: string, playerId: string, pool: MusicQuizSongPool) {
@@ -143,17 +180,14 @@ export async function loadRandomMusicQuizTrack(roomId: string, playerId: string,
 
   const usedTrackIds = new Set((rounds ?? []).map((entry: { spotify_track_id: string }) => entry.spotify_track_id));
   const filteredLibrary = MUSIC_QUIZ_LIBRARY.filter((entry) => pool === "mix" || entry.category === pool);
-  const unusedLibrary = filteredLibrary.filter((entry) => {
-    const trackMatch = entry.spotifyUrl.match(/track\/([A-Za-z0-9]+)/i);
-    return trackMatch?.[1] ? !usedTrackIds.has(trackMatch[1]) : true;
-  });
+  const unusedLibrary = filteredLibrary.filter((entry) => !usedTrackIds.has(entry.spotifyTrackId));
   const source = unusedLibrary.length > 0 ? unusedLibrary : filteredLibrary;
   if (source.length === 0) {
     throw new Error("No songs available in that playlist");
   }
 
   const nextEntry = source[Math.floor(Math.random() * source.length)];
-  return loadSpotifyTrackPreview(nextEntry.spotifyUrl);
+  return loadSpotifyTrackPreview(nextEntry);
 }
 
 export async function submitMusicQuizAnswer(roomId: string, playerId: string, answerText: string) {
@@ -243,9 +277,48 @@ export async function resetMusicQuizToLobby(roomId: string, playerId: string) {
     .update({
       state: "lobby",
       current_round_id: null,
+      selected_pool: null,
       phase_number: room.phase_number + 1,
-      public_message: "Waiting for the host to load the next Spotify song.",
+      public_message: "Waiting for the host to choose a category.",
     })
     .eq("id", roomId);
-  if (error) throw error;
+  if (error) {
+    if (!isMissingMusicQuizColumnError(error, "selected_pool")) throw error;
+    const { error: fallbackError } = await supabase
+      .from("music_quiz_rooms")
+      .update({
+        state: "lobby",
+        current_round_id: null,
+        phase_number: room.phase_number + 1,
+        public_message: "Waiting for the host to choose a category.",
+      })
+      .eq("id", roomId);
+    if (fallbackError) throw fallbackError;
+  }
+}
+
+export async function completeMusicQuizGame(roomId: string, playerId: string) {
+  const room = await requireHost(roomId, playerId);
+  const { error } = await supabase
+    .from("music_quiz_rooms")
+    .update({
+      state: "completed",
+      current_round_id: null,
+      phase_number: room.phase_number + 1,
+      public_message: "Game complete. Final scoreboard is locked in.",
+    })
+    .eq("id", roomId);
+  if (error) {
+    if (!isCompletedStateConstraintError(error)) throw error;
+    const { error: fallbackError } = await supabase
+      .from("music_quiz_rooms")
+      .update({
+        state: "reveal",
+        current_round_id: null,
+        phase_number: room.phase_number + 1,
+        public_message: "Game complete. Final scoreboard is locked in.",
+      })
+      .eq("id", roomId);
+    if (fallbackError) throw fallbackError;
+  }
 }

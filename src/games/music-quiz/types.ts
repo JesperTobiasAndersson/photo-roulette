@@ -1,4 +1,4 @@
-export type MusicQuizRoomStateValue = "lobby" | "question" | "reveal";
+export type MusicQuizRoomStateValue = "lobby" | "question" | "reveal" | "completed";
 export type MusicQuizPromptType = "title" | "artist";
 export type MusicQuizSongPool = "hits" | "classics" | "mix";
 
@@ -8,6 +8,8 @@ export type MusicQuizRoomDto = {
   state: MusicQuizRoomStateValue;
   host_player_id: string | null;
   current_round_id: string | null;
+  selected_pool?: MusicQuizSongPool | null;
+  total_rounds?: number;
   phase_number: number;
   public_message: string | null;
   created_at?: string;
@@ -33,6 +35,7 @@ export type MusicQuizRoundDto = {
   spotify_track_id: string;
   song_title: string;
   artist_name: string;
+  artist_spotify_url?: string | null;
   cover_image_url: string | null;
   point_value: number;
   state: "question" | "reveal";

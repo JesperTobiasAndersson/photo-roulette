@@ -74,8 +74,8 @@ export default function GameLibraryHome() {
       accent: "#22C55E",
       description: t("game.music.description"),
       icon: require("../assets/musicquiz.png"),
-      cta: t("home.coming_soon"),
-      comingSoon: true,
+      cta: t("game.music.cta"),
+      comingSoon: false,
     },
   ] as const;
   const footerLinks = [

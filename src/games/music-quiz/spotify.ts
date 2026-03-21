@@ -1,9 +1,12 @@
+import type { MusicQuizLibraryEntry } from "./data";
+
 export type SpotifyTrackPreview = {
   spotifyUrl: string;
   spotifyTrackId: string;
   songTitle: string;
   artistName: string;
   coverImageUrl: string | null;
+  artistSpotifyUrl: string;
 };
 
 function normalizeSpotifyUrl(input: string) {
@@ -36,24 +39,9 @@ function parseTrackIdFromUrl(input: string) {
   return { normalized, trackId: trackMatch[1] };
 }
 
-function splitSpotifyTitle(title: string) {
-  const clean = title.replace(/\s*\|\s*Spotify\s*$/i, "").trim();
-  const songByArtistMatch = clean.match(/^(.*?)\s*-\s*(?:song and lyrics by\s*)?(.*)$/i);
-  if (songByArtistMatch?.[1] && songByArtistMatch?.[2]) {
-    return {
-      songTitle: songByArtistMatch[1].trim(),
-      artistName: songByArtistMatch[2].trim(),
-    };
-  }
-
-  return {
-    songTitle: clean,
-    artistName: "",
-  };
-}
-
-export async function loadSpotifyTrackPreview(input: string): Promise<SpotifyTrackPreview> {
-  const { normalized, trackId } = parseTrackIdFromUrl(input);
+export async function loadSpotifyTrackPreview(input: string | MusicQuizLibraryEntry): Promise<SpotifyTrackPreview> {
+  const sourceUrl = typeof input === "string" ? input : input.spotifyUrl;
+  const { normalized, trackId } = parseTrackIdFromUrl(sourceUrl);
   const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(normalized)}`;
   const response = await fetch(oembedUrl);
   if (!response.ok) {
@@ -66,9 +54,8 @@ export async function loadSpotifyTrackPreview(input: string): Promise<SpotifyTra
     thumbnail_url?: string;
   };
 
-  const titleParts = splitSpotifyTitle(data.title ?? "");
-  const artistName = data.author_name?.trim() || titleParts.artistName;
-  const songTitle = titleParts.songTitle.trim();
+  const songTitle = typeof input === "string" ? (data.title ?? "").replace(/\s*\|\s*Spotify\s*$/i, "").trim() : input.songTitle.trim();
+  const artistName = typeof input === "string" ? (data.author_name?.trim() || "Unknown artist") : input.artistName.trim();
 
   if (!songTitle) {
     throw new Error("Could not read the song title from Spotify");
@@ -76,9 +63,10 @@ export async function loadSpotifyTrackPreview(input: string): Promise<SpotifyTra
 
   return {
     spotifyUrl: normalized,
-    spotifyTrackId: trackId,
+    spotifyTrackId: typeof input === "string" ? trackId : input.spotifyTrackId,
     songTitle,
     artistName: artistName || "Unknown artist",
     coverImageUrl: data.thumbnail_url ?? null,
+    artistSpotifyUrl: typeof input === "string" ? `https://open.spotify.com/search/${encodeURIComponent(artistName || "Unknown artist")}` : input.artistSpotifyUrl,
   };
 }
