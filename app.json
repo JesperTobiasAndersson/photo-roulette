@@ -42,14 +42,7 @@
         "apple-mobile-web-app-capable": "yes",
         "apple-mobile-web-app-status-bar-style": "black-translucent",
         "apple-mobile-web-app-title": "Picklo",
-        "mobile-web-app-capable": "yes",
-        "script": [
-          {
-            "async": true,
-            "src": "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5551520118812971",
-            "crossOrigin": "anonymous"
-          }
-        ]
+        "mobile-web-app-capable": "yes"
       },
       "manifest": {
         "name": "Picklo - Photo Roulette Game",

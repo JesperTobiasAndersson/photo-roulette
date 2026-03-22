@@ -82,18 +82,52 @@ export default function MusicQuizRoomScreen() {
   };
 
   const copyInvite = async () => { if (!inviteUrl) return; await Clipboard.setStringAsync(inviteUrl); setShowCopiedToast(true); setTimeout(() => setShowCopiedToast(false), 1400); };
-  const openPreviewTrack = async (preview: SpotifyTrackPreview) => {
-    if (Platform.OS === "web") return Linking.openURL(preview.spotifyUrl);
-    const appUrl = `spotify:track:${preview.spotifyTrackId}`;
+  const openSpotifyDestination = async (trackId: string, webUrl: string) => {
+    const appUrl = `spotify:track:${trackId}`;
+
+    if (Platform.OS === "web") {
+      const visibleDocument = typeof document !== "undefined" ? document : null;
+      const visibleWindow = typeof window !== "undefined" ? window : null;
+
+      if (!visibleWindow) return Linking.openURL(webUrl);
+
+      return new Promise<void>((resolve) => {
+        let finished = false;
+        const cleanup = () => {
+          if (visibleDocument) visibleDocument.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          cleanup();
+          resolve();
+        };
+        const handleVisibilityChange = () => {
+          if (visibleDocument?.hidden) finish();
+        };
+
+        if (visibleDocument) visibleDocument.addEventListener("visibilitychange", handleVisibilityChange, { once: true });
+
+        visibleWindow.location.href = appUrl;
+
+        visibleWindow.setTimeout(() => {
+          if (!visibleDocument?.hidden) {
+            visibleWindow.location.href = webUrl;
+          }
+          finish();
+        }, 900);
+      });
+    }
+
     if (await Linking.canOpenURL(appUrl)) return Linking.openURL(appUrl);
-    return Linking.openURL(preview.spotifyUrl);
+    return Linking.openURL(webUrl);
+  };
+  const openPreviewTrack = async (preview: SpotifyTrackPreview) => {
+    return openSpotifyDestination(preview.spotifyTrackId, preview.spotifyUrl);
   };
   const openSpotifyTrack = async () => {
     if (!currentRound) return;
-    if (Platform.OS === "web") return Linking.openURL(currentRound.spotify_url);
-    const appUrl = `spotify:track:${currentRound.spotify_track_id}`;
-    if (await Linking.canOpenURL(appUrl)) return Linking.openURL(appUrl);
-    return Linking.openURL(currentRound.spotify_url);
+    return openSpotifyDestination(currentRound.spotify_track_id, currentRound.spotify_url);
   };
   const openArtistPage = async (artistName: string, artistSpotifyUrl?: string | null) => {
     const artistUrl = artistSpotifyUrl || `https://open.spotify.com/search/${encodeURIComponent(artistName)}`;
