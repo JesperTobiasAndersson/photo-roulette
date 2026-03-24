@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getRandomStatement } from "../src/constants/statements";
+import { getRandomStatement, getStatementText, type StatementCategory } from "../src/constants/statements";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { StatusBar } from "expo-status-bar";
 import { getIsPremium } from "../src/lib/premium";
+import { useI18n } from "../src/lib/i18n";
 
 type Submission = { id: string; player_id: string; image_path: string };
 type PlayerImage = { id: string; image_path: string };
@@ -27,6 +28,7 @@ function asString(v: unknown): string | undefined {
 }
 
 export default function RoundScreen() {
+  const { language } = useI18n();
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
@@ -35,6 +37,7 @@ export default function RoundScreen() {
   const popAnim = useRef(new Animated.Value(0)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current; // for winner image pop
   const transitionAnim = useRef(new Animated.Value(1)).current; // fade out/in between rounds
+  const finalOverlayAnim = useRef(new Animated.Value(0)).current;
 
   const [playerCount, setPlayerCount] = useState<number>(0);
   const autoAdvanceRef = useRef(false);
@@ -54,6 +57,7 @@ export default function RoundScreen() {
   const [roundNumber, setRoundNumber] = useState<number>(0);
 
   const [hostId, setHostId] = useState<string>("");
+  const [statementCategory, setStatementCategory] = useState<StatementCategory>("innocent");
 
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [mySubmissionId, setMySubmissionId] = useState<string | null>(null);
@@ -64,10 +68,12 @@ export default function RoundScreen() {
   const [availableImages, setAvailableImages] = useState<PlayerImage[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
+  const [showFinalOverlay, setShowFinalOverlay] = useState(false);
 
   const lastSeenRoundIdRef = useRef<string | null>(null);
   const skipNextInsertNavRef = useRef<string | null>(null);
   const advancingRoundRef = useRef(false);
+  const finalTransitionStartedRef = useRef(false);
   const [advancingRound, setAdvancingRound] = useState(false);
 
   const isHost = !!(playerId && hostId && playerId === hostId);
@@ -75,6 +81,33 @@ export default function RoundScreen() {
   const publicUrlFor = (path: string) => {
     const { data } = supabase.storage.from("game-images").getPublicUrl(path);
     return data.publicUrl;
+  };
+
+  const navigateToResultsWithTransition = () => {
+    if (!roomId || finalTransitionStartedRef.current) return;
+    finalTransitionStartedRef.current = true;
+    setShowWinnerOverlay(false);
+    setShowFinalOverlay(true);
+    finalOverlayAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(finalOverlayAnim, {
+        toValue: 1,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(transitionAnim, {
+        toValue: 0,
+        duration: 620,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setTimeout(() => {
+        router.replace({ pathname: "/results", params: { roomId } });
+      }, 280);
+    });
   };
 
   const tryAutoAdvance = async () => {
@@ -106,10 +139,13 @@ export default function RoundScreen() {
     if (!roomId) return;
     const { data, error } = await supabase
       .from("rooms")
-      .select("host_player_id")
+      .select("*")
       .eq("id", roomId)
       .single();
-    if (!error) setHostId(data.host_player_id ?? "");
+    if (!error) {
+      setHostId(data.host_player_id ?? "");
+      setStatementCategory((data.statement_category as StatementCategory | null) ?? "innocent");
+    }
   };
 
   const loadRound = async () => {
@@ -235,7 +271,7 @@ useEffect(() => {
   (async () => {
     // Gratis-limit: after 5 rundor -> direkt till resultat
     if (!isPremiumUser && roundNumber >= 5) {
-      router.replace({ pathname: "/results", params: { roomId } });
+      navigateToResultsWithTransition();
       return;
     }
 
@@ -414,7 +450,7 @@ useEffect(() => {
         (payload) => {
           const newPhase = (payload.new as any)?.phase as string | undefined;
           if (newPhase === "finished") {
-            router.replace({ pathname: "/results", params: { roomId } });
+            navigateToResultsWithTransition();
           }
         }
       )
@@ -563,8 +599,7 @@ useEffect(() => {
 
         const { error: phaseErr } = await supabase.from("rooms").update({ phase: "finished" }).eq("id", roomId);
         if (phaseErr) return Alert.alert("Error (finished)", phaseErr.message);
-
-        router.replace({ pathname: "/results", params: { roomId } });
+        navigateToResultsWithTransition();
         return;
       }
 
@@ -582,7 +617,7 @@ useEffect(() => {
         .map((r: any) => r.statement)
         .filter((s: any): s is string => typeof s === "string" && s.length > 0);
 
-      const statement = getRandomStatement(usedStatements);
+      const statement = getRandomStatement({ exclude: usedStatements, category: statementCategory });
       const endsAt = new Date(Date.now() + 60_000).toISOString();
 
       const { data, error } = await supabase
@@ -662,13 +697,93 @@ useEffect(() => {
     return { submissionId: bestId, votes: best < 0 ? 0 : best, imagePath: bestPath };
   }, [submissions, voteCounts]);
 
-  const statusLabel = status === "collecting" ? "Selecting" : status === "voting" ? "Voting" : "Done";
+  const copy =
+    language === "sv"
+      ? {
+          roundWinner: "Rundvinnare",
+          nextRoundStarting: "Nästa runda startar…",
+          roundLabel: "Runda",
+          hostLabel: "Du är värd",
+          playerLabel: "Spelare",
+          statusCollecting: "Väljer",
+          statusVoting: "Röstar",
+          statusDone: "Klar",
+          statementTitle: "Statement",
+          statementBody: "Välj bilden som passar bäst 👇",
+          categoryInnocent: "OSKYLDIGA",
+          categoryAdult: "18+",
+          categoryGross: "GROV",
+          submitted: "Skickat in ✓",
+          choosePicture: "Välj en bild ({count} kvar)",
+          youVoted: "Du röstade ✓",
+          voteHint: "Tryck på en bild för att rösta, men inte din egen.",
+          winnerLabel: "Vinnare",
+          voteSingle: "röst",
+          votePlural: "röster",
+          yourImage: "Din bild",
+          yourVote: "Din röst",
+          cardWinner: "Vinnare",
+          loading: "Laddar...",
+          noImagesLeft: "Inga bilder kvar i handen.",
+          waitingForOthers: "Väntar på andra…",
+          waitingForOthersBody: "När alla har skickat in går spelet vidare automatiskt.",
+          finalResultsTitle: "Slutresultatet kommer",
+          finalResultsBody: "Vi raknar ihop kvallens vinnare...",
+        }
+      : {
+          roundWinner: "Round Winner",
+          nextRoundStarting: "Next round starting…",
+          roundLabel: "Round",
+          hostLabel: "You are host",
+          playerLabel: "Player",
+          statusCollecting: "Selecting",
+          statusVoting: "Voting",
+          statusDone: "Done",
+          statementTitle: "Statement",
+          statementBody: "Pick the best fitting picture 👇",
+          categoryInnocent: "INNOCENT",
+          categoryAdult: "18+",
+          categoryGross: "GROSS",
+          submitted: "Submitted ✓",
+          choosePicture: "Choose a picture ({count} left)",
+          youVoted: "You voted ✓",
+          voteHint: "Tap an image to vote, not your own.",
+          winnerLabel: "Winner",
+          voteSingle: "vote",
+          votePlural: "votes",
+          yourImage: "Your image",
+          yourVote: "Your vote",
+          cardWinner: "Winner",
+          loading: "Loading...",
+          noImagesLeft: "No images left in hand.",
+          waitingForOthers: "Waiting for others…",
+          waitingForOthersBody: "When everyone has submitted the game moves on automatically.",
+          finalResultsTitle: "Final results incoming",
+          finalResultsBody: "Counting up tonight's winner...",
+        };
+
+  const categoryLabel =
+    statementCategory === "adult"
+      ? copy.categoryAdult
+      : statementCategory === "gross"
+      ? copy.categoryGross
+      : copy.categoryInnocent;
+
+  const categoryBadgeColors =
+    statementCategory === "adult"
+      ? { backgroundColor: "#3F1D2E", borderColor: "#BE185D", textColor: "#FBCFE8" }
+      : statementCategory === "gross"
+      ? { backgroundColor: "#2B160B", borderColor: "#EA580C", textColor: "#FED7AA" }
+      : { backgroundColor: "#10261A", borderColor: "#22C55E", textColor: "#BBF7D0" };
+
+  const statusLabel =
+    status === "collecting" ? copy.statusCollecting : status === "voting" ? copy.statusVoting : copy.statusDone;
   const statusBg = status === "collecting" ? "#0B1222" : status === "voting" ? "#111827" : "#052e1b";
 
   if (!roomId || !playerId || !roundId) {
     return (
       <View style={{ flex: 1, backgroundColor: "#0B0F19", padding: 16, justifyContent: "center" }}>
-        <Text style={{ color: "white" }}>Loading...</Text>
+        <Text style={{ color: "white" }}>{copy.loading}</Text>
       </View>
     );
   }
@@ -692,7 +807,7 @@ useEffect(() => {
           >
             <View style={{ alignItems: "center", gap: 20 }}>
               <Text style={{ color: "white", fontSize: 28, fontWeight: "900", letterSpacing: 0.5 }}>
-                🏆 Round Winner
+                {copy.roundWinner}
               </Text>
               
               <View
@@ -718,20 +833,90 @@ useEffect(() => {
 
               <View style={{ alignItems: "center", gap: 8 }}>
                 <Text style={{ color: "#F59E0B", fontSize: 18, fontWeight: "900" }}>
-                  {winner.votes} {winner.votes === 1 ? "vote" : "votes"}
+                  {winner.votes} {winner.votes === 1 ? copy.voteSingle : copy.votePlural}
                 </Text>
                 <Text style={{ color: "#94A3B8", fontSize: 14, fontWeight: "700" }}>
-                  Next round starting…
+                  {copy.nextRoundStarting}
                 </Text>
               </View>
+            </View>
+          </Animated.View>
+        )}
+        {showFinalOverlay && (
+          <Animated.View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: "rgba(4,8,18,0.9)",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 11,
+              opacity: finalOverlayAnim,
+              transform: [
+                {
+                  scale: finalOverlayAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.96, 1],
+                  }),
+                },
+              ],
+            }}
+          >
+            <View
+              style={{
+                width: "88%",
+                borderRadius: 28,
+                paddingVertical: 28,
+                paddingHorizontal: 24,
+                backgroundColor: "#0F172A",
+                borderWidth: 1,
+                borderColor: "rgba(246,200,95,0.34)",
+                shadowColor: "#F6C85F",
+                shadowOpacity: 0.32,
+                shadowRadius: 24,
+                shadowOffset: { width: 0, height: 12 },
+                elevation: 18,
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 92,
+                  height: 92,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(246,200,95,0.14)",
+                  borderWidth: 1,
+                  borderColor: "rgba(246,200,95,0.3)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 18,
+                }}
+              >
+                <Text style={{ color: "#FDE68A", fontSize: 34, fontWeight: "900" }}>★</Text>
+              </View>
+
+              <Text style={{ color: "white", fontSize: 28, fontWeight: "900", textAlign: "center" }}>
+                {copy.finalResultsTitle}
+              </Text>
+              <Text
+                style={{
+                  color: "#94A3B8",
+                  fontSize: 15,
+                  fontWeight: "700",
+                  textAlign: "center",
+                  marginTop: 10,
+                  lineHeight: 22,
+                }}
+              >
+                {copy.finalResultsBody}
+              </Text>
             </View>
           </Animated.View>
         )}
         {/* Header */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ gap: 4 }}>
-            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>Round {roundNumber}/5</Text>
-            <Text style={{ color: "#94A3B8", fontWeight: "700" }}>{isHost ? "You are host" : "Player"}</Text>
+            <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>{copy.roundLabel} {roundNumber}/5</Text>
+            <Text style={{ color: "#94A3B8", fontWeight: "700" }}>{isHost ? copy.hostLabel : copy.playerLabel}</Text>
           </View>
 
           <View
@@ -779,28 +964,42 @@ useEffect(() => {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View style={{ width: 10, height: 34, borderRadius: 999, backgroundColor: "#38BDF8" }} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#E2E8F0", fontWeight: "900", letterSpacing: 0.2 }}>Statement</Text>
-              <Text style={{ color: "#94A3B8", fontWeight: "700", marginTop: 2 }}>Pick the best fitting picture 👇</Text>
+              <Text style={{ color: "#E2E8F0", fontWeight: "900", letterSpacing: 0.2 }}>{copy.statementTitle}</Text>
+              <Text style={{ color: "#94A3B8", fontWeight: "700", marginTop: 2 }}>{copy.statementBody}</Text>
+            </View>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 7,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: categoryBadgeColors.borderColor,
+                backgroundColor: categoryBadgeColors.backgroundColor,
+              }}
+            >
+              <Text style={{ color: categoryBadgeColors.textColor, fontSize: 12, fontWeight: "900" }}>{categoryLabel}</Text>
             </View>
           </View>
 
-          <Text style={{ color: "white", fontSize: 20, lineHeight: 28, fontWeight: "900" }}>{statement || "..."}</Text>
+          <Text style={{ color: "white", fontSize: 20, lineHeight: 28, fontWeight: "900" }}>
+            {getStatementText(statement, language) || "..."}
+          </Text>
 
           {status === "collecting" && (
             <Text style={{ color: "#A5B4FC", fontWeight: "800" }}>
-              {mySubmissionId ? "Submitted ✅" : `Choose a picture (${availableImages.length} left)`}
+              {mySubmissionId ? copy.submitted : copy.choosePicture.replace("{count}", String(availableImages.length))}
             </Text>
           )}
 
           {status === "voting" && (
             <Text style={{ color: "#86EFAC", fontWeight: "900" }}>
-              {myVoteSubmissionId ? "You voted ✅" : "Tap an image to vote (not your own)."}
+              {myVoteSubmissionId ? copy.youVoted : copy.voteHint}
             </Text>
           )}
 
           {status === "done" && (
             <Text style={{ color: "#FDE68A", fontWeight: "900" }}>
-              Winner: {winner.votes} votes {winner.submissionId ? "🏆" : ""}
+              {copy.winnerLabel}: {winner.votes} {winner.votes === 1 ? copy.voteSingle : copy.votePlural}
             </Text>
           )}
         </Animated.View>
@@ -853,9 +1052,9 @@ useEffect(() => {
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>Waiting for others…</Text>
+              <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>{copy.waitingForOthers}</Text>
               <Text style={{ color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
-                When everyone has submitted the game moves on automatically.
+                {copy.waitingForOthersBody}
               </Text>
             </View>
           )
@@ -902,10 +1101,12 @@ useEffect(() => {
                   <Image source={{ uri }} style={{ width: "100%", height: 180 }} contentFit="cover" cachePolicy="memory-disk" />
 
                   <View style={{ padding: 10, gap: 2 }}>
-                    <Text style={{ color: "white", fontWeight: "900" }}>{votes} votes</Text>
-                    {isMine && <Text style={{ color: "#38BDF8", fontWeight: "800" }}>Your image</Text>}
-                    {isVoted && <Text style={{ color: "#22C55E", fontWeight: "800" }}>Your vote</Text>}
-                    {isWinner && <Text style={{ color: "#F59E0B", fontWeight: "900" }}>Winner</Text>}
+                    <Text style={{ color: "white", fontWeight: "900" }}>
+                      {votes} {votes === 1 ? copy.voteSingle : copy.votePlural}
+                    </Text>
+                    {isMine && <Text style={{ color: "#38BDF8", fontWeight: "800" }}>{copy.yourImage}</Text>}
+                    {isVoted && <Text style={{ color: "#22C55E", fontWeight: "800" }}>{copy.yourVote}</Text>}
+                    {isWinner && <Text style={{ color: "#F59E0B", fontWeight: "900" }}>{copy.cardWinner}</Text>}
                   </View>
                 </Pressable>
               );
@@ -916,3 +1117,7 @@ useEffect(() => {
     </SafeAreaView>
   );
 }
+
+
+
+

@@ -77,6 +77,17 @@ export default function GameLibraryHome() {
       cta: t("game.music.cta"),
       comingSoon: false,
     },
+    {
+      slug: "trivia",
+      title: "Trivia",
+      tagline: t("game.trivia.tagline"),
+      recommendedPlayers: "2-12 players",
+      accent: "#F97316",
+      description: t("game.trivia.description"),
+      icon: require("../assets/trivia.png"),
+      cta: t("game.trivia.cta"),
+      comingSoon: false,
+    },
   ] as const;
   const footerLinks = [
     { label: t("home.legal.privacy"), href: "/privacy-policy" },

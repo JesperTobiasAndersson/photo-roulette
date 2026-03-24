@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, Alert, FlatList, Pressable, SafeAreaView, StatusBar } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, Alert, FlatList, Pressable, SafeAreaView, StatusBar, Animated, Easing } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { AdSenseAd } from "../src/lib/ads";
@@ -32,6 +32,12 @@ export default function ResultsScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const heroScale = useRef(new Animated.Value(0.92)).current;
+  const heroLift = useRef(new Animated.Value(28)).current;
+  const listOpacity = useRef(new Animated.Value(0)).current;
+  const listLift = useRef(new Animated.Value(18)).current;
+  const glowPulse = useRef(new Animated.Value(0.72)).current;
 
   const copy =
     language === "sv"
@@ -43,6 +49,8 @@ export default function ResultsScreen() {
           room: "Rum",
           winner: "Vinnare",
           winnerBody: "Snyggt spelat!",
+          winnerSpotlight: "Kvällens vinnare",
+          pointsLabel: "poäng",
           leaderboard: "Topplista",
           loading: "Laddar",
           updating: "Uppdaterar",
@@ -59,6 +67,8 @@ export default function ResultsScreen() {
           room: "Room",
           winner: "Winner",
           winnerBody: "Great job!",
+          winnerSpotlight: "Tonight's winner",
+          pointsLabel: "points",
           leaderboard: "Leaderboard",
           loading: "Loading",
           updating: "Updating",
@@ -99,6 +109,72 @@ export default function ResultsScreen() {
     load();
   }, [roomId]);
 
+  useEffect(() => {
+    heroOpacity.setValue(0);
+    heroScale.setValue(0.92);
+    heroLift.setValue(28);
+    listOpacity.setValue(0);
+    listLift.setValue(18);
+    glowPulse.setValue(0.72);
+
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(heroOpacity, {
+          toValue: 1,
+          duration: 520,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(heroScale, {
+          toValue: 1,
+          tension: 55,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroLift, {
+          toValue: 0,
+          duration: 520,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(listOpacity, {
+          toValue: 1,
+          duration: 420,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(listLift, {
+          toValue: 0,
+          duration: 420,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, {
+          toValue: 1,
+          duration: 1700,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowPulse, {
+          toValue: 0.72,
+          duration: 1700,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulse.start();
+    return () => pulse.stop();
+  }, [glowPulse, heroLift, heroOpacity, heroScale, listLift, listOpacity, rows.length]);
+
   const top3 = useMemo(() => rows.slice(0, 3), [rows]);
   const rest = useMemo(() => rows.slice(3), [rows]);
   const winnerName = top3[0]?.name ?? "—";
@@ -119,15 +195,61 @@ export default function ResultsScreen() {
           </Text>
         </View>
 
-        <View style={{ padding: 14, borderRadius: 18, backgroundColor: COLORS.cardStrong, borderWidth: 1, borderColor: COLORS.border }}>
-          <Text style={{ color: COLORS.subText, fontSize: 12, fontWeight: "700" }}>{copy.winner}</Text>
+        <Animated.View
+          style={{
+            padding: 14,
+            borderRadius: 24,
+            backgroundColor: COLORS.cardStrong,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            overflow: "hidden",
+            opacity: heroOpacity,
+            transform: [{ translateY: heroLift }, { scale: heroScale }],
+          }}
+        >
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: -36,
+              left: -18,
+              width: 240,
+              height: 240,
+              borderRadius: 999,
+              backgroundColor: "rgba(246,200,95,0.18)",
+              opacity: glowPulse,
+              transform: [{ scale: glowPulse }],
+            }}
+          />
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: 16,
+              right: -18,
+              width: 150,
+              height: 150,
+              borderRadius: 999,
+              backgroundColor: "rgba(124,92,255,0.14)",
+              opacity: glowPulse.interpolate({ inputRange: [0.72, 1], outputRange: [0.45, 0.8] }),
+              transform: [
+                {
+                  scale: glowPulse.interpolate({ inputRange: [0.72, 1], outputRange: [0.94, 1.08] }),
+                },
+              ],
+            }}
+          />
+          <Text style={{ color: COLORS.subText, fontSize: 12, fontWeight: "700", letterSpacing: 1.2 }}>
+            {copy.winnerSpotlight.toUpperCase()}
+          </Text>
           <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>👑 {winnerName}</Text>
-              <Text style={{ color: COLORS.subText, marginTop: 2 }}>{copy.winnerBody}</Text>
+              <Text style={{ color: COLORS.text, fontSize: 32, fontWeight: "900" }}>👑 {winnerName}</Text>
+              <Text style={{ color: COLORS.subText, marginTop: 6 }}>{copy.winnerBody}</Text>
             </View>
-            <View style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: "rgba(124,92,255,0.18)", borderWidth: 1, borderColor: "rgba(124,92,255,0.28)" }}>
-              <Text style={{ color: COLORS.text, fontWeight: "900", fontSize: 16 }}>{winnerPoints}p</Text>
+            <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, backgroundColor: "rgba(124,92,255,0.18)", borderWidth: 1, borderColor: "rgba(124,92,255,0.28)" }}>
+              <Text style={{ color: COLORS.text, fontWeight: "900", fontSize: 18 }}>{winnerPoints}</Text>
+              <Text style={{ color: COLORS.subText, fontWeight: "800", fontSize: 11, marginTop: 2 }}>
+                {copy.pointsLabel.toUpperCase()}
+              </Text>
             </View>
           </View>
 
@@ -147,12 +269,13 @@ export default function ResultsScreen() {
               );
             })}
           </View>
-        </View>
+        </Animated.View>
 
         <View style={{ marginVertical: 12 }}>
           <AdSenseAd />
         </View>
 
+        <Animated.View style={{ opacity: listOpacity, transform: [{ translateY: listLift }], flex: 1 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
           <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "900" }}>{copy.leaderboard}</Text>
           <Pressable
@@ -211,6 +334,7 @@ export default function ResultsScreen() {
             );
           }}
         />
+        </Animated.View>
 
         <Pressable
           onPress={() => router.replace("/picklo")}
@@ -230,3 +354,4 @@ export default function ResultsScreen() {
     </SafeAreaView>
   );
 }
+

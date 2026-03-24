@@ -238,12 +238,6 @@ export default function MemeMatchHome() {
             {copy.tagline}
           </Text>
 
-          {isWeb && (
-            <Text style={{ color: "#94A3B8", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13 }}>
-              {copy.addHomeScreen}
-            </Text>
-          )}
-
           {codeFromUrl ? (
             <Text style={{ color: "#BAE6FD", marginTop: 10, textAlign: "center", lineHeight: 20, fontSize: 13, fontWeight: "800" }}>
               {copy.inviteDetected} {codeFromUrl}

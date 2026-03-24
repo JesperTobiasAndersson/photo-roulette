@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../src/lib/supabase";
 import { compressImage, uriToArrayBuffer } from "../src/lib/imageUpload";
+import { useI18n } from "../src/lib/i18n";
 
 type HandRow = {
   id: string;
@@ -22,11 +23,7 @@ type HandRow = {
   used_in_round_id: string | null;
 };
 
-async function mapWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<void>
-) {
+async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T, index: number) => Promise<void>) {
   let i = 0;
   const workers = new Array(limit).fill(0).map(async () => {
     while (i < items.length) {
@@ -39,12 +36,72 @@ async function mapWithConcurrency<T>(
 
 export default function PickHandScreen() {
   const router = useRouter();
+  const { language, t } = useI18n();
   const { roomId, playerId } = useLocalSearchParams<{ roomId: string; playerId: string }>();
 
   const [hand, setHand] = useState<HandRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadDone, setUploadDone] = useState(0);
+
+  const MAX_IMAGES = 5;
+
+  const copy =
+    language === "sv"
+      ? {
+          errorHand: "Fel (bilder)",
+          maxReachedTitle: "Max uppnått",
+          maxReachedBody: "Du har valt 5 bilder. Tryck på en bild nedan för att ta bort den och välja en ny.",
+          needAccess: "Behöver åtkomst till bilder",
+          uploadError: "Uppladdningsfel",
+          dbError: "Databasfel",
+          holdOn: "Vänta lite",
+          uploadNotFinished: "Uppladdningen är inte klar än",
+          chooseImages: "Välj dina bilder",
+          progress: "Framsteg",
+          pickHint: "Välj bilder från ditt bibliotek. De används bara i det här rummet.",
+          uploading: "Laddar upp",
+          uploadTip: "Tips: välj screenshots eller memes, det blir roligare så.",
+          continue: "Fortsätt",
+          pickImages: `Välj ${MAX_IMAGES} bilder`,
+          pickMoreImages: "Välj fler bilder",
+          yourHand: "Din hand",
+          images: "bilder",
+          removeHint: "Tryck på en bild för att ta bort den och välja en ny.",
+          removeImageTitle: "Ta bort bild?",
+          removeImageBody: "Det här tar bort bilden från din hand.",
+          cancel: "Avbryt",
+          delete: "Ta bort",
+          emptyState: "Inga bilder än. Tryck på “Välj 5 bilder” för att börja.",
+          back: "Tillbaka",
+        }
+      : {
+          errorHand: "Error (hand)",
+          maxReachedTitle: "Max reached",
+          maxReachedBody: "You've picked 5 images. Tap an image below to remove it, then pick again.",
+          needAccess: "Need access to photos",
+          uploadError: "Upload error",
+          dbError: "DB error",
+          holdOn: "Hold on",
+          uploadNotFinished: "Upload not finished yet",
+          chooseImages: "Choose your images",
+          progress: "Progress",
+          pickHint: "Pick photos from your library. They're only used in this room.",
+          uploading: "Uploading",
+          uploadTip: "Tip: choose screenshots or memes. It's more fun that way.",
+          continue: "Continue",
+          pickImages: `Pick ${MAX_IMAGES} images`,
+          pickMoreImages: "Pick more images",
+          yourHand: "Your hand",
+          images: "images",
+          removeHint: "Tap an image to remove it and pick a new one.",
+          removeImageTitle: "Remove image?",
+          removeImageBody: "This will delete the picture from your hand.",
+          cancel: "Cancel",
+          delete: "Delete",
+          emptyState: "No pictures yet. Tap “Pick 5 images” to start.",
+          back: "Back",
+        };
 
   const publicUrlFor = (path: string) => {
     const { data } = supabase.storage.from("game-images").getPublicUrl(path);
@@ -60,7 +117,7 @@ export default function PickHandScreen() {
       .eq("player_id", playerId)
       .order("created_at", { ascending: true });
 
-    if (error) return Alert.alert("Error (hand)", error.message);
+    if (error) return Alert.alert(copy.errorHand, error.message);
     setHand(data ?? []);
   };
 
@@ -68,7 +125,6 @@ export default function PickHandScreen() {
     loadHand();
   }, [roomId, playerId]);
 
-  const MAX_IMAGES = 5;
   const remainingToPick = Math.max(0, MAX_IMAGES - hand.length);
   const canContinue = hand.length === MAX_IMAGES;
 
@@ -77,14 +133,11 @@ export default function PickHandScreen() {
     if (busy) return;
 
     if (hand.length >= MAX_IMAGES) {
-      return Alert.alert(
-        "Max reached",
-        "You've picked 5 images. Tap an image below to remove it, then pick again."
-      );
+      return Alert.alert(copy.maxReachedTitle, copy.maxReachedBody);
     }
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return Alert.alert("Need access to photos");
+    if (!perm.granted) return Alert.alert(copy.needAccess);
 
     const mediaTypes =
       // @ts-ignore
@@ -107,7 +160,7 @@ export default function PickHandScreen() {
 
     const picked = assets.slice(0, remainingToPick);
     if (picked.length === 0) {
-      return Alert.alert("Max reached", "You can only keep 5 images in your hand.");
+      return Alert.alert(copy.maxReachedTitle, copy.maxReachedBody);
     }
 
     setUploadTotal(picked.length);
@@ -131,7 +184,7 @@ export default function PickHandScreen() {
           .upload(filePath, buf, { contentType: "image/jpeg", upsert: false });
 
         if (upErr) {
-          Alert.alert("Upload error", upErr.message);
+          Alert.alert(copy.uploadError, upErr.message);
         }
 
         const { error: insErr } = await supabase.from("player_images").insert({
@@ -142,7 +195,7 @@ export default function PickHandScreen() {
         });
 
         if (insErr) {
-          Alert.alert("DB error", insErr.message);
+          Alert.alert(copy.dbError, insErr.message);
           return;
         }
 
@@ -166,17 +219,16 @@ export default function PickHandScreen() {
       .eq("room_id", roomId)
       .eq("player_id", playerId);
 
-    if (error) return Alert.alert("Error (hand)", error.message);
+    if (error) return Alert.alert(copy.errorHand, error.message);
 
     if ((count ?? 0) < MAX_IMAGES) {
-      return Alert.alert("Hold on…", `Upload not finished yet (${count ?? 0}/${MAX_IMAGES}).`);
+      return Alert.alert(copy.holdOn, `${copy.uploadNotFinished} (${count ?? 0}/${MAX_IMAGES}).`);
     }
 
     router.replace({ pathname: "/lobby", params: { roomId, playerId, handReady: "1" } });
   };
 
   const selectedUris = useMemo(() => hand.map((h) => publicUrlFor(h.image_path)), [hand]);
-
   const progress = uploadTotal > 0 ? uploadDone / uploadTotal : 0;
 
   const Button = ({
@@ -190,12 +242,7 @@ export default function PickHandScreen() {
     disabled?: boolean;
     variant?: "primary" | "secondary";
   }) => {
-    const bg =
-      variant === "primary"
-        ? hand.length >= MAX_IMAGES
-          ? "#0F766E"
-          : "#111827"
-        : "#374151";
+    const bg = variant === "primary" ? (hand.length >= MAX_IMAGES ? "#0F766E" : "#111827") : "#374151";
 
     return (
       <Pressable
@@ -214,21 +261,17 @@ export default function PickHandScreen() {
         })}
       >
         {busy && variant === "primary" ? <ActivityIndicator color="white" /> : null}
-        <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>{title}</Text>
+        <Text style={{ color: "white", fontWeight: "900", fontSize: 16, textTransform: "uppercase" }}>{title}</Text>
       </Pressable>
     );
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#0B0F19" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#0B0F19" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={{ flex: 1, padding: 16, gap: 12 }}>
-          {/* Header */}
           <View style={{ gap: 10 }}>
-            <Text style={{ color: "white", fontSize: 24, textTransform: "uppercase", fontWeight: "900" }}>Choose your images</Text>
+            <Text style={{ color: "white", fontSize: 24, textTransform: "uppercase", fontWeight: "900" }}>{copy.chooseImages}</Text>
 
             <View
               style={{
@@ -241,7 +284,7 @@ export default function PickHandScreen() {
               }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ color: "#CBD5E1", textTransform: "uppercase", fontWeight: "800" }}>Progress</Text>
+                <Text style={{ color: "#CBD5E1", textTransform: "uppercase", fontWeight: "800" }}>{copy.progress}</Text>
 
                 <View
                   style={{
@@ -254,25 +297,21 @@ export default function PickHandScreen() {
                   }}
                 >
                   <Text style={{ color: "white", fontWeight: "900" }}>
-                    {hand.length}/{MAX_IMAGES}{remainingToPick > 0 ? `  (+${remainingToPick})` : " ✅"}
+                    {hand.length}/{MAX_IMAGES}
+                    {remainingToPick > 0 ? `  (+${remainingToPick})` : " ✓"}
                   </Text>
                 </View>
               </View>
 
-              <Text style={{ color: "#9CA3AF", lineHeight: 20 }}>
-                Pick photos from your library. They’re only used in this room.
-              </Text>
+              <Text style={{ color: "#9CA3AF", lineHeight: 20 }}>{copy.pickHint}</Text>
 
-              {/* Upload progress */}
-              {busy && (
+              {busy ? (
                 <View style={{ gap: 10, marginTop: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <Text style={{ color: "white",  fontWeight: "900" }}>
-                      Uploading {uploadDone}/{uploadTotal}
+                    <Text style={{ color: "white", fontWeight: "900" }}>
+                      {copy.uploading} {uploadDone}/{uploadTotal}
                     </Text>
-                    <Text style={{ color: "#9CA3AF",  fontWeight: "900" }}>
-                      {Math.round(progress * 100)}%
-                    </Text>
+                    <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{Math.round(progress * 100)}%</Text>
                   </View>
 
                   <View
@@ -294,26 +333,18 @@ export default function PickHandScreen() {
                     />
                   </View>
 
-                  <Text style={{ color: "#94A3B8", fontSize: 12 }}>
-                    Tip: choose screenshots/memes – it’s more fun 😄
-                  </Text>
+                  <Text style={{ color: "#94A3B8", fontSize: 12 }}>{copy.uploadTip}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
 
-          {/* Buttons */}
           <View style={{ gap: 10 }}>
             {canContinue ? (
-              <Button
-                title="Continue"
-                onPress={goNext}
-                disabled={busy}
-                variant="primary"
-              />
+              <Button title={copy.continue} onPress={goNext} disabled={busy} variant="primary" />
             ) : (
               <Button
-                title={remainingToPick === MAX_IMAGES ? `Pick ${MAX_IMAGES} images` : "Pick more images"}
+                title={remainingToPick === MAX_IMAGES ? copy.pickImages : copy.pickMoreImages}
                 onPress={pickAndUploadMany}
                 disabled={busy}
                 variant="primary"
@@ -321,7 +352,6 @@ export default function PickHandScreen() {
             )}
           </View>
 
-          {/* Grid */}
           <View
             style={{
               flex: 1,
@@ -333,14 +363,12 @@ export default function PickHandScreen() {
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <Text style={{ color: "white", fontSize: 16, fontWeight: "900" }}>Your hand</Text>
-              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{selectedUris.length} images</Text>
+              <Text style={{ color: "white", fontSize: 16, fontWeight: "900" }}>{copy.yourHand}</Text>
+              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{selectedUris.length} {copy.images}</Text>
             </View>
-            {hand.length > 0 && (
-              <Text style={{ color: "#94A3B8", fontSize: 12, marginTop: 4, marginBottom: 12 }}>
-                Tap an image to remove it and pick a new one.
-              </Text>
-            )}
+            {hand.length > 0 ? (
+              <Text style={{ color: "#94A3B8", fontSize: 12, marginTop: 4, marginBottom: 12 }}>{copy.removeHint}</Text>
+            ) : null}
 
             <FlatList
               data={selectedUris}
@@ -354,33 +382,25 @@ export default function PickHandScreen() {
                 return (
                   <Pressable
                     onPress={() => {
-                      Alert.alert(
-                        "Remove image?",
-                        "This will delete the picture from your hand.",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Delete",
-                            style: "destructive",
-                            onPress: async () => {
-                              try {
-                                // remove from storage
-                                await supabase.storage.from("game-images").remove([image.image_path]);
-                              } catch (e) {
-                                console.warn("storage remove error", e);
-                              }
-                              const { error: dbErr } = await supabase
-                                .from("player_images")
-                                .delete()
-                                .eq("id", image.id);
-                              if (dbErr) {
-                                Alert.alert("DB error", dbErr.message);
-                              }
-                              loadHand();
-                            },
+                      Alert.alert(copy.removeImageTitle, copy.removeImageBody, [
+                        { text: copy.cancel, style: "cancel" },
+                        {
+                          text: copy.delete,
+                          style: "destructive",
+                          onPress: async () => {
+                            try {
+                              await supabase.storage.from("game-images").remove([image.image_path]);
+                            } catch (error) {
+                              console.warn("storage remove error", error);
+                            }
+                            const { error: dbErr } = await supabase.from("player_images").delete().eq("id", image.id);
+                            if (dbErr) {
+                              Alert.alert(copy.dbError, dbErr.message);
+                            }
+                            loadHand();
                           },
-                        ]
-                      );
+                        },
+                      ]);
                     }}
                     style={{
                       flex: 1,
@@ -397,15 +417,12 @@ export default function PickHandScreen() {
               }}
               ListEmptyComponent={
                 <View style={{ paddingVertical: 18 }}>
-                  <Text style={{ color: "#9CA3AF", textAlign: "center", lineHeight: 20 }}>
-                    No pictures yet. Tap “Choose 5 pics” to start.
-                  </Text>
+                  <Text style={{ color: "#9CA3AF", textAlign: "center", lineHeight: 20 }}>{copy.emptyState}</Text>
                 </View>
               }
             />
           </View>
 
-          {/* Back */}
           <Pressable
             onPress={() => router.replace({ pathname: "/lobby", params: { roomId, playerId } })}
             disabled={busy}
@@ -418,7 +435,7 @@ export default function PickHandScreen() {
               opacity: busy ? 0.5 : pressed ? 0.9 : 1,
             })}
           >
-            <Text style={{ color: "white", fontWeight: "900" }}>Back</Text>
+            <Text style={{ color: "white", fontWeight: "900" }}>{copy.back || t("common.back_to_games")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
