@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Easing, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Animated, Easing, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
@@ -60,6 +60,7 @@ export default function ImposterLobbyScreen() {
   const endgameWinnerTranslateY = useRef(new Animated.Value(24)).current;
   const endgameSubtitleOpacity = useRef(new Animated.Value(0)).current;
   const endgameSubtitleTranslateY = useRef(new Animated.Value(18)).current;
+  const navigationScheduledRef = useRef(false);
 
   const isHost = !!room && !!myPlayer && room.host_player_id === myPlayer.id;
   const alivePlayers = useMemo(() => players.filter((player) => player.status === "alive"), [players]);
@@ -97,6 +98,24 @@ export default function ImposterLobbyScreen() {
     } finally {
       setBusy(null);
     }
+  };
+
+  const navigateToResults = () => {
+    if (navigationScheduledRef.current) return;
+    navigationScheduledRef.current = true;
+    setShowEndgameRevealModal(false);
+    setHasNavigatedToResults(true);
+
+    const go = () => {
+      router.replace({ pathname: "/imposter-results", params: { roomId, playerId } });
+    };
+
+    if (Platform.OS === "web") {
+      go();
+      return;
+    }
+
+    setTimeout(go, 120);
   };
 
   useEffect(() => {
@@ -201,6 +220,7 @@ export default function ImposterLobbyScreen() {
   useEffect(() => {
     if (!room) return;
     if (room.state !== "ended") {
+      navigationScheduledRef.current = false;
       setHasNavigatedToResults(false);
       return;
     }
@@ -355,13 +375,11 @@ export default function ImposterLobbyScreen() {
     if (hasNavigatedToResults) return;
 
     const timeoutId = setTimeout(() => {
-      setShowEndgameRevealModal(false);
-      setHasNavigatedToResults(true);
-      router.replace({ pathname: "/imposter-results", params: { roomId, playerId } });
+      navigateToResults();
     }, 4400);
 
     return () => clearTimeout(timeoutId);
-  }, [hasNavigatedToResults, playerId, room, roomId, showEndgameRevealModal]);
+  }, [hasNavigatedToResults, room, showEndgameRevealModal]);
 
   if (loading || !room || !myPlayer) {
     return (
@@ -604,6 +622,23 @@ export default function ImposterLobbyScreen() {
                 ? "The imposter survived the accusations and took control of the round."
                 : "The crew read the room correctly and exposed the imposter."}
             </Animated.Text>
+            <Pressable
+              onPress={navigateToResults}
+              style={({ pressed }) => ({
+                alignSelf: "stretch",
+                minHeight: 52,
+                borderRadius: 16,
+                marginTop: 6,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: room?.winner === "imposter" ? "#3F0D17" : "#3B2604",
+                borderWidth: 1,
+                borderColor: room?.winner === "imposter" ? "rgba(251,113,133,0.35)" : "rgba(251,191,36,0.35)",
+                opacity: pressed ? 0.92 : 1,
+              })}
+            >
+              <Text style={{ color: "#F8FAFC", fontWeight: "900", textTransform: "uppercase" }}>Show Final Results</Text>
+            </Pressable>
             <View
               style={{
                 marginTop: 10,
