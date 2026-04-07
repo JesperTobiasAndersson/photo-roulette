@@ -29,7 +29,7 @@
       "package": "com.anonymous.Picklo"
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/Favicon.png",
       "build": {
         "babel": {
           "include": [

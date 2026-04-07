@@ -13,14 +13,123 @@ import { router } from "expo-router";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useI18n } from "../src/lib/i18n";
+import { ShareButton } from "../src/components/ShareButton";
+import { TopicLinksSection } from "../src/components/TopicLinksSection";
+import { WebMarketingSection } from "../src/components/WebMarketingSection";
+import { WebSeo } from "../src/components/WebSeo";
 
 const isWeb = Platform.OS === "web";
 const GAME_ENTRY_DELAY_MS = 180;
 
 export default function GameLibraryHome() {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const { width } = useWindowDimensions();
   const isCompact = width < 560;
+  const marketingCopy =
+    language === "sv"
+      ? {
+          shareMessage:
+            "Spela Picklo med kompisarna: partyspel, trivia, musikquiz, Mafia, Imposter och MemeMatch i en app. https://picklo.se/",
+          shareLabel: "Dela Picklo",
+          seoTitle: "Picklo Partyspel | Multiplayer-spel för webb och mobil",
+          seoDescription:
+            "Spela partyspel med rumskoder: MemeMatch, Mafia, Imposter, Chicago, Music Quiz och Trivia i en app.",
+          eyebrow: "För grupper",
+          title: "Partyspel för kompisgäng, förfester och spontana häng",
+          paragraphs: [
+            "Picklo är byggt för stunden när ett gäng vill ha något kul direkt. Öppna en länk, välj ett spel och få in alla i samma rum med en enkel kod.",
+            "Det gör sajten relevant för sökningar kring partyspel, social deduction-spel, mobiltrivia, icebreakers och gruppspel för vuxna.",
+          ],
+          bullets: [
+            "Snabb rumskods-flow som fungerar bra i gruppchattar och Stories",
+            "Flera spellägen så en delad länk kan fortsätta driva vidare trafik i appen",
+            "Korta sociala rundor som är lättare att klippa, dela och rekommendera",
+          ],
+          faq: [
+            {
+              question: "Vilka spel finns i Picklo?",
+              answer: "Picklo innehåller MemeMatch, Mafia, Imposter, Chicago, Music Quiz och Trivia för olika gruppstorlekar och stämningar.",
+            },
+            {
+              question: "Kan alla gå med från sin egen mobil?",
+              answer: "Ja. Picklo är byggt runt snabba rumskoder så grupper enkelt kan gå med via webben eller mobilen.",
+            },
+          ],
+        }
+      : {
+          shareMessage:
+            "Play Picklo with your group: party games, trivia, music quiz, Mafia, Imposter and MemeMatch in one app. https://picklo.se/",
+          shareLabel: "Share Picklo",
+          seoTitle: "Picklo Party Games | Multiplayer Party Games for Web and Mobile",
+          seoDescription:
+            "Play multiplayer party games with room codes: MemeMatch, Mafia, Imposter, Chicago, Music Quiz and Trivia in one app.",
+          eyebrow: "For Groups",
+          title: "Party games for friend groups, pregames and spontaneous hangouts",
+          paragraphs: [
+            "Picklo is designed for the moment when a group wants something fun immediately. Open one link, pick a game and get everyone into the same room with a simple code.",
+            "That makes the site relevant for searches around party games, social deduction games, mobile trivia, icebreaker games and group games for adults.",
+          ],
+          bullets: [
+            "Fast room-code flow that works well in group chats and Stories",
+            "Multiple game modes so one shared link can keep traffic exploring",
+            "Short, social rounds that are easier to clip and recommend",
+          ],
+          faq: [
+            {
+              question: "What kind of games are on Picklo?",
+              answer: "Picklo includes MemeMatch, Mafia, Imposter, Chicago, Music Quiz and Trivia for different group sizes and moods.",
+            },
+            {
+              question: "Can everyone join from their own phone?",
+              answer: "Yes. Picklo is built around quick room-code multiplayer so groups can join fast on web or mobile.",
+            },
+          ],
+        };
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        name: "Picklo",
+        url: "https://picklo.se/",
+      },
+      {
+        "@type": "Organization",
+        name: "Picklo",
+        url: "https://picklo.se/",
+      },
+      {
+        "@type": "CollectionPage",
+        name: "Picklo Party Games",
+        description:
+          "Picklo is a multiplayer party game collection for web and mobile with MemeMatch, Mafia, Imposter, Chicago, Music Quiz and Trivia.",
+        url: "https://picklo.se/",
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: marketingCopy.faq.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: item.answer,
+          },
+        })),
+      },
+    ],
+  };
+  const topicLinks =
+    language === "sv"
+      ? [
+          { href: "/party-games", title: "Partyspel", description: "En bred guide till Picklo för fest, häng och gruppchattar.", accentColor: "#38BDF8" },
+          { href: "/social-deduction-games", title: "Social deduction-spel", description: "För spelare som letar efter Mafia, Imposter och bluffspel.", accentColor: "#F43F5E" },
+          { href: "/quiz-games", title: "Quizspel", description: "För grupper som söker trivia, musikquiz och poängjakt.", accentColor: "#22C55E" },
+        ]
+      : [
+          { href: "/party-games", title: "Party Games", description: "A broader guide to Picklo for hangouts, pregames and group chats.", accentColor: "#38BDF8" },
+          { href: "/social-deduction-games", title: "Social Deduction Games", description: "For players looking for Mafia, Imposter and bluffing games.", accentColor: "#F43F5E" },
+          { href: "/quiz-games", title: "Quiz Games", description: "For groups searching for trivia, music quiz and quick scoring.", accentColor: "#22C55E" },
+        ];
   const games = [
     {
       slug: "picklo",
@@ -151,6 +260,20 @@ export default function GameLibraryHome() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#070B14" }}>
+      <WebSeo
+        title={marketingCopy.seoTitle}
+        description={marketingCopy.seoDescription}
+        lang={language}
+        keywords={[
+          "party games",
+          "multiplayer party games",
+          "social deduction games",
+          "web party games",
+          "icebreaker games",
+          "party games for friends",
+        ]}
+        structuredData={structuredData}
+      />
       <StatusBar style="light" />
 
       <Animated.View
@@ -193,7 +316,7 @@ export default function GameLibraryHome() {
                 </View>
 
                 <View style={{ gap: 4, alignItems: "center" }}>
-                  <Text style={{ color: "#F8FAFC", fontSize: isCompact ? 32 : isWeb ? 28 : 24, fontWeight: "900" }}>Picklo</Text>
+                  <Text accessibilityRole="header" style={{ color: "#F8FAFC", fontSize: isCompact ? 32 : isWeb ? 28 : 24, fontWeight: "900" }}>Picklo</Text>
                 </View>
               </View>
 
@@ -210,6 +333,12 @@ export default function GameLibraryHome() {
                 >
                 {t("home.subtitle")}
               </Text>
+
+              {isWeb ? (
+                <View style={{ width: "100%", maxWidth: 420 }}>
+                  <ShareButton label={marketingCopy.shareLabel} message={marketingCopy.shareMessage} accentColor="#38BDF8" />
+                </View>
+              ) : null}
             </View>
 
             <View
@@ -387,6 +516,15 @@ export default function GameLibraryHome() {
                 {t("home.footer")}
               </Text>
             </View>
+
+            <WebMarketingSection
+              eyebrow={marketingCopy.eyebrow}
+              title={marketingCopy.title}
+              paragraphs={marketingCopy.paragraphs}
+              bullets={marketingCopy.bullets}
+              faq={marketingCopy.faq}
+            />
+            <TopicLinksSection title={language === "sv" ? "Populära sätt att hitta spel" : "Popular Ways To Find Games"} topics={topicLinks} />
           </View>
         </ScrollView>
       </Animated.View>

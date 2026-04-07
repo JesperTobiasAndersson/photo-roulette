@@ -4,8 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../lib/i18n";
 
 const FLAG_IMAGES = {
-  sv: require("../../assets/se.png"),
-  en: require("../../assets/en.png"),
+  sv: require("../../assets/se.jpg"),
+  en: require("../../assets/en.jpg"),
 } as const;
 
 export function LanguageToggle() {
@@ -51,7 +51,7 @@ export function LanguageToggle() {
             elevation: 8,
           }}
         >
-          {(["sv", "en"] as const).map((option) => {
+          {(["en", "sv"] as const).map((option) => {
             const active = language === option;
             return (
               <Pressable

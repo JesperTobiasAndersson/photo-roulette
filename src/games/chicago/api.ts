@@ -12,6 +12,7 @@ import {
 import type {
   ChicagoCard,
   ChicagoHandDto,
+  ChicagoPhase,
   ChicagoPlayedCardDto,
   ChicagoPlayerDto,
   ChicagoRoomDto,
@@ -24,6 +25,14 @@ function makeRoomCode(length = 4) {
   let result = "";
   for (let i = 0; i < length; i += 1) result += chars[Math.floor(Math.random() * chars.length)];
   return result;
+}
+
+const DRAW_LOCK_STALE_MS = 15000;
+const DRAW_LOCK_RETRY_MS = 120;
+const DRAW_LOCK_MAX_ATTEMPTS = 8;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function removeCardsFromHand(hand: ChicagoCard[], cardsToRemove: ChicagoCard[]) {
@@ -83,6 +92,45 @@ async function requireHost(roomId: string, playerId: string) {
   const room = await getRoom(roomId);
   if (room.host_player_id !== playerId) throw new Error("Only the host can do that");
   return room;
+}
+
+async function claimChicagoPhaseLock(roomId: string, expectedState: ChicagoPhase) {
+  for (let attempt = 0; attempt < DRAW_LOCK_MAX_ATTEMPTS; attempt += 1) {
+    const room = await getRoom(roomId);
+    if (room.state !== expectedState) throw new Error("Draw phase is not active");
+
+    const lockIsStale =
+      !!room.phase_ends_at && Date.now() - new Date(room.phase_ends_at).getTime() > DRAW_LOCK_STALE_MS;
+    if (lockIsStale) {
+      await supabase
+        .from("chicago_rooms")
+        .update({ phase_ends_at: null })
+        .eq("id", roomId)
+        .eq("state", expectedState)
+        .eq("phase_ends_at", room.phase_ends_at);
+    }
+
+    const lockToken = new Date().toISOString();
+    const { data: claimedRoom, error: claimError } = await supabase
+      .from("chicago_rooms")
+      .update({ phase_ends_at: lockToken })
+      .eq("id", roomId)
+      .eq("state", expectedState)
+      .is("phase_ends_at", null)
+      .select("*")
+      .maybeSingle();
+    if (claimError) throw claimError;
+    if (claimedRoom) {
+      return {
+        room: claimedRoom as ChicagoRoomDto,
+        lockToken,
+      };
+    }
+
+    await sleep(DRAW_LOCK_RETRY_MS);
+  }
+
+  throw new Error("Another draw is still being processed. Try again.");
 }
 
 async function addScore(playerId: string, amount: number) {
@@ -257,78 +305,94 @@ export async function submitChicagoDraw(roomId: string, playerId: string, discar
   const room = await getRoom(roomId);
   if (!["draw_phase_1", "draw_phase_2", "draw_phase_3"].includes(room.state)) throw new Error("Draw phase is not active");
 
-  const round = await getCurrentRound(roomId);
-  if (!round) throw new Error("No active round");
-  const hand = await getHand(playerId);
+  const { room: lockedRoom, lockToken } = await claimChicagoPhaseLock(roomId, room.state);
 
-  const remainingCards = removeCardsFromHand(hand.cards, discardedCards ?? []);
-  const drawCount = (discardedCards ?? []).length;
-  const deck = [...round.deck];
-  const newCards = deck.splice(0, drawCount);
-  const updatedHand = [...remainingCards, ...newCards];
+  try {
+    const round = await getCurrentRound(roomId);
+    if (!round) throw new Error("No active round");
+    const hand = await getHand(playerId);
 
-  const { error: handError } = await supabase.from("chicago_player_hands").update({ cards: updatedHand }).eq("player_id", playerId);
-  if (handError) throw handError;
+    const selectedCards = discardedCards ?? [];
+    const remainingCards = removeCardsFromHand(hand.cards, selectedCards);
+    const drawCount = selectedCards.length;
+    if (hand.cards.length - remainingCards.length !== drawCount) {
+      throw new Error("Choose cards that are actually in your hand");
+    }
 
-  const { error: drawError } = await supabase.from("chicago_draw_actions").upsert(
-    {
-      player_id: playerId,
-      round_id: round.id,
-      draw_number: round.draw_number,
-      discarded_cards: discardedCards ?? [],
-    },
-    { onConflict: "player_id,round_id,draw_number" }
-  );
-  if (drawError) throw drawError;
+    const deck = [...round.deck];
+    const newCards = deck.splice(0, drawCount);
+    if (newCards.length !== drawCount) {
+      throw new Error("Not enough cards left in the deck");
+    }
 
-  const { error: deckError } = await supabase.from("chicago_rounds").update({ deck }).eq("id", round.id);
-  if (deckError) throw deckError;
+    const updatedHand = [...remainingCards, ...newCards];
 
-  await supabase.from("chicago_room_players").update({ draw_ready: true }).eq("id", playerId);
+    const { error: handError } = await supabase.from("chicago_player_hands").update({ cards: updatedHand }).eq("player_id", playerId);
+    if (handError) throw handError;
 
-  const activePlayers = await getActivePlayers(roomId);
-  const everyoneReady = activePlayers.every((player) => player.draw_ready);
-  if (!everyoneReady) return { ok: true, waiting: true };
+    const { error: drawError } = await supabase.from("chicago_draw_actions").upsert(
+      {
+        player_id: playerId,
+        round_id: round.id,
+        draw_number: round.draw_number,
+        discarded_cards: selectedCards,
+      },
+      { onConflict: "player_id,round_id,draw_number" }
+    );
+    if (drawError) throw drawError;
 
-  await supabase.from("chicago_room_players").update({ draw_ready: false }).eq("room_id", roomId).eq("status", "active");
+    const { error: deckError } = await supabase.from("chicago_rounds").update({ deck }).eq("id", round.id);
+    if (deckError) throw deckError;
 
-  if (room.state === "draw_phase_1") {
+    const { error: readyError } = await supabase.from("chicago_room_players").update({ draw_ready: true }).eq("id", playerId);
+    if (readyError) throw readyError;
+
+    const activePlayers = await getActivePlayers(roomId);
+    const everyoneReady = activePlayers.every((player) => player.draw_ready);
+    if (!everyoneReady) return { ok: true, waiting: true };
+
+    await supabase.from("chicago_room_players").update({ draw_ready: false }).eq("room_id", roomId).eq("status", "active");
+
+    if (lockedRoom.state === "draw_phase_1") {
+      await supabase
+        .from("chicago_rooms")
+        .update({ state: "poker_score_1", phase_number: lockedRoom.phase_number + 1, public_message: "All draws submitted. Score the first poker hand." })
+        .eq("id", roomId);
+      await supabase.from("chicago_rounds").update({ active_phase: "poker_score_1" }).eq("id", round.id);
+      return { ok: true };
+    }
+
+    if (lockedRoom.state === "draw_phase_2") {
+      await supabase
+        .from("chicago_rooms")
+        .update({ state: "poker_score_2", phase_number: lockedRoom.phase_number + 1, public_message: "All draws submitted. Score the second poker hand." })
+        .eq("id", roomId);
+      await supabase.from("chicago_rounds").update({ active_phase: "poker_score_2" }).eq("id", round.id);
+      return { ok: true };
+    }
+
+    const { data: trick, error: trickError } = await supabase
+      .from("chicago_tricks")
+      .insert({ round_id: round.id, trick_number: 1, lead_suit: null, winner_player_id: null })
+      .select("*")
+      .single();
+    if (trickError) throw trickError;
+
+    await supabase.from("chicago_rounds").update({ active_phase: "trick_phase", trick_number: 1 }).eq("id", round.id);
     await supabase
       .from("chicago_rooms")
-      .update({ state: "poker_score_1", phase_number: room.phase_number + 1, public_message: "All draws submitted. Score the first poker hand." })
+      .update({
+        state: "trick_phase",
+        current_turn_player_id: lockedRoom.lead_player_id ?? activePlayers[0]?.id ?? null,
+        phase_number: lockedRoom.phase_number + 1,
+        public_message: "Final draw complete. Play tricks and fight for the last one.",
+      })
       .eq("id", roomId);
-    await supabase.from("chicago_rounds").update({ active_phase: "poker_score_1" }).eq("id", round.id);
-    return { ok: true };
+
+    return { ok: true, trickId: trick.id };
+  } finally {
+    await supabase.from("chicago_rooms").update({ phase_ends_at: null }).eq("id", roomId).eq("phase_ends_at", lockToken);
   }
-
-  if (room.state === "draw_phase_2") {
-    await supabase
-      .from("chicago_rooms")
-      .update({ state: "poker_score_2", phase_number: room.phase_number + 1, public_message: "All draws submitted. Score the second poker hand." })
-      .eq("id", roomId);
-    await supabase.from("chicago_rounds").update({ active_phase: "poker_score_2" }).eq("id", round.id);
-    return { ok: true };
-  }
-
-  const { data: trick, error: trickError } = await supabase
-    .from("chicago_tricks")
-    .insert({ round_id: round.id, trick_number: 1, lead_suit: null, winner_player_id: null })
-    .select("*")
-    .single();
-  if (trickError) throw trickError;
-
-  await supabase.from("chicago_rounds").update({ active_phase: "trick_phase", trick_number: 1 }).eq("id", round.id);
-  await supabase
-    .from("chicago_rooms")
-    .update({
-      state: "trick_phase",
-      current_turn_player_id: room.lead_player_id ?? activePlayers[0]?.id ?? null,
-      phase_number: room.phase_number + 1,
-      public_message: "Final draw complete. Play tricks and fight for the last one.",
-    })
-    .eq("id", roomId);
-
-  return { ok: true, trickId: trick.id };
 }
 
 export async function advanceChicagoPokerScore(roomId: string, _playerId: string) {

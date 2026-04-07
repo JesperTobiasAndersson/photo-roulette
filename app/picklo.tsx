@@ -10,12 +10,17 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useI18n } from "../src/lib/i18n";
+import { ShareButton } from "../src/components/ShareButton";
+import { RelatedGamesSection } from "../src/components/RelatedGamesSection";
+import { WebMarketingSection } from "../src/components/WebMarketingSection";
+import { WebSeo } from "../src/components/WebSeo";
 
 const isWeb = Platform.OS === "web";
 
@@ -40,6 +45,64 @@ export default function MemeMatchHome() {
   const [code, setCode] = useState(codeFromUrl);
   const [mode, setMode] = useState<"create" | "join">(codeFromUrl ? "join" : "create");
   const [loading, setLoading] = useState(false);
+  const marketingCopy =
+    language === "sv"
+      ? {
+          shareMessage:
+            "Testa MemeMatch på Picklo: ladda upp bilder, matcha prompten, rösta och skratta med kompisarna. https://picklo.se/picklo",
+          shareLabel: "Dela MemeMatch",
+          seoTitle: "MemeMatch | Partyspel med bilder, röstning och rumskoder",
+          seoDescription:
+            "Spela MemeMatch på Picklo: ladda upp bilder, matcha påståendet, rösta med vänner och gör gruppchatten till ett partyspel.",
+          eyebrow: "MemeMatch",
+          title: "Ett bildbaserat partyspel som naturligt skapar delbara ögonblick",
+          paragraphs: [
+            "MemeMatch har en tydlig viral hook: ladda upp roliga bilder, matcha prompten och låt alla rösta. Det gör spelet lättare att förklara, bjuda in till och dela vidare.",
+            "Den här sidan fångar nu bättre svensk sökintention kring meme game, bildspel, partyspel för vänner och spel med rumskod utan att tappa det snabba rumsflödet.",
+          ],
+          bullets: [
+            "Spelargenererat innehåll skapar screenshots och interna skämt",
+            "Röstningsreveal ger varje runda en tydlig social payoff",
+            "Fungerar bra för fester, studentboenden och gruppchattar",
+          ],
+        }
+      : {
+          shareMessage:
+            "Try MemeMatch on Picklo: upload images, match the prompt, vote and laugh with your friends. https://picklo.se/picklo",
+          shareLabel: "Share MemeMatch",
+          seoTitle: "MemeMatch | Party Game With Photos, Voting and Room Codes",
+          seoDescription:
+            "Play MemeMatch on Picklo: upload photos, match the statement, vote with friends and turn any group chat into a party game.",
+          eyebrow: "MemeMatch",
+          title: "A photo party game that naturally creates shareable moments",
+          paragraphs: [
+            "MemeMatch has a very clear viral hook: upload funny images, match the prompt and let everyone vote. That makes it easier for players to explain, invite and share.",
+            "This page now supports search intent around meme game, photo party game, funny game for friends and room-code party game without losing the fast room flow.",
+          ],
+          bullets: [
+            "Player-generated content creates screenshots and inside jokes",
+            "Voting reveal gives every round a clear social payoff",
+            "Works well for parties, dorms and group chats",
+          ],
+        };
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "MemeMatch Party Game",
+    description:
+      "MemeMatch is a multiplayer party game where players upload images, match the statement, vote on the best fit and share the result.",
+    url: "https://picklo.se/picklo",
+  };
+  const relatedGames =
+    language === "sv"
+      ? [
+          { href: "/imposter", title: "Imposter", description: "Ett snabbt bluffspel med hemligt ord och stark social energi.", accentColor: "#F59E0B" },
+          { href: "/mafia", title: "Mafia", description: "Dolda roller, dag- och nattfaser och mer långsiktig social deduction.", accentColor: "#F43F5E" },
+        ]
+      : [
+          { href: "/imposter", title: "Imposter", description: "A fast bluffing game with a hidden word and strong social energy.", accentColor: "#F59E0B" },
+          { href: "/mafia", title: "Mafia", description: "Hidden roles, day and night phases, and deeper social deduction.", accentColor: "#F43F5E" },
+        ];
   const copy =
     language === "sv"
       ? {
@@ -202,10 +265,13 @@ export default function MemeMatchHome() {
   );
 
   const Content = (
-    <View
-      style={{
-        flex: 1,
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{
+        flexGrow: 1,
         padding: 20,
+        paddingTop: isWeb ? 32 : 20,
+        paddingBottom: 32,
         justifyContent: "center",
         alignItems: isWeb ? "center" : undefined,
       }}
@@ -376,8 +442,21 @@ export default function MemeMatchHome() {
         <Text style={{ color: "#64748B", textAlign: "center", marginTop: 14, fontSize: 12 }}>
           {copy.consent}
         </Text>
+
+        {isWeb ? (
+          <View style={{ gap: 18, marginTop: 18 }}>
+            <ShareButton label={marketingCopy.shareLabel} message={marketingCopy.shareMessage} accentColor="#38BDF8" />
+            <WebMarketingSection
+              eyebrow={marketingCopy.eyebrow}
+              title={marketingCopy.title}
+              paragraphs={marketingCopy.paragraphs}
+              bullets={marketingCopy.bullets}
+            />
+            <RelatedGamesSection title={language === "sv" ? "Fler spel att testa" : "More Games To Try"} games={relatedGames} />
+          </View>
+        ) : null}
       </View>
-    </View>
+    </ScrollView>
   );
 
   return (
@@ -386,6 +465,14 @@ export default function MemeMatchHome() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       enabled={Platform.OS !== "web"}
     >
+      <WebSeo
+        title={marketingCopy.seoTitle}
+        description={marketingCopy.seoDescription}
+        lang={language}
+        path="/picklo"
+        keywords={["meme game", "photo game", "party game with friends", "funny group game", "room code game"]}
+        structuredData={structuredData}
+      />
       {isWeb ? (
         Content
       ) : (

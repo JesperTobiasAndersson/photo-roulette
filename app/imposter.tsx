@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -16,6 +17,10 @@ import { StatusBar } from "expo-status-bar";
 import { Image } from "react-native";
 import { createImposterRoom, joinImposterRoom } from "../src/games/imposter/api";
 import { useI18n } from "../src/lib/i18n";
+import { ShareButton } from "../src/components/ShareButton";
+import { RelatedGamesSection } from "../src/components/RelatedGamesSection";
+import { WebMarketingSection } from "../src/components/WebMarketingSection";
+import { WebSeo } from "../src/components/WebSeo";
 
 const isWeb = Platform.OS === "web";
 
@@ -33,6 +38,63 @@ export default function ImposterHome() {
   const [code, setCode] = useState(codeFromUrl);
   const [mode, setMode] = useState<"create" | "join">(codeFromUrl ? "join" : "create");
   const [loading, setLoading] = useState(false);
+  const marketingCopy =
+    language === "sv"
+      ? {
+          shareMessage:
+            "Spela Imposter på Picklo: en dold bluffare, ett hemligt ord och direkt kaos med rumskod. https://picklo.se/imposter",
+          shareLabel: "Dela Imposter",
+          seoTitle: "Imposter | Partyspel med hemligt ord för vänner",
+          seoDescription:
+            "Spela Imposter på Picklo: en dold bluffare, ett delat ord, snabb rumskods-setup och perfekt energi för grupper, fester och häng.",
+          eyebrow: "Imposter",
+          title: "Ett social deduction-spel som är lätt att pitcha och lätt att dela",
+          paragraphs: [
+            "Imposter fungerar bra för viral spridning eftersom konceptet är tydligt i en mening: alla får samma ord utom en spelare som måste improvisera.",
+            "Det hjälper sidan att fånga sökintention kring imposter game, bluffspel, icebreakers för vänner och social deduction på mobilen.",
+          ],
+          bullets: [
+            "Enkel hook för creators och korta klipp",
+            "Låg friktion tack vare rumskods-join",
+            "Stark replay value för kompisgäng och studentevent",
+          ],
+        }
+      : {
+          shareMessage:
+            "Play Imposter on Picklo: one hidden fake, one secret word and instant room-code chaos. https://picklo.se/imposter",
+          shareLabel: "Share Imposter",
+          seoTitle: "Imposter | Hidden Word Party Game for Friends",
+          seoDescription:
+            "Play Imposter on Picklo: one hidden fake, one shared word, fast room-code setup and great energy for groups, parties and hangouts.",
+          eyebrow: "Imposter",
+          title: "A social deduction game that is easy to pitch and easy to share",
+          paragraphs: [
+            "Imposter works well for viral growth because the concept is sticky in one line: everyone gets the same word except one player who has to improvise.",
+            "That helps this page target intent around imposter game, bluffing party game, icebreaker for friends and social deduction game for mobile.",
+          ],
+          bullets: [
+            "Simple hook for creators and short-form clips",
+            "Low setup friction with room-code join flow",
+            "Strong replay value for friend groups and student events",
+          ],
+        };
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Imposter Party Game",
+    description: "Play Imposter with room codes, hidden roles and one secret word that almost everyone shares.",
+    url: "https://picklo.se/imposter",
+  };
+  const relatedGames =
+    language === "sv"
+      ? [
+          { href: "/mafia", title: "Mafia", description: "Ett djupare social deduction-spel med fler roller och längre rundor.", accentColor: "#F43F5E" },
+          { href: "/picklo", title: "MemeMatch", description: "Ett mer lättsamt partyspel med bilder, röstning och inside jokes.", accentColor: "#38BDF8" },
+        ]
+      : [
+          { href: "/mafia", title: "Mafia", description: "A deeper social deduction game with more roles and longer rounds.", accentColor: "#F43F5E" },
+          { href: "/picklo", title: "MemeMatch", description: "A lighter party game with photos, voting, and inside jokes.", accentColor: "#38BDF8" },
+        ];
 
   const trimmedName = useMemo(() => name.trim(), [name]);
   const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
@@ -93,7 +155,17 @@ export default function ImposterHome() {
   };
 
   const content = (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{
+        flexGrow: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 20,
+        paddingTop: isWeb ? 32 : 20,
+        paddingBottom: 32,
+      }}
+    >
       <View style={{ width: "100%", maxWidth: 430 }}>
         <StatusBar style="light" />
         <View style={{ alignItems: "center", marginBottom: 18 }}>
@@ -207,12 +279,33 @@ export default function ImposterHome() {
         >
           <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games")}</Text>
         </Pressable>
+
+        {isWeb ? (
+          <View style={{ gap: 18, marginTop: 18 }}>
+            <ShareButton label={marketingCopy.shareLabel} message={marketingCopy.shareMessage} accentColor="#F59E0B" />
+            <WebMarketingSection
+              eyebrow={marketingCopy.eyebrow}
+              title={marketingCopy.title}
+              paragraphs={marketingCopy.paragraphs}
+              bullets={marketingCopy.bullets}
+            />
+            <RelatedGamesSection title={language === "sv" ? "Fler spel att testa" : "More Games To Try"} games={relatedGames} />
+          </View>
+        ) : null}
       </View>
-    </View>
+    </ScrollView>
   );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#070B14" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <WebSeo
+        title={marketingCopy.seoTitle}
+        description={marketingCopy.seoDescription}
+        lang={language}
+        path="/imposter"
+        keywords={["imposter game", "hidden word game", "bluffing party game", "social deduction game"]}
+        structuredData={structuredData}
+      />
       {isWeb ? content : <TouchableWithoutFeedback onPress={Keyboard.dismiss}>{content}</TouchableWithoutFeedback>}
     </KeyboardAvoidingView>
   );

@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -16,6 +17,10 @@ import { StatusBar } from "expo-status-bar";
 import { Image } from "react-native";
 import { createTriviaRoom, joinTriviaRoom } from "../src/games/trivia/api";
 import { useI18n } from "../src/lib/i18n";
+import { ShareButton } from "../src/components/ShareButton";
+import { RelatedGamesSection } from "../src/components/RelatedGamesSection";
+import { WebMarketingSection } from "../src/components/WebMarketingSection";
+import { WebSeo } from "../src/components/WebSeo";
 
 const isWeb = Platform.OS === "web";
 
@@ -33,6 +38,63 @@ export default function TriviaHomeScreen() {
   const [code, setCode] = useState(codeFromUrl);
   const [mode, setMode] = useState<"create" | "join">(codeFromUrl ? "join" : "create");
   const [loading, setLoading] = useState(false);
+  const marketingCopy =
+    language === "sv"
+      ? {
+          shareMessage:
+            "Spela Trivia på Picklo: kategorier, rumskoder och snabb värdstyrd poäng för nästa game night. https://picklo.se/trivia",
+          shareLabel: "Dela Trivia",
+          seoTitle: "Trivia | Multiplayer-quiz med rumskoder",
+          seoDescription:
+            "Spela Trivia på Picklo med kategorier, rumskoder, värdstyrd poängsättning och ett mobilvänligt flöde för snabba gruppsessioner.",
+          eyebrow: "Trivia",
+          title: "Trivia-trafik har hög intention och är värd att fånga",
+          paragraphs: [
+            "Trivia-sökningar konverterar ofta bra eftersom användaren redan vet vilken typ av gruppspel de vill ha. Den här sidan matchar nu den intentionen tydligare.",
+            "Den hjälper också viral spridning genom att göra värdet lättare att förklara i inbjudningar, DM:s och planeringschattar.",
+          ],
+          bullets: [
+            "Kategoridrivet upplägg som passar game nights",
+            "Fungerar för klassrum, kontor och kompisgäng",
+            "Tydlig rumskods-CTA för snabb multiplayer-start",
+          ],
+        }
+      : {
+          shareMessage:
+            "Play Trivia on Picklo: categories, room codes and fast host-led scoring for your next game night. https://picklo.se/trivia",
+          shareLabel: "Share Trivia",
+          seoTitle: "Trivia | Multiplayer Quiz Game With Room Codes",
+          seoDescription:
+            "Play Trivia on Picklo with categories, room codes, host-controlled scoring and a mobile-friendly flow for fast group sessions.",
+          eyebrow: "Trivia",
+          title: "Trivia traffic is high-intent and worth capturing",
+          paragraphs: [
+            "Trivia searches often convert well because the user already knows what type of group game they want. This page now speaks directly to that intent with clearer copy and stronger metadata.",
+            "It also helps virality by making the value proposition easier to pitch in invites, DMs and event-planning chats.",
+          ],
+          bullets: [
+            "Category-based game night appeal",
+            "Works for classrooms, offices and friend groups",
+            "Clear room-code CTA for instant multiplayer setup",
+          ],
+        };
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Trivia Party Game",
+    description: "Play realtime trivia with room codes, categories and host-controlled scoring on Picklo.",
+    url: "https://picklo.se/trivia",
+  };
+  const relatedGames =
+    language === "sv"
+      ? [
+          { href: "/music-quiz", title: "Music Quiz", description: "Perfekt om gruppen vill fortsätta med ett quiz men byta till musik och Spotify.", accentColor: "#22C55E" },
+          { href: "/mafia", title: "Mafia", description: "När ni vill gå från frågor och svar till bluff, roller och misstankar.", accentColor: "#F43F5E" },
+        ]
+      : [
+          { href: "/music-quiz", title: "Music Quiz", description: "Perfect if the group wants to stay in quiz mode but switch to Spotify and songs.", accentColor: "#22C55E" },
+          { href: "/mafia", title: "Mafia", description: "For when you want to move from questions and answers into bluffing and suspicion.", accentColor: "#F43F5E" },
+        ];
 
   const trimmedName = useMemo(() => name.trim(), [name]);
   const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
@@ -93,7 +155,17 @@ export default function TriviaHomeScreen() {
   };
 
   const content = (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{
+        flexGrow: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 20,
+        paddingTop: isWeb ? 32 : 20,
+        paddingBottom: 32,
+      }}
+    >
       <View style={{ width: "100%", maxWidth: 430 }}>
         <StatusBar style="light" />
         <View style={{ alignItems: "center", marginBottom: 18 }}>
@@ -205,12 +277,33 @@ export default function TriviaHomeScreen() {
         >
           <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games")}</Text>
         </Pressable>
+
+        {isWeb ? (
+          <View style={{ gap: 18, marginTop: 18 }}>
+            <ShareButton label={marketingCopy.shareLabel} message={marketingCopy.shareMessage} accentColor="#F97316" />
+            <WebMarketingSection
+              eyebrow={marketingCopy.eyebrow}
+              title={marketingCopy.title}
+              paragraphs={marketingCopy.paragraphs}
+              bullets={marketingCopy.bullets}
+            />
+            <RelatedGamesSection title={language === "sv" ? "Fler spel att testa" : "More Games To Try"} games={relatedGames} />
+          </View>
+        ) : null}
       </View>
-    </View>
+    </ScrollView>
   );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#070B14" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <WebSeo
+        title={marketingCopy.seoTitle}
+        description={marketingCopy.seoDescription}
+        lang={language}
+        path="/trivia"
+        keywords={["trivia game", "multiplayer trivia", "quiz game for friends", "room code quiz"]}
+        structuredData={structuredData}
+      />
       {isWeb ? content : <TouchableWithoutFeedback onPress={Keyboard.dismiss}>{content}</TouchableWithoutFeedback>}
     </KeyboardAvoidingView>
   );

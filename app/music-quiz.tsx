@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, TouchableWithoutFeedback, View } from "react-native";
+import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, TouchableWithoutFeedback, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "react-native";
 import { createMusicQuizRoom, joinMusicQuizRoom } from "../src/games/music-quiz/api";
 import { useI18n } from "../src/lib/i18n";
+import { ShareButton } from "../src/components/ShareButton";
+import { RelatedGamesSection } from "../src/components/RelatedGamesSection";
+import { WebMarketingSection } from "../src/components/WebMarketingSection";
+import { WebSeo } from "../src/components/WebSeo";
 
 const isWeb = Platform.OS === "web";
 
@@ -22,6 +26,63 @@ export default function MusicQuizHome() {
   const [code, setCode] = useState(codeFromUrl);
   const [mode, setMode] = useState<"create" | "join">(codeFromUrl ? "join" : "create");
   const [loading, setLoading] = useState(false);
+  const marketingCopy =
+    language === "sv"
+      ? {
+          shareMessage:
+            "Testa Music Quiz på Picklo: Spotify-drivna rundor, omslagsreveal och livepoäng. https://picklo.se/music-quiz",
+          shareLabel: "Dela Music Quiz",
+          seoTitle: "Music Quiz | Spotify-partyspel med rumskoder",
+          seoDescription:
+            "Spela Music Quiz på Picklo med Spotify-länkar, omslagsreveal, värdstyrd poängsättning och multiplayer med rumskoder.",
+          eyebrow: "Music Quiz",
+          title: "En musikquiz-landningssida som kan fånga party- och förfesttrafik",
+          paragraphs: [
+            "Music Quiz ger Picklo räckvidd bortom generella partyspelsökningar genom att också täcka musikquiz, Spotify quiz, låtgissning och game night-idéer.",
+            "Sidan har nu tydligare copy för både användare och sökmotorer samtidigt som rumskodsflödet är kvar i fokus.",
+          ],
+          bullets: [
+            "Stark koppling till playlist-kultur och creator-rekommendationer",
+            "Lätt att dela före fester, road trips och hemmahäng",
+            "Byggt för återkommande sessioner med olika värdar och kategorier",
+          ],
+        }
+      : {
+          shareMessage:
+            "Try Music Quiz on Picklo: Spotify-powered party rounds with cover reveals and live scoring. https://picklo.se/music-quiz",
+          shareLabel: "Share Music Quiz",
+          seoTitle: "Music Quiz | Spotify Party Game With Room Codes",
+          seoDescription:
+            "Play Music Quiz on Picklo with Spotify links, cover reveals, host scoring and room-code multiplayer for parties and hangouts.",
+          eyebrow: "Music Quiz",
+          title: "A music quiz landing page that can capture party and pregame traffic",
+          paragraphs: [
+            "Music Quiz gives Picklo reach beyond generic party game searches by covering music quiz, Spotify quiz, song guessing game and game night ideas.",
+            "The page now has clearer copy for users and search engines while keeping the room-code flow front and center.",
+          ],
+          bullets: [
+            "Strong overlap with playlist culture and creator recommendations",
+            "Easy to share before parties, road trips and house games",
+            "Built for repeat sessions with different hosts and categories",
+          ],
+        };
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "Music Quiz Party Game",
+    description: "Play a music quiz with Spotify links, cover reveals, room codes and host-led scoring on Picklo.",
+    url: "https://picklo.se/music-quiz",
+  };
+  const relatedGames =
+    language === "sv"
+      ? [
+          { href: "/trivia", title: "Trivia", description: "Ett naturligt nästa steg om gruppen vill fortsätta med quiz och fler kategorier.", accentColor: "#F97316" },
+          { href: "/picklo", title: "MemeMatch", description: "Byt från musik till bilder för en mer kaotisk och kreativ runda.", accentColor: "#38BDF8" },
+        ]
+      : [
+          { href: "/trivia", title: "Trivia", description: "A natural next stop if the group wants more quiz energy and categories.", accentColor: "#F97316" },
+          { href: "/picklo", title: "MemeMatch", description: "Switch from music to images for a more chaotic and creative round.", accentColor: "#38BDF8" },
+        ];
 
   const trimmedName = useMemo(() => name.trim(), [name]);
   const trimmedCode = useMemo(() => code.trim().toUpperCase(), [code]);
@@ -82,7 +143,17 @@ export default function MusicQuizHome() {
   };
 
   const content = (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{
+        flexGrow: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 20,
+        paddingTop: isWeb ? 32 : 20,
+        paddingBottom: 32,
+      }}
+    >
       <View style={{ width: "100%", maxWidth: 430 }}>
         <StatusBar style="light" />
         <View style={{ alignItems: "center", marginBottom: 18 }}>
@@ -194,12 +265,33 @@ export default function MusicQuizHome() {
         >
           <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games")}</Text>
         </Pressable>
+
+        {isWeb ? (
+          <View style={{ gap: 18, marginTop: 18 }}>
+            <ShareButton label={marketingCopy.shareLabel} message={marketingCopy.shareMessage} accentColor="#22C55E" />
+            <WebMarketingSection
+              eyebrow={marketingCopy.eyebrow}
+              title={marketingCopy.title}
+              paragraphs={marketingCopy.paragraphs}
+              bullets={marketingCopy.bullets}
+            />
+            <RelatedGamesSection title={language === "sv" ? "Fler spel att testa" : "More Games To Try"} games={relatedGames} />
+          </View>
+        ) : null}
       </View>
-    </View>
+    </ScrollView>
   );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#070B14" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <WebSeo
+        title={marketingCopy.seoTitle}
+        description={marketingCopy.seoDescription}
+        lang={language}
+        path="/music-quiz"
+        keywords={["music quiz", "spotify quiz", "song guessing game", "party music game"]}
+        structuredData={structuredData}
+      />
       {isWeb ? content : <TouchableWithoutFeedback onPress={Keyboard.dismiss}>{content}</TouchableWithoutFeedback>}
     </KeyboardAvoidingView>
   );

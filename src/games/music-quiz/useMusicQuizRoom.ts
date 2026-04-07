@@ -54,6 +54,18 @@ export function useMusicQuizRoom(roomId: string, playerId: string): MusicQuizRoo
   useEffect(() => {
     if (!roomId) return;
 
+    const handleAnswerChange = (payload: { new?: { round_id?: unknown }; old?: { round_id?: unknown } }) => {
+      const changedRoundId =
+        typeof payload.new?.round_id === "string"
+          ? payload.new.round_id
+          : typeof payload.old?.round_id === "string"
+            ? payload.old.round_id
+            : null;
+
+      if (!changedRoundId || changedRoundId !== currentRound?.id) return;
+      refresh();
+    };
+
     const roomChannel = supabase
       .channel(`music-quiz-room-${roomId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "music_quiz_rooms", filter: `id=eq.${roomId}` }, () => refresh())
@@ -68,7 +80,7 @@ export function useMusicQuizRoom(roomId: string, playerId: string): MusicQuizRoo
       .subscribe();
     const answersChannel = supabase
       .channel(`music-quiz-answers-${roomId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "music_quiz_answers" }, () => refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "music_quiz_answers" }, handleAnswerChange)
       .subscribe();
 
     return () => {
@@ -77,7 +89,7 @@ export function useMusicQuizRoom(roomId: string, playerId: string): MusicQuizRoo
       supabase.removeChannel(roundsChannel);
       supabase.removeChannel(answersChannel);
     };
-  }, [refresh, roomId]);
+  }, [currentRound?.id, refresh, roomId]);
 
   useEffect(() => {
     if (!roomId) return;
