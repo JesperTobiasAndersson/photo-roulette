@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { SupportPicklo } from "../src/components/SupportPicklo";
 import { Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useMafiaRoom } from "../src/games/mafia/useMafiaRoom";
+import { returnMafiaToLobby } from "../src/games/mafia/api";
+import { PlayAgainFooter } from "../src/components/PlayAgainFooter";
+import { showAlert } from "../src/lib/notify";
 import { GAMES } from "../src/games/catalog";
 import { useI18n } from "../src/lib/i18n";
 import { Button, Card, Chip, GameIcon, Screen, SectionLabel, TopBar } from "../src/ui/components";
@@ -25,7 +28,7 @@ function getRoleBadge(role: string | undefined, language: "en" | "sv") {
 }
 
 export default function MafiaResults() {
-  const { language, translateServerMessage } = useI18n();
+  const { language, translateServerMessage, translateError } = useI18n();
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
@@ -63,6 +66,26 @@ export default function MafiaResults() {
         };
 
   const goHome = () => router.replace(GAMES.mafia.href as any);
+  const [restarting, setRestarting] = useState(false);
+  const isHost = !!room && room.host_player_id === playerId;
+
+  // When the host restarts, the room goes back to the lobby; everyone follows.
+  useEffect(() => {
+    if (room?.state === "lobby" && roomId && playerId) {
+      router.replace({ pathname: "/mafia-lobby", params: { roomId, playerId } });
+    }
+  }, [room?.state, roomId, playerId]);
+
+  const playAgain = async () => {
+    setRestarting(true);
+    try {
+      await returnMafiaToLobby(roomId, playerId);
+    } catch (error) {
+      showAlert(language === "sv" ? "Kunde inte starta om" : "Couldn't restart", translateError(error));
+    } finally {
+      setRestarting(false);
+    }
+  };
   const topBar = <TopBar title="Mafia" onBack={goHome} />;
 
   if (loading || !room) {
@@ -82,7 +105,7 @@ export default function MafiaResults() {
   const myBadge = myRole?.role ? getRoleBadge(myRole.role, language) : null;
 
   return (
-    <Screen topBar={topBar} footer={<Button label={copy.back} icon="refresh" accent={ACCENT} onPress={goHome} />}>
+    <Screen topBar={topBar} footer={<PlayAgainFooter isHost={isHost} onPlayAgain={playAgain} loading={restarting} accent={ACCENT} newRoomHref={GAMES.mafia.href} />}>
       <Card accent={winColor} style={{ alignItems: "center", paddingVertical: space.xl }}>
         <View
           style={{

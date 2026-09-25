@@ -252,7 +252,7 @@ export default function Lobby() {
     if (lastErr) return showAlert(copy.errorRoundsLast, lastErr.message);
 
     const nextNumber = (last?.round_number ?? 0) + 1;
-    if (nextNumber > 5) return router.replace({ pathname: "/results", params: { roomId } });
+    if (nextNumber > 5) return router.replace({ pathname: "/results", params: { roomId, playerId } });
 
     const statement = getRandomStatement({ exclude: usedStatements, category: selectedCategory });
     const endsAt = new Date(Date.now() + 60_000).toISOString();
@@ -322,7 +322,7 @@ export default function Lobby() {
       }
 
       if (phase === "finished") {
-        router.replace({ pathname: "/results", params: { roomId } });
+        router.replace({ pathname: "/results", params: { roomId, playerId } });
       }
     };
 

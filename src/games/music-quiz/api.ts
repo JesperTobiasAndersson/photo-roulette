@@ -318,6 +318,16 @@ export async function resetMusicQuizToLobby(roomId: string, playerId: string) {
       .eq("id", roomId);
     if (fallbackError) throw fallbackError;
   }
+  // Without this the next match continued at round 11 with last match's points.
+  await clearMusicQuizMatch(roomId);
+}
+
+/** Called after a match returns to the lobby: new match starts at round 1 with 0 points. */
+async function clearMusicQuizMatch(roomId: string) {
+  const { error: roundsError } = await supabase.from("music_quiz_rounds").delete().eq("room_id", roomId);
+  if (roundsError) throw roundsError;
+  const { error: scoresError } = await supabase.from("music_quiz_players").update({ score: 0 }).eq("room_id", roomId);
+  if (scoresError) throw scoresError;
 }
 
 export async function completeMusicQuizGame(roomId: string, playerId: string) {

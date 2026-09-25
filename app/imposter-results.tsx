@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { SupportPicklo } from "../src/components/SupportPicklo";
 import { Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -9,6 +9,9 @@ import { getCategoryById } from "../src/games/imposter/logic";
 import { imposterCategoryLabel, imposterWordLabel } from "../src/games/imposter/data";
 import { WordPicture } from "../src/games/imposter/WordPicture";
 import { useImposterRoom } from "../src/games/imposter/useImposterRoom";
+import { returnImposterToLobby } from "../src/games/imposter/api";
+import { PlayAgainFooter } from "../src/components/PlayAgainFooter";
+import { showAlert } from "../src/lib/notify";
 import { useI18n } from "../src/lib/i18n";
 import { Button, Card, Chip, GameIcon, Screen, SectionLabel, TopBar } from "../src/ui/components";
 import { colors, radius, space, touch, type, withAlpha } from "../src/ui/theme";
@@ -33,7 +36,7 @@ const PUBLIC_MESSAGES_SV: Record<string, string> = {
 };
 
 export default function ImposterResults() {
-  const { language } = useI18n();
+  const { language, translateError } = useI18n();
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
@@ -44,7 +47,7 @@ export default function ImposterResults() {
       ? {
           loading: "Laddar resultat",
           ended: "Spelet är slut",
-          crewWins: "Crew vinner",
+          crewWins: "Laget vinner",
           imposterWins: "Impostern vinner",
           imposterWas: "Impostern var",
           category: "Kategori",
@@ -90,6 +93,26 @@ export default function ImposterResults() {
   const imposterNames = players.filter((player) => imposterIds.has(player.id)).map((player) => player.display_name);
 
   const topBar = <TopBar title={GAME.title} onBack={() => router.replace(GAME.href as any)} />;
+  const [restarting, setRestarting] = useState(false);
+  const isHost = !!room && room.host_player_id === playerId;
+
+  // When the host restarts, the room goes back to the lobby; everyone follows.
+  useEffect(() => {
+    if (room?.state === "lobby" && roomId && playerId) {
+      router.replace({ pathname: "/imposter-lobby", params: { roomId, playerId } });
+    }
+  }, [room?.state, roomId, playerId]);
+
+  const playAgain = async () => {
+    setRestarting(true);
+    try {
+      await returnImposterToLobby(roomId, playerId);
+    } catch (error) {
+      showAlert(language === "sv" ? "Kunde inte starta om" : "Couldn't restart", translateError(error));
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   if (loading || !room) {
     return (
@@ -112,12 +135,7 @@ export default function ImposterResults() {
   return (
     <Screen
       topBar={topBar}
-      footer={
-        <>
-          <Button label={copy.playAgain} icon="refresh" accent={ACCENT} onPress={() => router.replace(GAME.href as any)} />
-          <Button label={copy.home} icon="grid-outline" variant="ghost" size="md" onPress={() => router.replace("/")} />
-        </>
-      }
+      footer={<PlayAgainFooter isHost={isHost} onPlayAgain={playAgain} loading={restarting} accent={ACCENT} newRoomHref={GAME.href} />}
     >
       {/* Verdict */}
       <AnimatedEntrance enterKey={`results-${room.winner}`} delay={30}>

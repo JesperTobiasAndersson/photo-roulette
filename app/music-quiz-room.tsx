@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SupportPicklo } from "../src/components/SupportPicklo";
+import { PlayAgainFooter } from "../src/components/PlayAgainFooter";
 import { ActivityIndicator, Animated, Easing, Image, Linking, Platform, Pressable, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -304,8 +305,8 @@ export default function MusicQuizRoomScreen() {
       ) : (
         <Button label={copy.finishGame} icon="flag" accent={ACCENT} onPress={finishGame} loading={busy === "finish-game"} />
       );
-  } else if (effectiveCompleted && isHost) {
-    footer = <Button label={copy.resetGame} icon="refresh" accent={ACCENT} onPress={resetGame} loading={busy === "reset-game"} />;
+  } else if (effectiveCompleted) {
+    footer = <PlayAgainFooter isHost={isHost} onPlayAgain={resetGame} loading={busy === "reset-game"} accent={ACCENT} newRoomHref={GAME.href} />;
   }
 
   return (

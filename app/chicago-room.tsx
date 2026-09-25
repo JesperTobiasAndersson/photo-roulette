@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState } from "react";
 import { SupportPicklo } from "../src/components/SupportPicklo";
+import { PlayAgainFooter } from "../src/components/PlayAgainFooter";
 import { ActivityIndicator, Animated, Easing, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -9,6 +10,7 @@ import {
   advanceChicagoPokerScore,
   declareChicago,
   playChicagoCard,
+  resetChicagoToLobby,
   startChicagoRound,
   submitChicagoDraw,
 } from "../src/games/chicago/api";
@@ -699,11 +701,12 @@ export default function ChicagoRoomScreen() {
     );
   } else if (room.state === "game_over") {
     footer = (
-      <Button
-        label={t("common.play_again")}
-        icon="refresh"
+      <PlayAgainFooter
+        isHost={isHost}
+        onPlayAgain={() => run("play-again", () => resetChicagoToLobby(roomId, playerId))}
+        loading={busy === "play-again"}
         accent={ACCENT}
-        onPress={() => router.replace(GAMES.chicago.href as any)}
+        newRoomHref={GAMES.chicago.href}
       />
     );
   }

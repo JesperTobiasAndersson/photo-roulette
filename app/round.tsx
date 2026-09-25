@@ -95,7 +95,7 @@ export default function RoundScreen() {
       }),
     ]).start(() => {
       setTimeout(() => {
-        router.replace({ pathname: "/results", params: { roomId } });
+        router.replace({ pathname: "/results", params: { roomId, playerId } });
       }, 280);
     });
   };
@@ -414,7 +414,7 @@ useEffect(() => {
           if (newRoundId === roundId) return;
 
           if (newNumber > 5) {
-            router.replace({ pathname: "/results", params: { roomId } });
+            router.replace({ pathname: "/results", params: { roomId, playerId } });
             return;
           }
 

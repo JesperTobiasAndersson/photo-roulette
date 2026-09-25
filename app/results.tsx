@@ -6,6 +6,8 @@ import { useI18n } from "../src/lib/i18n";
 import { showAlert } from "../src/lib/notify";
 import { ShareButton } from "../src/components/ShareButton";
 import { SupportPicklo } from "../src/components/SupportPicklo";
+import { PlayAgainFooter } from "../src/components/PlayAgainFooter";
+import { playMemeMatchAgain } from "../src/games/memematch/api";
 import { GAMES } from "../src/games/catalog";
 import { Button, Card, Chip, Screen, SectionLabel, TopBar } from "../src/ui/components";
 import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
@@ -38,8 +40,45 @@ function getMedal(place: number, language: "en" | "sv") {
 }
 
 export default function ResultsScreen() {
-  const { language, t } = useI18n();
-  const { roomId } = useLocalSearchParams<{ roomId: string }>();
+  const { language, t, translateError } = useI18n();
+  const { roomId, playerId } = useLocalSearchParams<{ roomId: string; playerId?: string }>();
+  const [hostPlayerId, setHostPlayerId] = useState<string | null>(null);
+  const [restarting, setRestarting] = useState(false);
+
+  // Know who the host is, and follow the room when the host starts a new game.
+  useEffect(() => {
+    if (!roomId) return;
+    supabase
+      .from("rooms")
+      .select("host_player_id")
+      .eq("id", roomId)
+      .maybeSingle()
+      .then(({ data }) => setHostPlayerId((data?.host_player_id as string | null) ?? null));
+
+    const channel = supabase
+      .channel(`results-room-${roomId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, (payload) => {
+        if ((payload.new as { phase?: string })?.phase === "picking" && playerId) {
+          router.replace({ pathname: "/pick-hand", params: { roomId, playerId } });
+        }
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, playerId]);
+
+  const playAgain = async () => {
+    if (!roomId) return;
+    setRestarting(true);
+    try {
+      await playMemeMatchAgain(roomId);
+    } catch (error) {
+      showAlert(language === "sv" ? "Kunde inte starta om" : "Couldn't restart", translateError(error));
+    } finally {
+      setRestarting(false);
+    }
+  };
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const heroOpacity = useRef(new Animated.Value(0)).current;
@@ -200,11 +239,12 @@ export default function ResultsScreen() {
       : `🏆 ${winnerName} won MemeMatch on Picklo with ${winnerPoints} points! Think you can beat us?`;
 
   const footer = (
-    <Button
-      label={t("common.play_again")}
-      icon="refresh"
+    <PlayAgainFooter
+      isHost={!!playerId && playerId === hostPlayerId}
+      onPlayAgain={playAgain}
+      loading={restarting}
       accent={ACCENT}
-      onPress={() => router.replace(GAME.href as any)}
+      newRoomHref={GAME.href}
     />
   );
 

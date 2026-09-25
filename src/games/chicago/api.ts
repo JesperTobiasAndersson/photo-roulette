@@ -199,6 +199,38 @@ export async function joinChicagoRoom(code: string, displayName: string) {
   return joinRoomByCode("chicago", code, displayName);
 }
 
+/** "Play again": same room and players, scores back to 0, everyone returns to the lobby. */
+export async function resetChicagoToLobby(roomId: string, playerId: string) {
+  const room = await requireHost(roomId, playerId);
+
+  // Clear pointers to rounds/players first so the round rows can be deleted.
+  const { error: roomError } = await supabase
+    .from("chicago_rooms")
+    .update({
+      state: "lobby",
+      current_round: 0,
+      dealer_player_id: null,
+      lead_player_id: null,
+      current_turn_player_id: null,
+      winner_player_id: null,
+      phase_ends_at: null,
+      phase_number: room.phase_number + 1,
+      public_message: "Waiting for players to join Chicago.",
+    })
+    .eq("id", roomId);
+  if (roomError) throw roomError;
+
+  // Hands, draws, tricks and played cards cascade from the rounds.
+  const { error: roundsError } = await supabase.from("chicago_rounds").delete().eq("room_id", roomId);
+  if (roundsError) throw roundsError;
+
+  const { error: playersError } = await supabase
+    .from("chicago_room_players")
+    .update({ score: 0, status: "active", draw_ready: false, trick_ready: false, chicago_declared: false })
+    .eq("room_id", roomId);
+  if (playersError) throw playersError;
+}
+
 export async function startChicagoRound(roomId: string, playerId: string) {
   const room = await requireHost(roomId, playerId);
   const activePlayers = await getActivePlayers(roomId);

@@ -95,6 +95,21 @@ export async function joinMafiaRoom(code: string, displayName: string) {
   return joinRoomByCode("mafia", code, displayName);
 }
 
+/** "Play again": same room and players back in the lobby; roles are dealt fresh on start. */
+export async function returnMafiaToLobby(roomId: string, playerId: string) {
+  await requireHost(roomId, playerId);
+  const { error: roomError } = await supabase
+    .from("mafia_rooms")
+    .update({ state: "lobby", phase_number: 0, winner: null, phase_ends_at: null, public_message: "Waiting for players." })
+    .eq("id", roomId);
+  if (roomError) throw roomError;
+  const { error: playersError } = await supabase
+    .from("mafia_room_players")
+    .update({ status: "alive", role_reveal_ready: false, discussion_ready: false })
+    .eq("room_id", roomId);
+  if (playersError) throw playersError;
+}
+
 export async function startMafiaGame(roomId: string, playerId: string) {
   const room = await requireHost(roomId, playerId);
   const players = await getRoomPlayers(roomId);

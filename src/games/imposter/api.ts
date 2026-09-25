@@ -70,6 +70,28 @@ export async function updateImposterCategory(roomId: string, playerId: string, c
   if (error) throw error;
 }
 
+/** "Play again": same room and players back in the lobby; a new word is dealt on start. */
+export async function returnImposterToLobby(roomId: string, playerId: string) {
+  const room = await requireHost(roomId, playerId);
+  const { error: roomError } = await supabase
+    .from("imposter_rooms")
+    .update({
+      state: "lobby",
+      secret_prompt: null,
+      winner: null,
+      phase_ends_at: null,
+      phase_number: room.phase_number + 1,
+      public_message: "Waiting for players to join.",
+    })
+    .eq("id", roomId);
+  if (roomError) throw roomError;
+  const { error: playersError } = await supabase
+    .from("imposter_room_players")
+    .update({ status: "alive", role_reveal_ready: false, discussion_ready: false })
+    .eq("room_id", roomId);
+  if (playersError) throw playersError;
+}
+
 export async function startImposterGame(roomId: string, playerId: string) {
   const room = await requireHost(roomId, playerId);
   const players = await getRoomPlayers(roomId);

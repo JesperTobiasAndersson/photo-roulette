@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SupportPicklo } from "../src/components/SupportPicklo";
+import { PlayAgainFooter } from "../src/components/PlayAgainFooter";
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -368,8 +369,8 @@ export default function TriviaRoomScreen() {
         />
       </View>
     );
-  } else if (room.state === "completed" && isHost) {
-    footer = <Button label={copy.reset} icon="refresh" accent={ACCENT} onPress={resetGame} loading={busy === "reset"} />;
+  } else if (room.state === "completed") {
+    footer = <PlayAgainFooter isHost={isHost} onPlayAgain={resetGame} loading={busy === "reset"} accent={ACCENT} newRoomHref={GAME.href} />;
   }
 
   return (
