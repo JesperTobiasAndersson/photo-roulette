@@ -37,7 +37,7 @@ variables (plus the optional ones below), then **Redeploy**. Build command:
 |---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL` | yes | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Public client key (safe to expose) |
-| `EXPO_PUBLIC_SITE_URL` | no | Public address for share links/SEO, e.g. `https://picklo.se` |
+| `EXPO_PUBLIC_SITE_URL` | no | Public address for share links/SEO, e.g. `https://picklo.app` |
 | `EXPO_PUBLIC_TIP_URL` | no | Tip link shown after a game ends; empty hides it |
 
 ## 3. Daily cleanup + keep-alive (≈5 min)
