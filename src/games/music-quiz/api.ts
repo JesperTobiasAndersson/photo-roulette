@@ -1,5 +1,5 @@
 import { joinRoomByCode, supabase } from "../../lib/supabase";
-import { MUSIC_QUIZ_LIBRARY } from "./data";
+import { MUSIC_QUIZ_LIBRARY, type MusicQuizLibraryEntry } from "./data";
 import { loadSpotifyTrackPreview } from "./spotify";
 import type { MusicQuizAnswerDto, MusicQuizPlayerDto, MusicQuizPromptType, MusicQuizRoomDto, MusicQuizSongPool } from "./types";
 
@@ -153,15 +153,57 @@ export async function startMusicQuizRound(
   }
 }
 
+type MusicQuizLibraryRow = {
+  spotify_url: string;
+  spotify_track_id: string | null;
+  song_title: string | null;
+  artist_name: string | null;
+  artist_spotify_url: string | null;
+  category: MusicQuizLibraryEntry["category"];
+};
+
+// The song library lives in the music_quiz_library table. The small bundled list is only
+// a fallback for when the table can't be read (offline, older database).
+async function loadMusicQuizLibrary(pool: MusicQuizSongPool): Promise<MusicQuizLibraryEntry[]> {
+  const bundled = MUSIC_QUIZ_LIBRARY.filter((entry) => pool === "mix" || entry.category === pool);
+  let query = supabase
+    .from("music_quiz_library")
+    .select("spotify_url, spotify_track_id, song_title, artist_name, artist_spotify_url, category")
+    .limit(1000);
+  if (pool !== "mix") query = query.eq("category", pool);
+  const { data, error } = await query;
+  if (error || !data) return bundled;
+
+  const entries = (data as MusicQuizLibraryRow[]).flatMap((row) => {
+    const trackId = row.spotify_track_id || row.spotify_url.match(/track\/([A-Za-z0-9]+)/)?.[1];
+    if (!trackId || !row.song_title || !row.artist_name) return [];
+    return [{
+      spotifyUrl: row.spotify_url,
+      spotifyTrackId: trackId,
+      songTitle: row.song_title,
+      artistName: row.artist_name,
+      artistSpotifyUrl: row.artist_spotify_url || `https://open.spotify.com/search/${encodeURIComponent(row.artist_name)}`,
+      category: row.category,
+    }];
+  });
+  return entries.length > 0 ? entries : bundled;
+}
+
 export async function loadRandomMusicQuizTrack(roomId: string, playerId: string, pool: MusicQuizSongPool) {
   await requireHost(roomId, playerId);
 
-  const { data: rounds, error } = await supabase.from("music_quiz_rounds").select("spotify_track_id").eq("room_id", roomId);
+  const { data: rounds, error } = await supabase.from("music_quiz_rounds").select("spotify_track_id, song_title, artist_name").eq("room_id", roomId);
   if (error) throw error;
 
-  const usedTrackIds = new Set((rounds ?? []).map((entry: { spotify_track_id: string }) => entry.spotify_track_id));
-  const filteredLibrary = MUSIC_QUIZ_LIBRARY.filter((entry) => pool === "mix" || entry.category === pool);
-  const unusedLibrary = filteredLibrary.filter((entry) => !usedTrackIds.has(entry.spotifyTrackId));
+  type PlayedRound = { spotify_track_id: string; song_title: string | null; artist_name: string | null };
+  const songKey = (title: string | null, artist: string | null) => `${title ?? ""}|${artist ?? ""}`.toLowerCase();
+  const usedTrackIds = new Set(((rounds ?? []) as PlayedRound[]).map((entry) => entry.spotify_track_id));
+  // Also match on title + artist, so the same song stored under two Spotify ids is not repeated.
+  const usedSongs = new Set(((rounds ?? []) as PlayedRound[]).map((entry) => songKey(entry.song_title, entry.artist_name)));
+  const filteredLibrary = await loadMusicQuizLibrary(pool);
+  const unusedLibrary = filteredLibrary.filter(
+    (entry) => !usedTrackIds.has(entry.spotifyTrackId) && !usedSongs.has(songKey(entry.songTitle, entry.artistName))
+  );
   const source = unusedLibrary.length > 0 ? unusedLibrary : filteredLibrary;
   if (source.length === 0) {
     throw new Error("No songs available in that playlist");

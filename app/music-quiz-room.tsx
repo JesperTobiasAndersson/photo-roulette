@@ -100,6 +100,14 @@ export default function MusicQuizRoomScreen() {
 
       if (!visibleWindow) return Linking.openURL(webUrl);
 
+      // On a computer there is no Spotify app hand-off: open the web player in a new
+      // tab so the host keeps the game open (still inside the click, so it isn't blocked).
+      const isPhone = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (!isPhone) {
+        visibleWindow.open(webUrl, "_blank", "noopener");
+        return;
+      }
+
       return new Promise<void>((resolve) => {
         let finished = false;
         const cleanup = () => {
