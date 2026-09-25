@@ -371,7 +371,9 @@ export async function submitChicagoDraw(roomId: string, playerId: string, discar
 
 export async function advanceChicagoPokerScore(roomId: string, _playerId: string) {
   const room = await getRoom(roomId);
-  if (!["poker_score_1", "poker_score_2"].includes(room.state)) throw new Error("Poker scoring is not active");
+  // Every phone schedules this automatically; if another phone already scored the
+  // hand and moved on, there is nothing left to do.
+  if (!["poker_score_1", "poker_score_2"].includes(room.state)) return { ok: true, alreadyScored: true };
 
   const lockIsStale =
     !!room.phase_ends_at && Date.now() - new Date(room.phase_ends_at).getTime() > 15000;
