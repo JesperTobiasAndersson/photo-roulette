@@ -44,3 +44,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/

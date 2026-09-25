@@ -1,4 +1,6 @@
 import { Platform, Text, View } from "react-native";
+import { SectionLabel } from "../ui/components";
+import { colors, space, type } from "../ui/theme";
 
 type MarketingSectionProps = {
   eyebrow?: string;
@@ -6,50 +8,50 @@ type MarketingSectionProps = {
   paragraphs: string[];
   bullets?: string[];
   faq?: Array<{ question: string; answer: string }>;
+  /** Colour of the bullet dots; defaults to the brand colour. */
+  accentColor?: string;
+  /** Heading above the FAQ list. */
+  faqTitle?: string;
 };
 
-export function WebMarketingSection({ eyebrow, title, paragraphs, bullets, faq }: MarketingSectionProps) {
+/** Indexable body copy for web landing pages (hidden in the native app). */
+export function WebMarketingSection({ eyebrow, title, paragraphs, bullets, faq, accentColor = colors.brand, faqTitle }: MarketingSectionProps) {
   if (Platform.OS !== "web") {
     return null;
   }
 
   return (
-    <View
-      style={{
-        marginTop: 18,
-        backgroundColor: "#0B1222",
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: "#1E293B",
-        padding: 20,
-        gap: 12,
-      }}
-    >
-      {eyebrow ? (
-        <Text style={{ color: "#7DD3FC", fontSize: 12, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>
-          {eyebrow}
-        </Text>
-      ) : null}
-      <Text accessibilityRole="header" style={{ color: "#F8FAFC", fontSize: 24, fontWeight: "900", lineHeight: 32 }}>
+    <View style={{ gap: space.md }}>
+      {eyebrow ? <SectionLabel>{eyebrow}</SectionLabel> : null}
+      <Text accessibilityRole="header" style={[type.heading, { color: colors.text }]}>
         {title}
       </Text>
       {paragraphs.map((paragraph) => (
-        <Text key={paragraph} style={{ color: "#CBD5E1", fontSize: 15, lineHeight: 24 }}>
+        <Text key={paragraph} style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 25 }}>
           {paragraph}
         </Text>
       ))}
-      {bullets?.map((bullet) => (
-        <Text key={bullet} style={{ color: "#E2E8F0", fontSize: 14, lineHeight: 22 }}>
-          {"• "}
-          {bullet}
-        </Text>
-      ))}
+      {bullets?.length ? (
+        <View style={{ gap: space.sm }}>
+          {bullets.map((bullet) => (
+            <View key={bullet} style={{ flexDirection: "row", gap: space.md, alignItems: "flex-start" }}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: accentColor, marginTop: 9 }} />
+              <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 24, flex: 1 }}>{bullet}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {faq?.length ? (
-        <View style={{ marginTop: 4, gap: 10 }}>
+        <View style={{ gap: space.md, marginTop: space.sm }}>
+          {faqTitle ? (
+            <Text accessibilityRole="header" style={[type.heading, { color: colors.text }]}>
+              {faqTitle}
+            </Text>
+          ) : null}
           {faq.map((item) => (
-            <View key={item.question} style={{ gap: 4 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "800", fontSize: 15 }}>{item.question}</Text>
-              <Text style={{ color: "#94A3B8", fontSize: 14, lineHeight: 22 }}>{item.answer}</Text>
+            <View key={item.question} style={{ gap: space.xs }}>
+              <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16, lineHeight: 22 }}>{item.question}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 15, lineHeight: 23 }}>{item.answer}</Text>
             </View>
           ))}
         </View>
@@ -57,4 +59,3 @@ export function WebMarketingSection({ eyebrow, title, paragraphs, bullets, faq }
     </View>
   );
 }
-

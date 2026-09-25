@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Easing, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Animated, Easing, Modal, Platform, Pressable, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import * as Clipboard from "expo-clipboard";
-import { Image } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { AnimatedEntrance } from "../src/components/AnimatedEntrance";
-import { CopyToast } from "../src/components/CopyToast";
+import { ShareButton } from "../src/components/ShareButton";
+import { GAMES } from "../src/games/catalog";
 import { IMPOSTER_CATEGORIES } from "../src/games/imposter/data";
 import {
   finishImposterReveal,
@@ -16,8 +15,16 @@ import {
   submitImposterVote,
   updateImposterCategory,
 } from "../src/games/imposter/api";
-import { getCategoryById, getRoleDescription } from "../src/games/imposter/logic";
+import { getCategoryById } from "../src/games/imposter/logic";
 import { useImposterRoom } from "../src/games/imposter/useImposterRoom";
+import { useI18n, type Language } from "../src/lib/i18n";
+import { confirmAction, showAlert } from "../src/lib/notify";
+import { Button, Card, Chip, GameIcon, RoomCodeBadge, Screen, SectionLabel, TopBar, onAccent } from "../src/ui/components";
+import { colors, radius, space, touch, type, withAlpha } from "../src/ui/theme";
+import { SITE_URL } from "../src/lib/site";
+
+const GAME = GAMES.imposter;
+const ACCENT = GAME.accent;
 
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -25,18 +32,339 @@ function asString(v: unknown): string {
   return "";
 }
 
-function getRoleColor(role: string | undefined) {
-  if (role === "imposter") return "#FCA5A5";
-  return "#FCD34D";
+const COPY = {
+  en: {
+    loading: "Loading Imposter",
+    loadingSub: "Connecting the room and syncing the round state.",
+    roomCode: "Room code",
+    invite: "Invite friends",
+    inviteMessage: "Join my Imposter game on Picklo! Room code:",
+    category: "Category",
+    onlyHostCategory: "Only the host can change the category.",
+    players: "Players",
+    you: "You",
+    host: "Host",
+    out: "Out",
+    ready: "Ready",
+    voteReady: "Ready to vote",
+    alive: "Alive",
+    startGame: "Start the game",
+    needPlayers: (n: number) => `Need at least 3 players (${n}/3)`,
+    needCategory: "Pick a category first",
+    waitingHost: "Waiting for the host to start the game.",
+    lobbyHint: "Pick a category, and start once everyone has joined.",
+    // Secret card
+    tapToReveal: "Tap to see your card",
+    noPeeking: "Make sure nobody else can see your screen.",
+    tapToHide: "Tap to hide",
+    yourWord: "Your secret word",
+    youAreImposter: "You are the imposter",
+    imposterDesc: "Blend in, improvise, and try not to get caught.",
+    crewDesc: "You know the secret word. Give careful clues and expose the imposter.",
+    yourCard: "Your card",
+    // Reveal
+    privateReveal: "Private reveal",
+    revealHint: "Look at your card in secret, then tap ready so the round can move on.",
+    sawCard: "I saw my card",
+    revealFirst: "Reveal your card first",
+    readyWaiting: "Ready – waiting for the others",
+    readyCount: (a: number, b: number) => `${a}/${b} ready`,
+    // Discussion
+    discussion: "Discussion",
+    timeLeft: "Time left",
+    readyToVoteCount: (a: number, b: number) => `${a}/${b} ready to vote`,
+    readyToVote: "Ready to vote",
+    youreReady: "You're ready to vote",
+    youAreOut: "You are out",
+    openVoting: "Open voting now",
+    // Voting
+    vote: "Vote",
+    voteHint: "Who is the imposter? Tap a player, then confirm.",
+    pickPlayer: "Pick a player",
+    voteFor: (name: string) => `Vote for ${name}`,
+    changeVote: (name: string) => `Change vote to ${name}`,
+    voteLocked: (name: string) => `Voted for ${name}`,
+    votesIn: (a: number, b: number) => `${a}/${b} votes in`,
+    votesSoFar: "Votes so far",
+    yourVote: "Your vote",
+    resolveVote: "Resolve vote",
+    waitingResolve: "Waiting for the host to resolve the vote.",
+    outCantVote: "You're out – watch the others vote.",
+    unknown: "Unknown",
+    // Ended
+    gameOver: "Game over",
+    showResults: "Show final results",
+    // Modals
+    roundContinues: "Round continues",
+    wrongPlayer: "The group voted out the wrong player. The game continues.",
+    voteResult: "Vote result",
+    aPlayer: "A player",
+    wasImposter: "was revealed as the imposter",
+    wasVotedOut: "was voted out by the group",
+    rightCall: "The crew made the right call. The round outcome is being revealed.",
+    endedByVote: "That vote ended the game. Final results are about to appear.",
+    lostCrew: "The group lost a crew member. The next discussion begins now.",
+    finalVerdict: "Final verdict",
+    imposterWins: "IMPOSTER WINS",
+    crewWins: "CREW WINS",
+    imposterWinsSub: "The imposter survived the accusations and took control of the round.",
+    crewWinsSub: "The crew read the room correctly and exposed the imposter.",
+    // Leave
+    leaveTitle: "Leave the game?",
+    leaveMsg: "The round keeps going without you.",
+    leave: "Leave",
+    stay: "Stay",
+    phase: { lobby: "Lobby", role_reveal: "Reveal", discussion: "Discussion", voting: "Voting", ended: "Game over" },
+  },
+  sv: {
+    loading: "Laddar Imposter",
+    loadingSub: "Ansluter till rummet och synkar rundan.",
+    roomCode: "Rumskod",
+    invite: "Bjud in vänner",
+    inviteMessage: "Spela Imposter med mig på Picklo! Rumskod:",
+    category: "Kategori",
+    onlyHostCategory: "Bara värden kan byta kategori.",
+    players: "Spelare",
+    you: "Du",
+    host: "Värd",
+    out: "Ute",
+    ready: "Redo",
+    voteReady: "Redo att rösta",
+    alive: "Kvar",
+    startGame: "Starta spelet",
+    needPlayers: (n: number) => `Minst 3 spelare behövs (${n}/3)`,
+    needCategory: "Välj en kategori först",
+    waitingHost: "Väntar på att värden startar spelet.",
+    lobbyHint: "Välj en kategori och starta när alla har gått med.",
+    tapToReveal: "Tryck för att se ditt kort",
+    noPeeking: "Se till att ingen annan ser din skärm.",
+    tapToHide: "Tryck för att dölja",
+    yourWord: "Ditt hemliga ord",
+    youAreImposter: "Du är impostern",
+    imposterDesc: "Smält in, improvisera och försök att inte bli avslöjad.",
+    crewDesc: "Du kan det hemliga ordet. Ge försiktiga ledtrådar och avslöja impostern.",
+    yourCard: "Ditt kort",
+    privateReveal: "Hemlig visning",
+    revealHint: "Titta på ditt kort i hemlighet och tryck sedan redo så att rundan kan fortsätta.",
+    sawCard: "Jag har sett mitt kort",
+    revealFirst: "Visa ditt kort först",
+    readyWaiting: "Redo – väntar på de andra",
+    readyCount: (a: number, b: number) => `${a}/${b} redo`,
+    discussion: "Diskussion",
+    timeLeft: "Tid kvar",
+    readyToVoteCount: (a: number, b: number) => `${a}/${b} redo att rösta`,
+    readyToVote: "Redo att rösta",
+    youreReady: "Du är redo att rösta",
+    youAreOut: "Du är ute",
+    openVoting: "Öppna röstningen nu",
+    vote: "Rösta",
+    voteHint: "Vem är impostern? Tryck på en spelare och bekräfta.",
+    pickPlayer: "Välj en spelare",
+    voteFor: (name: string) => `Rösta på ${name}`,
+    changeVote: (name: string) => `Ändra röst till ${name}`,
+    voteLocked: (name: string) => `Du röstade på ${name}`,
+    votesIn: (a: number, b: number) => `${a}/${b} röster inne`,
+    votesSoFar: "Röster hittills",
+    yourVote: "Din röst",
+    resolveVote: "Avgör röstningen",
+    waitingResolve: "Väntar på att värden avgör röstningen.",
+    outCantVote: "Du är ute – titta på när de andra röstar.",
+    unknown: "Okänd",
+    gameOver: "Spelet är slut",
+    showResults: "Visa slutresultat",
+    roundContinues: "Rundan fortsätter",
+    wrongPlayer: "Gruppen röstade ut fel spelare. Spelet fortsätter.",
+    voteResult: "Röstresultat",
+    aPlayer: "En spelare",
+    wasImposter: "avslöjades som impostern",
+    wasVotedOut: "röstades ut av gruppen",
+    rightCall: "Crewet gjorde rätt val. Rundans utfall visas nu.",
+    endedByVote: "Den rösten avslutade spelet. Slutresultatet visas strax.",
+    lostCrew: "Gruppen förlorade en crewmedlem. Nästa diskussion börjar nu.",
+    finalVerdict: "Slutgiltigt utslag",
+    imposterWins: "IMPOSTERN VINNER",
+    crewWins: "CREW VINNER",
+    imposterWinsSub: "Impostern klarade anklagelserna och tog kontroll över rundan.",
+    crewWinsSub: "Crewet läste av rummet rätt och avslöjade impostern.",
+    leaveTitle: "Lämna spelet?",
+    leaveMsg: "Rundan fortsätter utan dig.",
+    leave: "Lämna",
+    stay: "Stanna",
+    phase: { lobby: "Lobby", role_reveal: "Visning", discussion: "Diskussion", voting: "Röstning", ended: "Spelet är slut" },
+  },
+};
+
+/** Server messages are stored in English; translate the known ones for Swedish players. */
+const PUBLIC_MESSAGES_SV: Record<string, string> = {
+  "Waiting for players to join.": "Väntar på att spelare går med.",
+  "Roles assigned. Reveal your card privately.": "Rollerna är utdelade. Titta på ditt kort i hemlighet.",
+  "Discuss the word and figure out who the imposter is.": "Diskutera ordet och lista ut vem impostern är.",
+  "Vote for the player you think is the imposter.": "Rösta på den du tror är impostern.",
+  "The group voted out the wrong player. The game continues.": "Gruppen röstade ut fel spelare. Spelet fortsätter.",
+  "Nobody was eliminated. Keep discussing.": "Ingen röstades ut. Fortsätt diskutera.",
+};
+
+function localizeMessage(message: string | null, language: Language) {
+  if (!message) return "";
+  return language === "sv" ? PUBLIC_MESSAGES_SV[message] ?? message : message;
+}
+
+/** Private word card: hidden until the player deliberately taps it, tap again to hide. */
+function SecretCard({
+  isImposter,
+  prompt,
+  revealed,
+  onToggle,
+  copy,
+  compact,
+}: {
+  isImposter: boolean;
+  prompt: string | null;
+  revealed: boolean;
+  onToggle: () => void;
+  copy: (typeof COPY)["en"];
+  compact?: boolean;
+}) {
+  const tone = isImposter ? colors.danger : ACCENT;
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityLabel={revealed ? copy.tapToHide : copy.tapToReveal}
+      style={({ pressed }) => ({
+        minHeight: compact ? 120 : 220,
+        borderRadius: radius.xl,
+        padding: space.xl,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: space.sm,
+        backgroundColor: revealed ? withAlpha(tone, 0.12) : colors.surface,
+        borderWidth: 2,
+        borderStyle: revealed ? "solid" : "dashed",
+        borderColor: revealed ? withAlpha(tone, 0.7) : withAlpha(ACCENT, 0.45),
+        opacity: pressed ? 0.9 : 1,
+        transform: [{ scale: pressed ? 0.99 : 1 }],
+      })}
+    >
+      {revealed ? (
+        <>
+          <Text style={[type.caption, { color: tone, textTransform: "uppercase" }]}>
+            {isImposter ? copy.yourCard : copy.yourWord}
+          </Text>
+          <Text
+            adjustsFontSizeToFit
+            numberOfLines={2}
+            style={{
+              color: isImposter ? colors.danger : colors.text,
+              fontSize: compact ? 30 : 40,
+              lineHeight: compact ? 36 : 46,
+              fontWeight: "900",
+              textAlign: "center",
+            }}
+          >
+            {isImposter ? copy.youAreImposter.toUpperCase() : (prompt ?? copy.unknown).toUpperCase()}
+          </Text>
+          {!compact ? (
+            <Text style={[type.small, { color: colors.textSecondary, textAlign: "center" }]}>
+              {isImposter ? copy.imposterDesc : copy.crewDesc}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: space.xs }}>
+            <Ionicons name="eye-off-outline" size={16} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: "700" }}>{copy.tapToHide}</Text>
+          </View>
+        </>
+      ) : (
+        <>
+          <View
+            style={{
+              width: compact ? 48 : 64,
+              height: compact ? 48 : 64,
+              borderRadius: radius.pill,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: withAlpha(ACCENT, 0.16),
+            }}
+          >
+            <Ionicons name="eye-outline" size={compact ? 24 : 32} color={ACCENT} />
+          </View>
+          <Text style={[type.heading, { color: colors.text, textAlign: "center" }]}>{copy.tapToReveal}</Text>
+          {!compact ? (
+            <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>{copy.noPeeking}</Text>
+          ) : null}
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+function PlayerRow({
+  name,
+  eliminated,
+  children,
+}: {
+  name: string;
+  eliminated?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        minHeight: touch.min + 8,
+        paddingVertical: space.sm,
+        paddingHorizontal: space.md,
+        borderRadius: radius.md,
+        backgroundColor: colors.sunken,
+        borderWidth: 1,
+        borderColor: colors.border,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+      }}
+    >
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: eliminated ? withAlpha(colors.danger, 0.14) : withAlpha(ACCENT, 0.16),
+        }}
+      >
+        <Text style={{ color: eliminated ? colors.danger : ACCENT, fontWeight: "900", fontSize: 16 }}>
+          {name.trim().charAt(0).toUpperCase() || "?"}
+        </Text>
+      </View>
+      <Text
+        numberOfLines={1}
+        style={[
+          type.bodyStrong,
+          {
+            flex: 1,
+            color: eliminated ? colors.textMuted : colors.text,
+            textDecorationLine: eliminated ? "line-through" : "none",
+          },
+        ]}
+      >
+        {name}
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 6, flexShrink: 1 }}>{children}</View>
+    </View>
+  );
 }
 
 export default function ImposterLobbyScreen() {
+  const { language, t } = useI18n();
+  const copy = COPY[language];
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
   const [busy, setBusy] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [cardRevealed, setCardRevealed] = useState(false);
+  const [hasSeenCard, setHasSeenCard] = useState(false);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [showRoundContinueModal, setShowRoundContinueModal] = useState(false);
   const [shownRoundContinueKey, setShownRoundContinueKey] = useState<string | null>(null);
   const [showVoteRevealModal, setShowVoteRevealModal] = useState(false);
@@ -94,7 +422,7 @@ export default function ImposterLobbyScreen() {
       await fn();
       await refresh();
     } catch (error) {
-      Alert.alert("Action failed", String((error as Error)?.message ?? error));
+      showAlert(t("common.action_failed"), String((error as Error)?.message ?? error));
     } finally {
       setBusy(null);
     }
@@ -117,6 +445,15 @@ export default function ImposterLobbyScreen() {
 
     setTimeout(go, 120);
   };
+
+  // UI-only: hide the secret card whenever the phase changes, and clear the local vote pick each round.
+  useEffect(() => {
+    setCardRevealed(false);
+  }, [room?.state]);
+
+  useEffect(() => {
+    setSelectedTargetId(null);
+  }, [room?.phase_number]);
 
   useEffect(() => {
     if (!room?.phase_ends_at || room.state === "lobby" || room.state === "role_reveal" || room.state === "ended") return;
@@ -381,170 +718,220 @@ export default function ImposterLobbyScreen() {
     return () => clearTimeout(timeoutId);
   }, [hasNavigatedToResults, room, showEndgameRevealModal]);
 
+  const leaveGame = async () => {
+    if (room && room.state !== "lobby" && room.state !== "ended") {
+      const ok = await confirmAction(copy.leaveTitle, copy.leaveMsg, {
+        confirmLabel: copy.leave,
+        cancelLabel: copy.stay,
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    router.replace(GAME.href as any);
+  };
+
   if (loading || !room || !myPlayer) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
-        <StatusBar style="light" />
-        <View style={{ width: "100%", maxWidth: 420, alignItems: "center" }}>
-          <View
-            style={{
-              width: 112,
-              height: 112,
-              borderRadius: 30,
-              overflow: "hidden",
-              backgroundColor: "#111827",
-              borderWidth: 1,
-              borderColor: "rgba(245,158,11,0.35)",
-              marginBottom: 18,
-            }}
-          >
-            <Image source={require("../assets/imposter.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          </View>
-          <Text style={{ color: "white", fontSize: 34, fontWeight: "900", textAlign: "center" }}>Loading Imposter</Text>
-          <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 24, textAlign: "center", marginTop: 10 }}>
-            Connecting the room and syncing the round state.
-          </Text>
+      <Screen centered topBar={<TopBar title={GAME.title} onBack={() => router.replace(GAME.href as any)} />}>
+        <View style={{ alignItems: "center", gap: space.md }}>
+          <GameIcon source={GAME.icon} size={96} accent={ACCENT} />
+          <Text style={[type.title, { color: colors.text, textAlign: "center" }]}>{copy.loading}</Text>
+          <Text style={[type.body, { color: colors.textMuted, textAlign: "center" }]}>{copy.loadingSub}</Text>
         </View>
-      </View>
+      </Screen>
     );
   }
 
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://picklo.app";
+  const baseUrl = SITE_URL;
   const inviteUrl = `${baseUrl}/imposter?code=${room.code}`;
-  const copyInviteLink = async () => {
-    await Clipboard.setStringAsync(inviteUrl);
-    setShowCopiedToast(true);
-    setTimeout(() => setShowCopiedToast(false), 1400);
+
+  const isAlive = myPlayer.status === "alive";
+  const isImposter = myRole?.role === "imposter";
+  const revealReadyCount = players.filter((player) => player.role_reveal_ready).length;
+  const votersCount = new Set(currentVotes.map((vote) => vote.voter_player_id)).size;
+  const voteOptions = alivePlayers.filter((player) => player.id !== myPlayer.id);
+  const selectedId = selectedTargetId ?? myVote?.target_player_id ?? null;
+  const selectedPlayer = selectedId ? players.find((player) => player.id === selectedId) ?? null : null;
+  const voteAlreadyCast = !!myVote && myVote.target_player_id === selectedId;
+  const startBlocker = players.length < 3 ? copy.needPlayers(players.length) : !room.category_id ? copy.needCategory : null;
+
+  const toggleCard = () => {
+    setCardRevealed((value) => !value);
+    setHasSeenCard(true);
   };
 
+  const hintText = (text: string) => (
+    <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>{text}</Text>
+  );
+
+  // ---------------------------------------------------------------------------
+  // Sticky footer: the one main action for the current phase.
+  // ---------------------------------------------------------------------------
+  let footer: React.ReactNode = null;
+  if (room.state === "lobby") {
+    footer = isHost ? (
+      <>
+        {startBlocker ? hintText(startBlocker) : null}
+        <Button
+          label={copy.startGame}
+          icon="play"
+          accent={ACCENT}
+          loading={busy === "start"}
+          disabled={busy === "start" || !!startBlocker}
+          onPress={() => run("start", () => startImposterGame(roomId, playerId))}
+        />
+      </>
+    ) : (
+      <View style={{ minHeight: touch.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm }}>
+        <Ionicons name="hourglass-outline" size={20} color={ACCENT} />
+        <Text style={[type.bodyStrong, { color: colors.textSecondary }]}>{copy.waitingHost}</Text>
+      </View>
+    );
+  } else if (room.state === "role_reveal") {
+    footer = (
+      <>
+        {hintText(copy.readyCount(revealReadyCount, players.length))}
+        <Button
+          label={myPlayer.role_reveal_ready ? copy.readyWaiting : hasSeenCard ? copy.sawCard : copy.revealFirst}
+          icon={myPlayer.role_reveal_ready ? "checkmark-circle" : "checkmark"}
+          accent={ACCENT}
+          loading={busy === "reveal-ready"}
+          disabled={busy === "reveal-ready" || myPlayer.role_reveal_ready || !hasSeenCard}
+          onPress={() => run("reveal-ready", () => finishImposterReveal(roomId, playerId))}
+        />
+      </>
+    );
+  } else if (room.state === "discussion") {
+    footer = (
+      <Button
+        label={!isAlive ? copy.youAreOut : myPlayer.discussion_ready ? copy.youreReady : copy.readyToVote}
+        icon={!isAlive ? "close-circle" : myPlayer.discussion_ready ? "checkmark-circle" : "hand-right"}
+        accent={ACCENT}
+        loading={busy === "discussion-ready"}
+        disabled={busy === "discussion-ready" || myPlayer.discussion_ready || !isAlive}
+        onPress={() => run("discussion-ready", () => submitImposterDiscussionReady(roomId, playerId))}
+      />
+    );
+  } else if (room.state === "voting") {
+    footer = !isAlive ? (
+      hintText(copy.outCantVote)
+    ) : (
+      <Button
+        label={
+          !selectedPlayer
+            ? copy.pickPlayer
+            : voteAlreadyCast
+              ? copy.voteLocked(selectedPlayer.display_name)
+              : myVote
+                ? copy.changeVote(selectedPlayer.display_name)
+                : copy.voteFor(selectedPlayer.display_name)
+        }
+        icon={voteAlreadyCast ? "checkmark-circle" : "hand-left"}
+        accent={ACCENT}
+        loading={!!busy && busy.startsWith("vote-")}
+        disabled={!selectedPlayer || voteAlreadyCast || (!!busy && busy.startsWith("vote-"))}
+        onPress={() => {
+          if (!selectedPlayer) return;
+          run(`vote-${selectedPlayer.id}`, () => submitImposterVote(roomId, playerId, selectedPlayer.id));
+        }}
+      />
+    );
+  } else if (room.state === "ended") {
+    footer = <Button label={copy.showResults} icon="trophy" accent={ACCENT} onPress={navigateToResults} />;
+  }
+
+  const winnerTone = room.winner === "imposter" ? colors.danger : ACCENT;
+  const votedOutTone = revealedVotedOutRole === "imposter" ? ACCENT : colors.danger;
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
-      <StatusBar style="light" />
+    <Screen
+      topBar={
+        <TopBar
+          title={room.state === "lobby" ? GAME.title : `${GAME.title} · ${copy.phase[room.state]}`}
+          onBack={leaveGame}
+          right={room.state !== "lobby" ? <Chip label={room.code} color={ACCENT} icon="key" /> : undefined}
+        />
+      }
+      footer={footer}
+    >
+      {/* Wrong-player interstitial */}
       <Modal visible={showRoundContinueModal} transparent animationType="fade" onRequestClose={() => setShowRoundContinueModal(false)}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(2,6,23,0.56)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
-          <AnimatedEntrance enterKey={`round-continue-${room.phase_number}`} distance={18}>
-            <View
-              style={{
-                width: "100%",
-                maxWidth: 420,
-                borderRadius: 24,
-                padding: 20,
-                backgroundColor: "#0F172A",
-                borderWidth: 1,
-                borderColor: "#334155",
-                gap: 14,
-              }}
-            >
-              <Text style={{ color: "#F8FAFC", fontSize: 22, fontWeight: "900" }}>Round Continues</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 24, fontSize: 15 }}>
-                The group voted out the wrong player. The game continues.
-              </Text>
-            </View>
+        <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: space.lg }}>
+          <AnimatedEntrance enterKey={`round-continue-${room.phase_number}`} distance={18} style={{ width: "100%", maxWidth: 420 }}>
+            <Card style={{ borderRadius: radius.xl, padding: space.xl }}>
+              <Text style={[type.title, { color: colors.text }]}>{copy.roundContinues}</Text>
+              <Text style={[type.body, { color: colors.textSecondary }]}>{copy.wrongPlayer}</Text>
+            </Card>
           </AnimatedEntrance>
         </View>
       </Modal>
+
+      {/* Vote result overlay */}
       <Modal visible={showVoteRevealModal} transparent animationType="fade" onRequestClose={() => setShowVoteRevealModal(false)}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(2,6,23,0.7)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
+        <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: space.lg }}>
           <Animated.View
             style={{
               width: "100%",
               maxWidth: 420,
-              borderRadius: 28,
-              padding: 24,
-              backgroundColor: revealedVotedOutRole === "imposter" ? "#1A1104" : "#140A0C",
+              borderRadius: radius.xl,
+              padding: space.xl,
+              backgroundColor: colors.surface,
               borderWidth: 1,
-              borderColor: revealedVotedOutRole === "imposter" ? "rgba(251,191,36,0.38)" : "rgba(252,165,165,0.4)",
-              shadowColor: revealedVotedOutRole === "imposter" ? "#F59E0B" : "#F87171",
+              borderColor: withAlpha(votedOutTone, 0.45),
+              shadowColor: votedOutTone,
               shadowOpacity: 0.3,
               shadowRadius: 30,
               shadowOffset: { width: 0, height: 16 },
               elevation: 18,
               alignItems: "center",
+              gap: space.sm,
               opacity: voteRevealOpacity,
               transform: [{ scale: voteRevealScale }, { translateY: voteRevealTranslateY }],
             }}
           >
             <View
               style={{
-                width: 96,
-                height: 96,
-                borderRadius: 999,
+                width: 88,
+                height: 88,
+                borderRadius: radius.pill,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: revealedVotedOutRole === "imposter" ? "rgba(217,119,6,0.24)" : "rgba(127,29,29,0.32)",
+                backgroundColor: withAlpha(votedOutTone, 0.18),
                 borderWidth: 1,
-                borderColor: revealedVotedOutRole === "imposter" ? "rgba(251,191,36,0.35)" : "rgba(252,165,165,0.35)",
-                marginBottom: 18,
+                borderColor: withAlpha(votedOutTone, 0.4),
+                marginBottom: space.sm,
               }}
             >
-              <Text style={{ color: revealedVotedOutRole === "imposter" ? "#FCD34D" : "#FCA5A5", fontSize: 40, fontWeight: "900" }}>
-                {revealedVotedOutRole === "imposter" ? "!" : "X"}
-              </Text>
+              <Ionicons name={revealedVotedOutRole === "imposter" ? "finger-print" : "skull"} size={42} color={votedOutTone} />
             </View>
-            <Text
-              style={{
-                color: revealedVotedOutRole === "imposter" ? "#FCD34D" : "#FCA5A5",
-                fontWeight: "900",
-                fontSize: 13,
-                letterSpacing: 2,
-                textTransform: "uppercase",
-              }}
-            >
-              Vote result
+            <Text style={[type.caption, { color: votedOutTone, textTransform: "uppercase" }]}>{copy.voteResult}</Text>
+            <Text style={[type.display, { color: colors.text, textAlign: "center" }]}>
+              {revealedVotedOutPlayer?.display_name ?? copy.aPlayer}
             </Text>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center", marginTop: 12 }}>
-              {revealedVotedOutPlayer?.display_name ?? "A player"}
+            <Text style={[type.bodyStrong, { color: colors.textSecondary, textAlign: "center" }]}>
+              {revealedVotedOutRole === "imposter" ? copy.wasImposter : copy.wasVotedOut}
             </Text>
-            <Text style={{ color: "#E2E8F0", fontWeight: "800", fontSize: 16, textAlign: "center", marginTop: 10 }}>
-              {revealedVotedOutRole === "imposter" ? "was revealed as the imposter" : "was voted out by the group"}
-            </Text>
-            <Text style={{ color: "#94A3B8", lineHeight: 22, textAlign: "center", marginTop: 12 }}>
-              {revealedVotedOutRole === "imposter"
-                ? "The crew made the right call. The round outcome is being revealed."
-                : room.state === "ended"
-                  ? "That vote ended the game. Final results are about to appear."
-                  : "The group lost a crew member. The next discussion begins now."}
+            <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>
+              {revealedVotedOutRole === "imposter" ? copy.rightCall : room.state === "ended" ? copy.endedByVote : copy.lostCrew}
             </Text>
           </Animated.View>
         </View>
       </Modal>
+
+      {/* Endgame overlay */}
       <Modal visible={showEndgameRevealModal} transparent animationType="fade" onRequestClose={() => undefined}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(3,7,18,0.82)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
+        <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: space.lg }}>
           <Animated.View
             style={{
               width: "100%",
               maxWidth: 430,
-              borderRadius: 30,
-              paddingHorizontal: 24,
-              paddingVertical: 28,
-              backgroundColor: room?.winner === "imposter" ? "#17090B" : "#1A1104",
+              borderRadius: radius.xl,
+              paddingHorizontal: space.xl,
+              paddingVertical: space.xxl,
+              backgroundColor: colors.surface,
               borderWidth: 1,
-              borderColor: room?.winner === "imposter" ? "rgba(252,165,165,0.36)" : "rgba(251,191,36,0.34)",
-              shadowColor: room?.winner === "imposter" ? "#FB7185" : "#F59E0B",
+              borderColor: withAlpha(winnerTone, 0.45),
+              shadowColor: winnerTone,
               shadowOpacity: 0.34,
               shadowRadius: 34,
               shadowOffset: { width: 0, height: 18 },
@@ -552,100 +939,90 @@ export default function ImposterLobbyScreen() {
               alignItems: "center",
               opacity: endgameRevealOpacity,
               transform: [{ scale: endgameRevealScale }, { translateY: endgameRevealTranslateY }],
-              gap: 10,
+              gap: space.sm,
             }}
           >
             <Animated.View
               style={{
                 position: "absolute",
+                top: space.xl,
                 width: 188,
                 height: 188,
-                borderRadius: 999,
-                backgroundColor: room?.winner === "imposter" ? "rgba(251,113,133,0.24)" : "rgba(251,191,36,0.22)",
+                borderRadius: radius.pill,
+                backgroundColor: withAlpha(winnerTone, 0.22),
                 opacity: endgamePulseOpacity,
                 transform: [{ scale: endgamePulseScale }],
               }}
             />
             <View
               style={{
-                width: 108,
-                height: 108,
-                borderRadius: 999,
+                width: 104,
+                height: 104,
+                borderRadius: radius.pill,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: room?.winner === "imposter" ? "rgba(127,29,29,0.34)" : "rgba(146,64,14,0.34)",
+                backgroundColor: withAlpha(winnerTone, 0.18),
                 borderWidth: 1,
-                borderColor: room?.winner === "imposter" ? "rgba(252,165,165,0.3)" : "rgba(251,191,36,0.32)",
-                marginBottom: 8,
+                borderColor: withAlpha(winnerTone, 0.4),
+                marginBottom: space.sm,
               }}
             >
-              <Text style={{ color: room?.winner === "imposter" ? "#FCA5A5" : "#FCD34D", fontSize: 46, fontWeight: "900" }}>
-                {room?.winner === "imposter" ? "I" : "C"}
-              </Text>
+              <Ionicons name={room.winner === "imposter" ? "skull" : "trophy"} size={48} color={winnerTone} />
             </View>
             <Animated.Text
-              style={{
-                color: room?.winner === "imposter" ? "#FCA5A5" : "#FCD34D",
-                fontWeight: "900",
-                fontSize: 12,
-                letterSpacing: 2.2,
-                textTransform: "uppercase",
-                opacity: endgameVerdictOpacity,
-                transform: [{ translateY: endgameVerdictTranslateY }],
-              }}
+              style={[
+                type.caption,
+                {
+                  color: winnerTone,
+                  textTransform: "uppercase",
+                  opacity: endgameVerdictOpacity,
+                  transform: [{ translateY: endgameVerdictTranslateY }],
+                },
+              ]}
             >
-              Final verdict
+              {copy.finalVerdict}
             </Animated.Text>
             <Animated.Text
-              style={{
-                color: "#F8FAFC",
-                fontWeight: "900",
-                fontSize: 32,
-                textAlign: "center",
-                opacity: endgameWinnerOpacity,
-                transform: [{ translateY: endgameWinnerTranslateY }, { scale: endgameWinnerOpacity }],
-              }}
+              style={[
+                type.display,
+                {
+                  color: colors.text,
+                  textAlign: "center",
+                  opacity: endgameWinnerOpacity,
+                  transform: [{ translateY: endgameWinnerTranslateY }, { scale: endgameWinnerOpacity }],
+                },
+              ]}
             >
-              {room?.winner === "imposter" ? "IMPOSTER WINS" : "CREW WINS"}
+              {room.winner === "imposter" ? copy.imposterWins : copy.crewWins}
             </Animated.Text>
             <Animated.Text
-              style={{
-                color: "#CBD5E1",
-                lineHeight: 22,
-                textAlign: "center",
-                maxWidth: 320,
-                opacity: endgameSubtitleOpacity,
-                transform: [{ translateY: endgameSubtitleTranslateY }],
-              }}
+              style={[
+                type.body,
+                {
+                  color: colors.textSecondary,
+                  textAlign: "center",
+                  maxWidth: 320,
+                  opacity: endgameSubtitleOpacity,
+                  transform: [{ translateY: endgameSubtitleTranslateY }],
+                },
+              ]}
             >
-              {room?.winner === "imposter"
-                ? "The imposter survived the accusations and took control of the round."
-                : "The crew read the room correctly and exposed the imposter."}
+              {room.winner === "imposter" ? copy.imposterWinsSub : copy.crewWinsSub}
             </Animated.Text>
-            <Pressable
+            <Button
+              label={copy.showResults}
+              icon="trophy"
+              accent={winnerTone}
               onPress={navigateToResults}
-              style={({ pressed }) => ({
-                alignSelf: "stretch",
-                minHeight: 52,
-                borderRadius: 16,
-                marginTop: 6,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: room?.winner === "imposter" ? "#3F0D17" : "#3B2604",
-                borderWidth: 1,
-                borderColor: room?.winner === "imposter" ? "rgba(251,113,133,0.35)" : "rgba(251,191,36,0.35)",
-                opacity: pressed ? 0.92 : 1,
-              })}
-            >
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", textTransform: "uppercase" }}>Show Final Results</Text>
-            </Pressable>
+              style={{ alignSelf: "stretch", marginTop: space.md }}
+            />
             <View
               style={{
-                marginTop: 10,
+                marginTop: space.sm,
                 alignSelf: "stretch",
-                height: 8,
-                borderRadius: 999,
-                backgroundColor: "rgba(15,23,42,0.85)",
+                height: 6,
+                borderRadius: radius.pill,
+                backgroundColor: colors.sunken,
                 overflow: "hidden",
               }}
             >
@@ -653,333 +1030,276 @@ export default function ImposterLobbyScreen() {
                 style={{
                   width: "100%",
                   height: "100%",
-                  backgroundColor: room?.winner === "imposter" ? "#FB7185" : "#F59E0B",
-                  transform: [
-                    {
-                      scaleX: endgameRevealOpacity.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.2, 1],
-                      }),
-                    },
-                  ],
+                  backgroundColor: winnerTone,
+                  transform: [{ scaleX: endgameRevealOpacity.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }) }],
                 }}
               />
             </View>
           </Animated.View>
         </View>
       </Modal>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-        <AnimatedEntrance enterKey={`header-${room.state}`} delay={20}>
-          <View style={{ gap: 6 }}>
-            <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>Imposter</Text>
-            <Text style={{ color: "#94A3B8" }}>Room {room.code} · {room.state.replace("_", " ")}</Text>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* LOBBY                                                              */}
+      {/* ------------------------------------------------------------------ */}
+      {room.state === "lobby" ? (
+        <AnimatedEntrance enterKey="phase-lobby" delay={20} style={{ gap: space.lg }}>
+          <Card accent={ACCENT} style={{ alignItems: "center", paddingVertical: space.xl }}>
+            <RoomCodeBadge code={room.code} label={copy.roomCode} accent={ACCENT} />
+            <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>{copy.lobbyHint}</Text>
+            <View style={{ alignSelf: "stretch" }}>
+              <ShareButton
+                label={copy.invite}
+                message={`${copy.inviteMessage} ${room.code}`}
+                url={inviteUrl}
+                accentColor={ACCENT}
+                variant="secondary"
+                size="md"
+              />
+            </View>
+          </Card>
+
+          <View style={{ gap: space.sm }}>
+            <SectionLabel>{copy.category}</SectionLabel>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+              {IMPOSTER_CATEGORIES.map((entry) => {
+                const active = room.category_id === entry.id;
+                const pending = busy === `category-${entry.id}`;
+                return (
+                  <Pressable
+                    key={entry.id}
+                    onPress={() => run(`category-${entry.id}`, () => updateImposterCategory(roomId, playerId, entry.id))}
+                    disabled={!isHost}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active, disabled: !isHost }}
+                    style={({ pressed }) => ({
+                      flexGrow: 1,
+                      flexBasis: "45%",
+                      minHeight: touch.primary,
+                      paddingHorizontal: space.md,
+                      borderRadius: radius.md,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: space.sm,
+                      backgroundColor: active ? withAlpha(entry.accent, 0.18) : colors.surface,
+                      borderWidth: active ? 2 : 1,
+                      borderColor: active ? entry.accent : colors.border,
+                      opacity: !isHost && !active ? 0.55 : pressed || pending ? 0.85 : 1,
+                    })}
+                  >
+                    <Ionicons
+                      name={active ? "radio-button-on" : "radio-button-off"}
+                      size={20}
+                      color={active ? entry.accent : colors.textSubtle}
+                    />
+                    <Text numberOfLines={2} style={{ flex: 1, color: active ? colors.text : colors.textSecondary, fontSize: 15, fontWeight: "800" }}>
+                      {entry.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {!isHost ? <Text style={[type.small, { color: colors.textSubtle }]}>{copy.onlyHostCategory}</Text> : null}
+          </View>
+
+          <View style={{ gap: space.sm }}>
+            <SectionLabel right={<Chip label={`${players.length}`} color={ACCENT} icon="people" />}>{copy.players}</SectionLabel>
+            {players.map((player, index) => (
+              <AnimatedEntrance key={player.id} enterKey={`lobby-${players.length}-${player.id}`} delay={60 + index * 30} distance={10}>
+                <PlayerRow name={player.display_name}>
+                  {player.id === myPlayer.id ? <Chip label={copy.you} color={colors.brand} /> : null}
+                  {player.id === room.host_player_id ? <Chip label={copy.host} color={ACCENT} icon="star" /> : null}
+                </PlayerRow>
+              </AnimatedEntrance>
+            ))}
           </View>
         </AnimatedEntrance>
+      ) : null}
 
-        {room.state !== "lobby" && myRole ? (
-          <AnimatedEntrance enterKey={`card-${room.state}`} delay={50}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Your card</Text>
-              <Text style={{ color: getRoleColor(myRole.role), fontWeight: "900", fontSize: 24 }}>
-                {myRole.role === "imposter" ? "IMPOSTER" : myRole.prompt?.toUpperCase() ?? "UNKNOWN"}
-              </Text>
-              <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{getRoleDescription(myRole.role)}</Text>
+      {/* ------------------------------------------------------------------ */}
+      {/* ROLE REVEAL                                                        */}
+      {/* ------------------------------------------------------------------ */}
+      {room.state === "role_reveal" ? (
+        <AnimatedEntrance enterKey="phase-role-reveal" delay={20} style={{ gap: space.md }}>
+          <View style={{ gap: space.xs }}>
+            <Text style={[type.title, { color: colors.text }]}>{copy.privateReveal}</Text>
+            <Text style={[type.body, { color: colors.textSecondary }]}>{copy.revealHint}</Text>
+          </View>
+          {myRole ? (
+            <SecretCard isImposter={isImposter} prompt={myRole.prompt} revealed={cardRevealed} onToggle={toggleCard} copy={copy} />
+          ) : null}
+          {category ? <Chip label={`${copy.category}: ${category.title}`} color={category.accent} icon="pricetag" /> : null}
+        </AnimatedEntrance>
+      ) : null}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* DISCUSSION                                                         */}
+      {/* ------------------------------------------------------------------ */}
+      {room.state === "discussion" ? (
+        <AnimatedEntrance enterKey={`phase-discussion-${room.phase_number}`} delay={20} style={{ gap: space.md }}>
+          <Card accent={ACCENT} style={{ alignItems: "center" }}>
+            <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.timeLeft}</Text>
+            <Text style={{ color: ACCENT, fontSize: 48, lineHeight: 54, fontWeight: "900", fontVariant: ["tabular-nums"] }}>
+              {phaseMinutesText}
+            </Text>
+            <Text style={[type.small, { color: colors.textSecondary, textAlign: "center" }]}>
+              {localizeMessage(room.public_message, language)}
+            </Text>
+            <Chip label={copy.readyToVoteCount(discussionReadyCount, alivePlayers.length)} color={colors.brand} icon="hand-right" />
+          </Card>
+          {myRole ? (
+            <SecretCard compact isImposter={isImposter} prompt={myRole.prompt} revealed={cardRevealed} onToggle={toggleCard} copy={copy} />
+          ) : null}
+          {isHost ? (
+            <Button
+              label={copy.openVoting}
+              icon="megaphone-outline"
+              variant="secondary"
+              size="md"
+              loading={busy === "start-voting"}
+              disabled={busy === "start-voting"}
+              onPress={() => run("start-voting", () => startImposterVoting(roomId, playerId))}
+            />
+          ) : null}
+        </AnimatedEntrance>
+      ) : null}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* VOTING                                                             */}
+      {/* ------------------------------------------------------------------ */}
+      {room.state === "voting" ? (
+        <AnimatedEntrance enterKey={`phase-voting-${room.phase_number}`} delay={20} style={{ gap: space.md }}>
+          <View style={{ gap: space.xs }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm }}>
+              <Text style={[type.title, { color: colors.text }]}>{copy.vote}</Text>
+              <Chip label={copy.votesIn(votersCount, alivePlayers.length)} color={ACCENT} icon="checkbox" />
             </View>
-          </AnimatedEntrance>
-        ) : null}
+            <Text style={[type.body, { color: colors.textSecondary }]}>{isAlive ? copy.voteHint : copy.outCantVote}</Text>
+          </View>
 
-        {room.state === "lobby" ? (
-          <AnimatedEntrance enterKey="phase-lobby" delay={70}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>LOBBY</Text>
-              <Text style={{ color: "#94A3B8", lineHeight: 22 }}>
-                Join the room, pick a category, and start once everyone is ready.
-              </Text>
-
-              <View style={{ gap: 8 }}>
-                <Text style={{ color: "#CBD5E1", fontWeight: "900" }}>Category</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  {IMPOSTER_CATEGORIES.map((entry) => {
-                    const active = room.category_id === entry.id;
-                    return (
-                      <Pressable
-                        key={entry.id}
-                        onPress={() => run(`category-${entry.id}`, () => updateImposterCategory(roomId, playerId, entry.id))}
-                        disabled={!isHost}
-                        style={({ pressed }) => ({
-                          minWidth: 132,
-                          paddingVertical: 14,
-                          paddingHorizontal: 14,
-                          borderRadius: 18,
-                          backgroundColor: active ? `${entry.accent}33` : "#111827",
-                          borderWidth: 1,
-                          borderColor: active ? `${entry.accent}AA` : "#243041",
-                          shadowColor: entry.accent,
-                          shadowOpacity: active ? 0.28 : 0,
-                          shadowRadius: 14,
-                          shadowOffset: { width: 0, height: 8 },
-                          elevation: active ? 8 : 0,
-                          opacity: !isHost ? 0.6 : pressed ? 0.92 : 1,
-                          gap: 4,
-                        })}
-                      >
-                        <Text style={{ color: active ? entry.accent : "#64748B", fontWeight: "900", fontSize: 11, letterSpacing: 1.1 }}>
-                          CATEGORY
-                        </Text>
-                        <Text style={{ color: active ? "#F8FAFC" : "#E2E8F0", fontWeight: "900", fontSize: 13, letterSpacing: 0.8 }}>
-                          {entry.title.toUpperCase()}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {!isHost ? <Text style={{ color: "#64748B" }}>Only the host can change the category.</Text> : null}
-              </View>
-
-              <View style={{ gap: 8 }}>
-                <Text style={{ color: "#CBD5E1", fontWeight: "900" }}>Players</Text>
-                {players.map((player, index) => (
-                  <AnimatedEntrance key={player.id} enterKey={`lobby-${players.length}-${player.id}`} delay={110 + index * 30} distance={10}>
-                    <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between" }}>
-                      <Text style={{ color: "white", fontWeight: "800" }}>{player.display_name}</Text>
-                      <Text style={{ color: player.id === room.host_player_id ? "#FCD34D" : "#64748B", fontWeight: "800" }}>
-                        {player.id === room.host_player_id ? "HOST" : "PLAYER"}
-                      </Text>
-                    </View>
-                  </AnimatedEntrance>
-                ))}
-              </View>
-
-              <Pressable
-                onPress={copyInviteLink}
-                style={({ pressed }) => ({
-                  height: 46,
-                  borderRadius: 14,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#111827",
-                  borderWidth: 1,
-                  borderColor: "#1F2937",
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>COPY INVITE LINK</Text>
-              </Pressable>
-              {showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
-
-              {isHost ? (
-                <Pressable
-                  onPress={() => run("start", () => startImposterGame(roomId, playerId))}
-                  disabled={busy === "start" || players.length < 3 || !room.category_id}
-                  style={({ pressed }) => ({
-                    height: 54,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#D97706",
-                    opacity: busy === "start" || players.length < 3 || !room.category_id ? 0.5 : pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>START THE GAME</Text>
-                </Pressable>
-              ) : (
-                <Text style={{ color: "#94A3B8" }}>Waiting for the host to start the game.</Text>
-              )}
-            </View>
-          </AnimatedEntrance>
-        ) : null}
-
-        {room.state === "role_reveal" ? (
-          <AnimatedEntrance enterKey="phase-role-reveal" delay={70}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>PRIVATE REVEAL</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                Read your card privately, then tap ready so the round can move to discussion.
-              </Text>
-              <Pressable
-                onPress={() => run("reveal-ready", () => finishImposterReveal(roomId, playerId))}
-                disabled={busy === "reveal-ready" || myPlayer.role_reveal_ready}
-                style={({ pressed }) => ({
-                  height: 52,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#000000",
-                  opacity: myPlayer.role_reveal_ready ? 0.6 : pressed ? 0.92 : 1,
-                })}
-              >
-                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
-                  {myPlayer.role_reveal_ready ? "READY" : "I SAW MY CARD"}
-                </Text>
-              </Pressable>
-            </View>
-          </AnimatedEntrance>
-        ) : null}
-
-        {room.state === "discussion" ? (
-          <AnimatedEntrance enterKey={`phase-discussion-${room.phase_number}`} delay={70}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>DISCUSSION</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{room.public_message}</Text>
-              <View style={{ backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937", gap: 6 }}>
-                <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>Time left</Text>
-                <Text style={{ color: "#FDBA74", fontSize: 28, fontWeight: "900" }}>{phaseMinutesText}</Text>
-                <Text style={{ color: "#94A3B8" }}>
-                  {discussionReadyCount}/{alivePlayers.length} players are ready to vote.
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => run("discussion-ready", () => submitImposterDiscussionReady(roomId, playerId))}
-                disabled={busy === "discussion-ready" || myPlayer.discussion_ready || myPlayer.status !== "alive"}
-                style={({ pressed }) => ({
-                  height: 52,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#000000",
-                  opacity: myPlayer.discussion_ready || myPlayer.status !== "alive" ? 0.6 : pressed ? 0.92 : 1,
-                })}
-              >
-                <Text style={{ color: "white", fontWeight: "900" }}>
-                  {myPlayer.status !== "alive" ? "YOU ARE OUT" : "READY TO VOTE"}
-                </Text>
-              </Pressable>
-              {isHost ? (
-                <Pressable
-                  onPress={() => run("start-voting", () => startImposterVoting(roomId, playerId))}
-                  disabled={busy === "start-voting"}
-                  style={({ pressed }) => ({
-                    height: 52,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#111827",
-                    borderWidth: 1,
-                    borderColor: "#1F2937",
-                    opacity: pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>OPEN VOTING NOW</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </AnimatedEntrance>
-        ) : null}
-
-        {room.state === "voting" ? (
-          <AnimatedEntrance enterKey={`phase-voting-${room.phase_number}`} delay={70}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Vote</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>Pick the player you think is the imposter.</Text>
-              {alivePlayers
-                .filter((player) => player.id !== myPlayer.id)
-                .map((player, index) => (
-                  <AnimatedEntrance key={player.id} enterKey={`vote-option-${room.phase_number}-${player.id}`} delay={100 + index * 28} distance={10}>
+          {isAlive ? (
+            <View style={{ gap: space.sm }} accessibilityRole="radiogroup">
+              {voteOptions.map((player, index) => {
+                const selected = selectedId === player.id;
+                const locked = myVote?.target_player_id === player.id;
+                return (
+                  <AnimatedEntrance key={player.id} enterKey={`vote-option-${room.phase_number}-${player.id}`} delay={40 + index * 28} distance={10}>
                     <Pressable
-                      onPress={() => run(`vote-${player.id}`, () => submitImposterVote(roomId, playerId, player.id))}
+                      onPress={() => setSelectedTargetId(player.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
                       style={({ pressed }) => ({
-                        paddingVertical: 12,
-                        paddingHorizontal: 14,
-                        borderRadius: 14,
-                        backgroundColor: myVote?.target_player_id === player.id ? "#D97706" : "#020617",
-                        borderWidth: 1,
-                        borderColor: myVote?.target_player_id === player.id ? "#F59E0B" : "#1F2937",
-                        opacity: pressed ? 0.92 : 1,
+                        minHeight: 64,
+                        paddingHorizontal: space.lg,
+                        borderRadius: radius.lg,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: space.md,
+                        backgroundColor: selected ? withAlpha(ACCENT, 0.18) : colors.surface,
+                        borderWidth: 2,
+                        borderColor: selected ? ACCENT : colors.border,
+                        opacity: pressed ? 0.9 : 1,
+                        transform: [{ scale: pressed ? 0.99 : 1 }],
                       })}
                     >
-                      <Text style={{ color: "white", fontWeight: "900" }}>{player.display_name}</Text>
-                    </Pressable>
-                  </AnimatedEntrance>
-                ))}
-
-              {voteTallies.length > 0 ? (
-                <View style={{ gap: 8, backgroundColor: "#020617", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#1F2937" }}>
-                  <Text style={{ color: "#F8FAFC", fontWeight: "900", textTransform: "uppercase" }}>VOTES SO FAR</Text>
-                  {voteTallies.map((entry) => (
-                    <Text key={entry.player?.id ?? `vote-${entry.count}`} style={{ color: "#CBD5E1", lineHeight: 20 }}>
-                      {entry.player?.display_name ?? "Unknown"}: {entry.count}
-                    </Text>
-                  ))}
-                </View>
-              ) : null}
-
-              {isHost ? (
-                <Pressable
-                  onPress={() => run("resolve-votes", () => resolveImposterVoting(roomId, playerId))}
-                  disabled={busy === "resolve-votes"}
-                  style={({ pressed }) => ({
-                    height: 52,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#111827",
-                    borderWidth: 1,
-                    borderColor: "#1F2937",
-                    opacity: pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>RESOLVE VOTE</Text>
-                </Pressable>
-              ) : (
-                <Text style={{ color: "#94A3B8" }}>Waiting for the host to resolve the vote.</Text>
-              )}
-            </View>
-          </AnimatedEntrance>
-        ) : null}
-
-        {room.state !== "lobby" ? (
-          <AnimatedEntrance enterKey={`players-${room.state}-${room.phase_number}`} delay={120}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>Players</Text>
-              {players.map((player, index) => {
-                const role = playerRoles.find((entry) => entry.player_id === player.id)?.role;
-                return (
-                  <AnimatedEntrance key={player.id} enterKey={`player-row-${room.phase_number}-${player.id}-${player.status}`} delay={150 + index * 24} distance={8}>
-                    <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <View style={{ gap: 4 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          <Text
-                            style={{
-                              color: player.status === "eliminated" ? "#FCA5A5" : "white",
-                              fontWeight: "800",
-                              textDecorationLine: player.status === "eliminated" ? "line-through" : "none",
-                            }}
-                          >
-                            {player.display_name}
-                          </Text>
-                          {player.id === myPlayer.id ? <Text style={{ color: "#93C5FD", fontWeight: "900", fontSize: 12 }}>YOU</Text> : null}
-                          {player.status === "eliminated" ? <Text style={{ color: "#FCA5A5", fontWeight: "900", fontSize: 11 }}>OUT</Text> : null}
-                          {room.state === "role_reveal" && player.role_reveal_ready ? <Text style={{ color: "#86EFAC", fontWeight: "900", fontSize: 11 }}>READY</Text> : null}
-                          {room.state === "discussion" && player.discussion_ready ? <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 11 }}>VOTE READY</Text> : null}
-                        </View>
-                        <Text style={{ color: "#64748B" }}>
-                          {room.state === "ended" && role ? role.toUpperCase() : player.id === room.host_player_id ? "Host" : player.status === "alive" ? "Alive" : "Eliminated"}
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: selected ? ACCENT : withAlpha(ACCENT, 0.14),
+                        }}
+                      >
+                        <Text style={{ color: selected ? onAccent(ACCENT) : ACCENT, fontWeight: "900", fontSize: 17 }}>
+                          {player.display_name.trim().charAt(0).toUpperCase() || "?"}
                         </Text>
                       </View>
-                    </View>
+                      <Text numberOfLines={1} style={{ flex: 1, color: colors.text, fontSize: 18, fontWeight: "800" }}>
+                        {player.display_name}
+                      </Text>
+                      {locked ? <Chip label={copy.yourVote} color={ACCENT} icon="checkmark" /> : null}
+                      <Ionicons
+                        name={selected ? "checkmark-circle" : "ellipse-outline"}
+                        size={28}
+                        color={selected ? ACCENT : colors.textSubtle}
+                      />
+                    </Pressable>
                   </AnimatedEntrance>
                 );
               })}
             </View>
-          </AnimatedEntrance>
-        ) : null}
+          ) : null}
 
-        <Pressable
-          onPress={() => router.replace("/")}
-          style={({ pressed }) => ({
-            height: 50,
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#111827",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-            opacity: pressed ? 0.9 : 1,
+          {voteTallies.length > 0 ? (
+            <Card style={{ gap: space.sm }}>
+              <SectionLabel>{copy.votesSoFar}</SectionLabel>
+              {voteTallies.map((entry) => (
+                <View key={entry.player?.id ?? `vote-${entry.count}`} style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+                  <Text numberOfLines={1} style={[type.body, { color: colors.textSecondary, flex: 1 }]}>
+                    {entry.player?.display_name ?? copy.unknown}
+                  </Text>
+                  <Text style={[type.bodyStrong, { color: ACCENT }]}>{entry.count}</Text>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          {isHost ? (
+            <Button
+              label={copy.resolveVote}
+              icon="flag-outline"
+              variant="secondary"
+              size="md"
+              loading={busy === "resolve-votes"}
+              disabled={busy === "resolve-votes"}
+              onPress={() => run("resolve-votes", () => resolveImposterVoting(roomId, playerId))}
+            />
+          ) : (
+            hintText(copy.waitingResolve)
+          )}
+        </AnimatedEntrance>
+      ) : null}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* ENDED (brief moment before the results screen)                     */}
+      {/* ------------------------------------------------------------------ */}
+      {room.state === "ended" ? (
+        <AnimatedEntrance enterKey="phase-ended" delay={20} style={{ gap: space.xs }}>
+          <Text style={[type.title, { color: colors.text }]}>{copy.gameOver}</Text>
+          <Text style={[type.heading, { color: winnerTone }]}>
+            {room.winner === "imposter" ? copy.imposterWins : copy.crewWins}
+          </Text>
+        </AnimatedEntrance>
+      ) : null}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* PLAYERS (in-game)                                                  */}
+      {/* ------------------------------------------------------------------ */}
+      {room.state !== "lobby" ? (
+        <View style={{ gap: space.sm }}>
+          <SectionLabel>{copy.players}</SectionLabel>
+          {players.map((player, index) => {
+            const role = playerRoles.find((entry) => entry.player_id === player.id)?.role;
+            const eliminated = player.status === "eliminated";
+            return (
+              <AnimatedEntrance key={player.id} enterKey={`player-row-${room.phase_number}-${player.id}-${player.status}`} delay={60 + index * 24} distance={8}>
+                <PlayerRow name={player.display_name} eliminated={eliminated}>
+                  {player.id === myPlayer.id ? <Chip label={copy.you} color={colors.brand} /> : null}
+                  {player.id === room.host_player_id ? <Chip label={copy.host} color={ACCENT} icon="star" /> : null}
+                  {eliminated ? <Chip label={copy.out} color={colors.danger} icon="close" /> : null}
+                  {room.state === "role_reveal" && player.role_reveal_ready ? <Chip label={copy.ready} color={colors.success} icon="checkmark" /> : null}
+                  {room.state === "discussion" && player.discussion_ready ? <Chip label={copy.voteReady} color={colors.brand} icon="hand-right" /> : null}
+                  {room.state === "ended" && role ? (
+                    <Chip label={role.toUpperCase()} color={role === "imposter" ? colors.danger : ACCENT} />
+                  ) : null}
+                </PlayerRow>
+              </AnimatedEntrance>
+            );
           })}
-        >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>BACK TO GAMES</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+        </View>
+      ) : null}
+    </Screen>
   );
 }

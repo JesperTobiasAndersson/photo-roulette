@@ -11,10 +11,10 @@ const translations: Record<Language, TranslationDict> = {
   en: {
     "language.english": "English",
     "language.swedish": "Svenska",
-    "home.subtitle": "Choose a game to get started. This home screen will expand with more games over time.",
-    "home.featured": "Featured Games",
+    "home.subtitle": "Party games for your group. Everyone plays on their own phone.",
+    "home.featured": "Pick a game",
     "home.coming_soon": "Coming Soon",
-    "home.recommended": "Recommended: {players}",
+    "home.recommended": "{players}",
     "home.legal.title": "Legal & Support",
     "home.legal.body": "Policies, contact information, and app support for Picklo.",
     "home.legal.privacy": "Privacy Policy",
@@ -25,10 +25,10 @@ const translations: Record<Language, TranslationDict> = {
     "home.footer": "Picklo is a party game collection for web and mobile.",
     "home.opening": "Opening game room...",
     "game.memematch.tagline": "Pick images. Match the statement.",
-    "game.memematch.description": "Multiplayer party game with room codes, realtime rounds, image uploads, voting, and results.",
+    "game.memematch.description": "Everyone uploads a hand of photos, plays the best match for each statement, then votes for the funniest.",
     "game.memematch.cta": "Play MemeMatch",
     "game.mafia.tagline": "Hidden roles, bluffing, and social deduction.",
-    "game.mafia.description": "Separate game module for role assignment, day and night phases, voting, and eliminations.",
+    "game.mafia.description": "Secret roles, night kills and day votes. No narrator needed: the app runs the game.",
     "game.mafia.cta": "Play Mafia",
     "game.imposter.tagline": "Blend in, improvise, and expose the fake.",
     "game.imposter.description": "Room-code bluffing game where one player is the imposter and everyone else shares the same secret word.",
@@ -50,6 +50,25 @@ const translations: Record<Language, TranslationDict> = {
     "chicago.button.create": "Create Chicago Room",
     "chicago.button.join": "Join Chicago Room",
     "common.back_to_games": "Back to games",
+    "common.back": "Back",
+    "common.players": "{range} players",
+    "common.name": "Your name",
+    "common.name_placeholder": "e.g. Alex",
+    "common.room_code": "Room code",
+    "common.create_room": "Create room",
+    "common.join_room": "Join room",
+    "common.new_room": "New room",
+    "common.have_code": "Have a code?",
+    "common.enter_name": "Enter your name first",
+    "common.enter_code": "Enter the room code",
+    "common.share": "Share",
+    "common.more_games": "More games",
+    "common.invite": "Invite friends",
+    "common.start_game": "Start game",
+    "common.waiting_for_host": "Waiting for the host to start…",
+    "common.leave": "Leave",
+    "common.play_again": "Play again",
+    "common.you": "You",
     "common.action_failed": "Action failed",
     "common.loading_chicago": "Loading Chicago",
     "common.copy_invite_link": "Copy invite link",
@@ -60,8 +79,8 @@ const translations: Record<Language, TranslationDict> = {
     "common.loading": "Loading...",
     "common.invitation_link_copied": "Invitation link copied",
     "pwa.title": "Install Picklo",
-    "pwa.ios": "In Safari, tap the Share button and then choose Add to Home Screen.",
-    "pwa.body": "Save Picklo to your home screen for the full app experience.",
+    "pwa.ios": "Tap Share, then Add to Home Screen.",
+    "pwa.body": "One tap to your games next time.",
     "pwa.install": "Install",
     "pwa.safari": "Use Safari Share",
     "pwa.not_now": "Not now",
@@ -147,10 +166,10 @@ const translations: Record<Language, TranslationDict> = {
   sv: {
     "language.english": "English",
     "language.swedish": "Svenska",
-    "home.subtitle": "Välj ett spel för att komma igång. Startsidan kommer att fyllas på med fler spel över tid.",
-    "home.featured": "Utvalda spel",
+    "home.subtitle": "Partyspel för gänget. Alla spelar på sin egen mobil.",
+    "home.featured": "Välj ett spel",
     "home.coming_soon": "Kommer snart",
-    "home.recommended": "Rekommenderat: {players}",
+    "home.recommended": "{players}",
     "home.legal.title": "Juridik & support",
     "home.legal.body": "Policyer, kontaktuppgifter och apphjälp för Picklo.",
     "home.legal.privacy": "Integritetspolicy",
@@ -161,10 +180,10 @@ const translations: Record<Language, TranslationDict> = {
     "home.footer": "Picklo är en samling partyspel för webben och mobilen.",
     "home.opening": "Öppnar spelrum...",
     "game.memematch.tagline": "Välj bilder. Matcha påståendet.",
-    "game.memematch.description": "Partyspel för flera spelare med rumskoder, liveomgångar, bilduppladdning, röstning och resultat.",
+    "game.memematch.description": "Alla laddar upp en hand med bilder, spelar den som passar bäst till påståendet och röstar fram den roligaste.",
     "game.memematch.cta": "Spela MemeMatch",
     "game.mafia.tagline": "Dolda roller, bluff och social deduction.",
-    "game.mafia.description": "Separat spelmodul för rollfördelning, dag- och nattfaser, röstning och elimineringar.",
+    "game.mafia.description": "Hemliga roller, nattmord och dagröstningar. Ingen spelledare behövs: appen sköter spelet.",
     "game.mafia.cta": "Spela Mafia",
     "game.imposter.tagline": "Smält in, improvisera och avslöja bluffen.",
     "game.imposter.description": "Bluffspel med rumskod där en spelare är impostern och alla andra delar samma hemliga ord.",
@@ -186,6 +205,25 @@ const translations: Record<Language, TranslationDict> = {
     "chicago.button.create": "Skapa Chicago-rum",
     "chicago.button.join": "Gå med i Chicago-rum",
     "common.back_to_games": "Tillbaka till spel",
+    "common.back": "Tillbaka",
+    "common.players": "{range} spelare",
+    "common.name": "Ditt namn",
+    "common.name_placeholder": "t.ex. Alex",
+    "common.room_code": "Rumskod",
+    "common.create_room": "Skapa rum",
+    "common.join_room": "Gå med",
+    "common.new_room": "Nytt rum",
+    "common.have_code": "Har du en kod?",
+    "common.enter_name": "Skriv ditt namn först",
+    "common.enter_code": "Skriv rumskoden",
+    "common.share": "Dela",
+    "common.more_games": "Fler spel",
+    "common.invite": "Bjud in vänner",
+    "common.start_game": "Starta spelet",
+    "common.waiting_for_host": "Väntar på att värden startar…",
+    "common.leave": "Lämna",
+    "common.play_again": "Spela igen",
+    "common.you": "Du",
     "common.action_failed": "Åtgärden misslyckades",
     "common.loading_chicago": "Laddar Chicago",
     "common.copy_invite_link": "Kopiera inbjudningslänk",
@@ -196,8 +234,8 @@ const translations: Record<Language, TranslationDict> = {
     "common.loading": "Laddar...",
     "common.invitation_link_copied": "Inbjudningslänken kopierad",
     "pwa.title": "Installera Picklo",
-    "pwa.ios": "I Safari, tryck på dela-knappen och välj sedan Lägg till på hemskärmen.",
-    "pwa.body": "Spara Picklo på hemskärmen för hela appupplevelsen.",
+    "pwa.ios": "Tryck på Dela och sedan Lägg till på hemskärmen.",
+    "pwa.body": "Ett tryck till spelen nästa gång.",
     "pwa.install": "Installera",
     "pwa.safari": "Använd Safaris dela-knapp",
     "pwa.not_now": "Inte nu",
@@ -305,6 +343,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       .then((value) => {
         if (value === "en" || value === "sv") {
           setLanguageState(value);
+        } else if (detectDeviceLanguage() === "sv") {
+          setLanguageState("sv");
         }
       })
       .catch(() => undefined);
@@ -371,6 +411,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+function detectDeviceLanguage(): Language {
+  try {
+    const locale =
+      typeof navigator !== "undefined" && navigator.language
+        ? navigator.language
+        : Intl.DateTimeFormat().resolvedOptions().locale;
+    return locale?.toLowerCase().startsWith("sv") ? "sv" : "en";
+  } catch {
+    return "en";
+  }
 }
 
 function normalizePokerKey(label: string) {

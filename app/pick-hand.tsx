@@ -1,21 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  Alert,
-  Image,
-  FlatList,
-  ActivityIndicator,
-  SafeAreaView,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../src/lib/supabase";
 import { compressImage, uriToArrayBuffer } from "../src/lib/imageUpload";
 import { useI18n } from "../src/lib/i18n";
+import { confirmAction, showAlert } from "../src/lib/notify";
+import { GAMES } from "../src/games/catalog";
+import { Button, Card, Chip, Screen, TopBar } from "../src/ui/components";
+import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
+
+const GAME = GAMES.memematch;
+const ACCENT = GAME.accent;
 
 type HandRow = {
   id: string;
@@ -74,6 +71,10 @@ export default function PickHandScreen() {
           delete: "Ta bort",
           emptyState: "Inga bilder än. Tryck på “Välj 5 bilder” för att börja.",
           back: "Tillbaka",
+          done: "Klart",
+          leaveTitle: "Lämna spelet?",
+          leaveBody: "Du lämnar rummet. Dina vänner kan fortsätta spela.",
+          stay: "Stanna",
         }
       : {
           errorHand: "Error (hand)",
@@ -101,6 +102,10 @@ export default function PickHandScreen() {
           delete: "Delete",
           emptyState: "No pictures yet. Tap “Pick 5 images” to start.",
           back: "Back",
+          done: "Done",
+          leaveTitle: "Leave the game?",
+          leaveBody: "You'll leave this room. Your friends can keep playing.",
+          stay: "Stay",
         };
 
   const publicUrlFor = (path: string) => {
@@ -117,7 +122,7 @@ export default function PickHandScreen() {
       .eq("player_id", playerId)
       .order("created_at", { ascending: true });
 
-    if (error) return Alert.alert(copy.errorHand, error.message);
+    if (error) return showAlert(copy.errorHand, error.message);
     setHand(data ?? []);
   };
 
@@ -133,11 +138,11 @@ export default function PickHandScreen() {
     if (busy) return;
 
     if (hand.length >= MAX_IMAGES) {
-      return Alert.alert(copy.maxReachedTitle, copy.maxReachedBody);
+      return showAlert(copy.maxReachedTitle, copy.maxReachedBody);
     }
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return Alert.alert(copy.needAccess);
+    if (!perm.granted) return showAlert(copy.needAccess);
 
     const mediaTypes =
       // @ts-ignore
@@ -160,7 +165,7 @@ export default function PickHandScreen() {
 
     const picked = assets.slice(0, remainingToPick);
     if (picked.length === 0) {
-      return Alert.alert(copy.maxReachedTitle, copy.maxReachedBody);
+      return showAlert(copy.maxReachedTitle, copy.maxReachedBody);
     }
 
     setUploadTotal(picked.length);
@@ -184,7 +189,8 @@ export default function PickHandScreen() {
           .upload(filePath, buf, { contentType: "image/jpeg", upsert: false });
 
         if (upErr) {
-          Alert.alert(copy.uploadError, upErr.message);
+          showAlert(copy.uploadError, upErr.message);
+          return; // don't create a hand row pointing at a file that never uploaded
         }
 
         const { error: insErr } = await supabase.from("player_images").insert({
@@ -195,7 +201,7 @@ export default function PickHandScreen() {
         });
 
         if (insErr) {
-          Alert.alert(copy.dbError, insErr.message);
+          showAlert(copy.dbError, insErr.message);
           return;
         }
 
@@ -219,10 +225,10 @@ export default function PickHandScreen() {
       .eq("room_id", roomId)
       .eq("player_id", playerId);
 
-    if (error) return Alert.alert(copy.errorHand, error.message);
+    if (error) return showAlert(copy.errorHand, error.message);
 
     if ((count ?? 0) < MAX_IMAGES) {
-      return Alert.alert(copy.holdOn, `${copy.uploadNotFinished} (${count ?? 0}/${MAX_IMAGES}).`);
+      return showAlert(copy.holdOn, `${copy.uploadNotFinished} (${count ?? 0}/${MAX_IMAGES}).`);
     }
 
     router.replace({ pathname: "/lobby", params: { roomId, playerId, handReady: "1" } });
@@ -231,214 +237,190 @@ export default function PickHandScreen() {
   const selectedUris = useMemo(() => hand.map((h) => publicUrlFor(h.image_path)), [hand]);
   const progress = uploadTotal > 0 ? uploadDone / uploadTotal : 0;
 
-  const Button = ({
-    title,
-    onPress,
-    disabled,
-    variant = "primary",
-  }: {
-    title: string;
-    onPress: () => void;
-    disabled?: boolean;
-    variant?: "primary" | "secondary";
-  }) => {
-    const bg = variant === "primary" ? (hand.length >= MAX_IMAGES ? "#0F766E" : "#111827") : "#374151";
-
-    return (
-      <Pressable
-        onPress={onPress}
-        disabled={disabled}
-        style={({ pressed }) => ({
-          height: 54,
-          borderRadius: 16,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: bg,
-          opacity: disabled ? 0.5 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-          flexDirection: "row",
-          gap: 10,
-        })}
-      >
-        {busy && variant === "primary" ? <ActivityIndicator color="white" /> : null}
-        <Text style={{ color: "white", fontWeight: "900", fontSize: 16, textTransform: "uppercase" }}>{title}</Text>
-      </Pressable>
-    );
+  const removeImage = async (image: HandRow) => {
+    if (busy) return;
+    const ok = await confirmAction(copy.removeImageTitle, copy.removeImageBody, {
+      confirmLabel: copy.delete,
+      cancelLabel: copy.cancel,
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await supabase.storage.from("game-images").remove([image.image_path]);
+    } catch (error) {
+      console.warn("storage remove error", error);
+    }
+    const { error: dbErr } = await supabase.from("player_images").delete().eq("id", image.id);
+    if (dbErr) {
+      showAlert(copy.dbError, dbErr.message);
+    }
+    loadHand();
   };
 
+  const leave = async () => {
+    if (busy) return;
+    const ok = await confirmAction(copy.leaveTitle, copy.leaveBody, {
+      confirmLabel: t("common.leave"),
+      cancelLabel: copy.stay,
+      destructive: true,
+    });
+    if (ok) router.replace(GAME.href as any);
+  };
+
+  const handProgress = hand.length / MAX_IMAGES;
+  const emptySlots = Array.from({ length: remainingToPick }, (_, i) => i);
+
+  const footer = canContinue ? (
+    <Button label={copy.continue} icon="checkmark-circle" accent={ACCENT} onPress={goNext} disabled={busy} />
+  ) : (
+    <Button
+      label={
+        busy
+          ? `${copy.uploading} ${uploadDone}/${uploadTotal}`
+          : remainingToPick === MAX_IMAGES
+          ? copy.pickImages
+          : `${copy.pickMoreImages} (+${remainingToPick})`
+      }
+      icon="images"
+      accent={ACCENT}
+      loading={busy}
+      onPress={pickAndUploadMany}
+      disabled={busy}
+    />
+  );
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#0B0F19" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={{ flex: 1, padding: 16, gap: 12 }}>
-          <View style={{ gap: 10 }}>
-            <Text style={{ color: "white", fontSize: 24, textTransform: "uppercase", fontWeight: "900" }}>{copy.chooseImages}</Text>
-
-            <View
-              style={{
-                backgroundColor: "#0F172A",
-                borderRadius: 18,
-                padding: 12,
-                borderWidth: 1,
-                borderColor: "#1F2937",
-                gap: 8,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ color: "#CBD5E1", textTransform: "uppercase", fontWeight: "800" }}>{copy.progress}</Text>
-
-                <View
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 999,
-                    backgroundColor: "#0B1222",
-                    borderWidth: 1,
-                    borderColor: "#1F2937",
-                  }}
-                >
-                  <Text style={{ color: "white", fontWeight: "900" }}>
-                    {hand.length}/{MAX_IMAGES}
-                    {remainingToPick > 0 ? `  (+${remainingToPick})` : " ✓"}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={{ color: "#9CA3AF", lineHeight: 20 }}>{copy.pickHint}</Text>
-
-              {busy ? (
-                <View style={{ gap: 10, marginTop: 2 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <Text style={{ color: "white", fontWeight: "900" }}>
-                      {copy.uploading} {uploadDone}/{uploadTotal}
-                    </Text>
-                    <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{Math.round(progress * 100)}%</Text>
-                  </View>
-
-                  <View
-                    style={{
-                      height: 10,
-                      borderRadius: 999,
-                      backgroundColor: "#0B1222",
-                      borderWidth: 1,
-                      borderColor: "#1F2937",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <View
-                      style={{
-                        height: "100%",
-                        width: `${Math.max(2, Math.round(progress * 100))}%`,
-                        backgroundColor: "#22C55E",
-                      }}
-                    />
-                  </View>
-
-                  <Text style={{ color: "#94A3B8", fontSize: 12 }}>{copy.uploadTip}</Text>
-                </View>
-              ) : null}
-            </View>
+    <Screen topBar={<TopBar title={copy.chooseImages} onBack={leave} />} footer={footer}>
+      {/* Progress */}
+      <Card accent={canContinue ? colors.success : ACCENT}>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: space.md }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.yourHand}</Text>
+            <Text style={[type.title, { color: colors.text }]}>
+              {hand.length} / {MAX_IMAGES} <Text style={[type.body, { color: colors.textMuted }]}>{copy.images}</Text>
+            </Text>
           </View>
+          {canContinue ? (
+            <Chip label={copy.done} color={colors.success} icon="checkmark-circle" />
+          ) : (
+            <Chip label={`+${remainingToPick}`} color={ACCENT} icon="add" />
+          )}
+        </View>
 
-          <View style={{ gap: 10 }}>
-            {canContinue ? (
-              <Button title={copy.continue} onPress={goNext} disabled={busy} variant="primary" />
-            ) : (
-              <Button
-                title={remainingToPick === MAX_IMAGES ? copy.pickImages : copy.pickMoreImages}
-                onPress={pickAndUploadMany}
-                disabled={busy}
-                variant="primary"
-              />
-            )}
-          </View>
-
+        <View style={{ height: 10, borderRadius: radius.pill, backgroundColor: colors.sunken, overflow: "hidden" }}>
           <View
             style={{
-              flex: 1,
-              backgroundColor: "#0F172A",
-              borderRadius: 20,
-              padding: 12,
-              borderWidth: 1,
-              borderColor: "#1F2937",
+              height: "100%",
+              width: `${Math.round(handProgress * 100)}%`,
+              backgroundColor: canContinue ? colors.success : ACCENT,
+              borderRadius: radius.pill,
             }}
-          >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <Text style={{ color: "white", fontSize: 16, fontWeight: "900" }}>{copy.yourHand}</Text>
-              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{selectedUris.length} {copy.images}</Text>
-            </View>
-            {hand.length > 0 ? (
-              <Text style={{ color: "#94A3B8", fontSize: 12, marginTop: 4, marginBottom: 12 }}>{copy.removeHint}</Text>
-            ) : null}
-
-            <FlatList
-              data={selectedUris}
-              keyExtractor={(x, i) => `${x}-${i}`}
-              numColumns={3}
-              columnWrapperStyle={{ gap: 8 }}
-              contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
-              renderItem={({ item, index }) => {
-                const image = hand[index];
-                const uri = publicUrlFor(image.image_path);
-                return (
-                  <Pressable
-                    onPress={() => {
-                      Alert.alert(copy.removeImageTitle, copy.removeImageBody, [
-                        { text: copy.cancel, style: "cancel" },
-                        {
-                          text: copy.delete,
-                          style: "destructive",
-                          onPress: async () => {
-                            try {
-                              await supabase.storage.from("game-images").remove([image.image_path]);
-                            } catch (error) {
-                              console.warn("storage remove error", error);
-                            }
-                            const { error: dbErr } = await supabase.from("player_images").delete().eq("id", image.id);
-                            if (dbErr) {
-                              Alert.alert(copy.dbError, dbErr.message);
-                            }
-                            loadHand();
-                          },
-                        },
-                      ]);
-                    }}
-                    style={{
-                      flex: 1,
-                      borderRadius: 14,
-                      overflow: "hidden",
-                      borderWidth: 1,
-                      borderColor: "#1F2937",
-                      backgroundColor: "#0B1222",
-                    }}
-                  >
-                    <Image source={{ uri }} style={{ width: "100%", aspectRatio: 1, height: undefined }} resizeMode="cover" />
-                  </Pressable>
-                );
-              }}
-              ListEmptyComponent={
-                <View style={{ paddingVertical: 18 }}>
-                  <Text style={{ color: "#9CA3AF", textAlign: "center", lineHeight: 20 }}>{copy.emptyState}</Text>
-                </View>
-              }
-            />
-          </View>
-
-          <Pressable
-            onPress={() => router.replace({ pathname: "/lobby", params: { roomId, playerId } })}
-            disabled={busy}
-            style={({ pressed }) => ({
-              height: 50,
-              borderRadius: 16,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#111827",
-              opacity: busy ? 0.5 : pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={{ color: "white", fontWeight: "900" }}>{copy.back || t("common.back_to_games")}</Text>
-          </Pressable>
+          />
         </View>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+
+        {busy ? (
+          <View style={{ gap: space.sm }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+                <ActivityIndicator color={ACCENT} size="small" />
+                <Text style={[type.bodyStrong, { color: colors.text }]}>
+                  {copy.uploading} {uploadDone}/{uploadTotal}
+                </Text>
+              </View>
+              <Text style={[type.bodyStrong, { color: colors.textMuted }]}>{Math.round(progress * 100)}%</Text>
+            </View>
+            <View style={{ height: 6, borderRadius: radius.pill, backgroundColor: colors.sunken, overflow: "hidden" }}>
+              <View
+                style={{
+                  height: "100%",
+                  width: `${Math.max(2, Math.round(progress * 100))}%`,
+                  backgroundColor: colors.success,
+                }}
+              />
+            </View>
+            <Text style={[type.small, { color: colors.textMuted }]}>{copy.uploadTip}</Text>
+          </View>
+        ) : (
+          <Text style={[type.small, { color: colors.textMuted }]}>{copy.pickHint}</Text>
+        )}
+      </Card>
+
+      {/* Hand grid: photos + empty "add" slots, 3 per row */}
+      <View style={{ gap: space.sm }}>
+        {hand.length > 0 ? <Text style={[type.small, { color: colors.textMuted }]}>{copy.removeHint}</Text> : null}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -space.xs }}>
+          {hand.map((image, index) => (
+            <View key={image.id} style={{ width: "33.333%", padding: space.xs }}>
+              <Pressable
+                onPress={() => removeImage(image)}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel={`${copy.removeImageTitle} ${index + 1}`}
+                style={({ pressed }) => ({
+                  width: "100%",
+                  aspectRatio: 1,
+                  borderRadius: radius.md,
+                  overflow: "hidden",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.sunken,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Image source={{ uri: selectedUris[index] }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 6,
+                    right: 6,
+                    width: 30,
+                    height: 30,
+                    borderRadius: radius.pill,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.overlay,
+                    borderWidth: 1,
+                    borderColor: colors.borderStrong,
+                  }}
+                >
+                  <Ionicons name="close" size={18} color={colors.text} />
+                </View>
+              </Pressable>
+            </View>
+          ))}
+
+          {emptySlots.map((slot) => (
+            <View key={`empty-${slot}`} style={{ width: "33.333%", padding: space.xs }}>
+              <Pressable
+                onPress={pickAndUploadMany}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel={copy.pickMoreImages}
+                style={({ pressed }) => ({
+                  width: "100%",
+                  aspectRatio: 1,
+                  borderRadius: radius.md,
+                  borderWidth: 1.5,
+                  borderStyle: "dashed",
+                  borderColor: withAlpha(ACCENT, slot === 0 ? 0.7 : 0.3),
+                  backgroundColor: pressed ? withAlpha(ACCENT, 0.14) : withAlpha(ACCENT, slot === 0 ? 0.08 : 0.03),
+                  alignItems: "center",
+                  justifyContent: "center",
+                })}
+              >
+                {busy && slot < uploadTotal - uploadDone ? (
+                  <ActivityIndicator color={ACCENT} />
+                ) : (
+                  <Ionicons name="add" size={30} color={slot === 0 ? ACCENT : withAlpha(ACCENT, 0.6)} />
+                )}
+              </Pressable>
+            </View>
+          ))}
+        </View>
+        {hand.length === 0 && !busy ? (
+          <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>{copy.emptyState}</Text>
+        ) : null}
+      </View>
+    </Screen>
   );
 }

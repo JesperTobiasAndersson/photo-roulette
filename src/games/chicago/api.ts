@@ -1,4 +1,4 @@
-import { supabase } from "../../lib/supabase";
+import { joinRoomByCode, supabase } from "../../lib/supabase";
 import {
   canFollowSuit,
   cardId,
@@ -193,36 +193,10 @@ export async function createChicagoRoom(displayName: string) {
   return { roomId: room.id, playerId: player.id, code: room.code };
 }
 
+// Joining goes through the database so it can check the room code, game state and
+// player limit, and so a player re-joining from the same phone gets their old seat back.
 export async function joinChicagoRoom(code: string, displayName: string) {
-  const trimmedCode = code.trim().toUpperCase();
-  const trimmedName = displayName.trim();
-  if (!trimmedCode || !trimmedName) throw new Error("Enter your name and room code");
-
-  const { data: room, error: roomError } = await supabase.from("chicago_rooms").select("*").eq("code", trimmedCode).single();
-  if (roomError) throw roomError;
-  if (room.state === "game_over") throw new Error("This Chicago game has already ended");
-
-  const { count, error: countError } = await supabase.from("chicago_room_players").select("*", { count: "exact", head: true }).eq("room_id", room.id);
-  if (countError) throw countError;
-  if ((count ?? 0) >= 6) throw new Error("Chicago supports up to 6 players");
-
-  const { data: player, error: playerError } = await supabase
-    .from("chicago_room_players")
-    .insert({
-      room_id: room.id,
-      display_name: trimmedName,
-      seat_order: (count ?? 0) + 1,
-      score: 0,
-      status: "active",
-      draw_ready: false,
-      trick_ready: false,
-      chicago_declared: false,
-    })
-    .select("*")
-    .single();
-  if (playerError) throw playerError;
-
-  return { roomId: room.id, playerId: player.id, code: room.code };
+  return joinRoomByCode("chicago", code, displayName);
 }
 
 export async function startChicagoRound(roomId: string, playerId: string) {

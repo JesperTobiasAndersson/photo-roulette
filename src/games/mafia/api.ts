@@ -1,4 +1,4 @@
-import { supabase } from "../../lib/supabase";
+import { joinRoomByCode, supabase } from "../../lib/supabase";
 import { assignRoles, getWinner, resolveDayVotes, resolveNightActions } from "./logic";
 import type { MafiaNightActionDto, MafiaPlayerDto, MafiaRoleDto, MafiaRoomDto } from "./types";
 
@@ -89,30 +89,10 @@ export async function createMafiaRoom(displayName: string) {
   return { roomId: room.id, playerId: player.id, code: room.code };
 }
 
+// Joining goes through the database so it can check the room code, game state and
+// player limit, and so a player re-joining from the same phone gets their old seat back.
 export async function joinMafiaRoom(code: string, displayName: string) {
-  const trimmedCode = code.trim().toUpperCase();
-  const trimmedName = displayName.trim();
-  if (!trimmedName) throw new Error("Enter a player name");
-  if (!trimmedCode) throw new Error("Enter a room code");
-
-  const { data: room, error: roomError } = await supabase.from("mafia_rooms").select("*").eq("code", trimmedCode).single();
-  if (roomError) throw roomError;
-  if (room.state !== "lobby") throw new Error("Game already started");
-
-  const { count, error: countError } = await supabase
-    .from("mafia_room_players")
-    .select("*", { count: "exact", head: true })
-    .eq("room_id", room.id);
-  if (countError) throw countError;
-
-  const { data: player, error: playerError } = await supabase
-    .from("mafia_room_players")
-    .insert({ room_id: room.id, display_name: trimmedName, seat_order: (count ?? 0) + 1, status: "alive", role_reveal_ready: false, discussion_ready: false })
-    .select("*")
-    .single();
-  if (playerError) throw playerError;
-
-  return { roomId: room.id, playerId: player.id, code: room.code };
+  return joinRoomByCode("mafia", code, displayName);
 }
 
 export async function startMafiaGame(roomId: string, playerId: string) {

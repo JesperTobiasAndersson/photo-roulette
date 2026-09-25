@@ -1,20 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getRandomStatement, type StatementCategory } from "../src/constants/statements";
-import {
-  View,
-  Text,
-  Pressable,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-} from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
-import * as Clipboard from "expo-clipboard";
-import { CopyToast } from "../src/components/CopyToast";
 import { useI18n } from "../src/lib/i18n";
+import { confirmAction, showAlert } from "../src/lib/notify";
+import { ShareButton } from "../src/components/ShareButton";
+import { GAMES } from "../src/games/catalog";
+import { Button, Card, Chip, RoomCodeBadge, Screen, SectionLabel, SegmentedControl, TopBar } from "../src/ui/components";
+import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
+import { SITE_URL } from "../src/lib/site";
+
+const GAME = GAMES.memematch;
+const ACCENT = GAME.accent;
 
 export default function Lobby() {
   const { language, t } = useI18n();
@@ -29,17 +27,14 @@ export default function Lobby() {
   const [phase, setPhase] = useState<"lobby" | "picking" | "playing" | "finished">("lobby");
   const [players, setPlayers] = useState<{ id: string; name: string }[]>([]);
   const [handCount, setHandCount] = useState<number>(0);
-  const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<StatementCategory>("innocent");
 
-  const baseUrl = Platform.OS === "web" ? window.location.origin : "https://picklo.app";
+  const baseUrl = SITE_URL;
   const inviteUrl = roomCode ? `${baseUrl}/picklo?code=${roomCode}` : "";
 
   const copy =
     language === "sv"
       ? {
-          waitTitle: "Vänta",
-          waitBody: "Rumskoden laddas fortfarande...",
           errorRoom: "Fel (rum)",
           errorPlayers: "Fel (spelare)",
           errorPhase: "Fel (fas)",
@@ -60,13 +55,22 @@ export default function Lobby() {
           descFinished: "Matchen är slut!",
           lobby: "LOBBY",
           code: "Kod",
-          copyInvite: "Kopiera inbjudningslänk",
           player: "Spelare",
           playersCount: "spelare",
-          continueToImages: "FORTSÄTT TILL BILDER",
-          startGame: "STARTA SPEL 🚀",
-          startNewRound: "STARTA NY RUNDA 🚀",
+          continueToImages: "Fortsätt till bilder",
+          startGame: "Starta spel",
+          startNewRound: "Starta ny runda",
           back: "Tillbaka",
+          leaveTitle: "Lämna spelet?",
+          leaveBody: "Du lämnar rummet. Dina vänner kan fortsätta spela.",
+          stay: "Stanna",
+          you: "Du",
+          photosReady: `${handCount}/5 bilder`,
+          waitHostContinue: "Väntar på att värden väljer kategori och fortsätter…",
+          waitHostStart: "Väntar på att värden startar spelet…",
+          waitHostRound: "Väntar på att värden startar rundan…",
+          hostHintLobby: "Bjud in alla först – sen fortsätter ni till bilderna.",
+          hostHintPicking: "Starta när alla har valt sina 5 bilder.",
           categoryTitle: "Statement-kategori",
           categoryBody: "Värden väljer en kategori för hela matchen innan spelet startar.",
           categoryInnocent: "Oskyldiga",
@@ -75,8 +79,6 @@ export default function Lobby() {
           categorySavingError: "Fel (kategori)",
         }
       : {
-          waitTitle: "Wait",
-          waitBody: "Room code is loading...",
           errorRoom: "Error (room)",
           errorPlayers: "Error (players)",
           errorPhase: "Error (phase)",
@@ -97,13 +99,22 @@ export default function Lobby() {
           descFinished: "Match is over!",
           lobby: "LOBBY",
           code: "Code",
-          copyInvite: "Copy invitation link",
           player: "Player",
           playersCount: "players",
-          continueToImages: "CONTINUE TO IMAGES",
-          startGame: "START GAME 🚀",
-          startNewRound: "START NEW ROUND 🚀",
+          continueToImages: "Continue to images",
+          startGame: "Start game",
+          startNewRound: "Start new round",
           back: "Back",
+          leaveTitle: "Leave the game?",
+          leaveBody: "You'll leave this room. Your friends can keep playing.",
+          stay: "Stay",
+          you: "You",
+          photosReady: `${handCount}/5 images`,
+          waitHostContinue: "Waiting for the host to pick a category and continue…",
+          waitHostStart: "Waiting for the host to start the game…",
+          waitHostRound: "Waiting for the host to start the round…",
+          hostHintLobby: "Invite everyone first, then continue to the images.",
+          hostHintPicking: "Start once everyone has picked their 5 images.",
           categoryTitle: "Statement category",
           categoryBody: "The host chooses one category for the whole match before the game starts.",
           categoryInnocent: "Innocent",
@@ -118,11 +129,13 @@ export default function Lobby() {
     { value: "gross", label: copy.categoryGross },
   ];
 
-  const copyInvite = async () => {
-    if (!inviteUrl) return Alert.alert(copy.waitTitle, copy.waitBody);
-    await Clipboard.setStringAsync(inviteUrl);
-    setShowCopiedToast(true);
-    setTimeout(() => setShowCopiedToast(false), 1400);
+  const leave = async () => {
+    const ok = await confirmAction(copy.leaveTitle, copy.leaveBody, {
+      confirmLabel: t("common.leave"),
+      cancelLabel: copy.stay,
+      destructive: true,
+    });
+    if (ok) router.replace(GAME.href as any);
   };
 
   const lastNavigatedRoundIdRef = useRef<string | null>(null);
@@ -156,7 +169,7 @@ export default function Lobby() {
       .eq("id", roomId)
       .single();
 
-    if (rErr) return Alert.alert(copy.errorRoom, rErr.message);
+    if (rErr) return showAlert(copy.errorRoom, rErr.message);
 
     setRoomCode(room.code);
     setHostId(room.host_player_id ?? "");
@@ -169,7 +182,7 @@ export default function Lobby() {
       .eq("room_id", roomId)
       .order("joined_at", { ascending: true });
 
-    if (pErr) return Alert.alert(copy.errorPlayers, pErr.message);
+    if (pErr) return showAlert(copy.errorPlayers, pErr.message);
     setPlayers(ps ?? []);
 
     const c = await getHandCount();
@@ -182,7 +195,7 @@ export default function Lobby() {
       .from("rooms")
       .update({ phase: "picking", statement_category: selectedCategory })
       .eq("id", roomId);
-    if (error) Alert.alert(copy.errorPhase, error.message);
+    if (error) showAlert(copy.errorPhase, error.message);
   };
 
   const setCategory = async (category: StatementCategory) => {
@@ -193,7 +206,7 @@ export default function Lobby() {
 
     if (error) {
       setSelectedCategory("innocent");
-      Alert.alert(copy.categorySavingError, error.message);
+      showAlert(copy.categorySavingError, error.message);
     }
   };
 
@@ -205,24 +218,24 @@ export default function Lobby() {
       .select("*", { count: "exact", head: true })
       .eq("room_id", roomId);
 
-    if (cErr) return Alert.alert(copy.errorPlayersCount, cErr.message);
+    if (cErr) return showAlert(copy.errorPlayersCount, cErr.message);
 
     const expected = count ?? 0;
-    if (expected < 2) return Alert.alert(copy.tooFewPlayersTitle, copy.tooFewPlayersBody);
+    if (expected < 2) return showAlert(copy.tooFewPlayersTitle, copy.tooFewPlayersBody);
 
     const { error: uErr } = await supabase
       .from("rooms")
       .update({ expected_players: expected, phase: "playing" })
       .eq("id", roomId);
 
-    if (uErr) return Alert.alert(copy.errorRoomUpdate, uErr.message);
+    if (uErr) return showAlert(copy.errorRoomUpdate, uErr.message);
 
     const { data: usedRows, error: usedErr } = await supabase
       .from("rounds")
       .select("statement")
       .eq("room_id", roomId);
 
-    if (usedErr) return Alert.alert(copy.errorRounds, usedErr.message);
+    if (usedErr) return showAlert(copy.errorRounds, usedErr.message);
 
     const usedStatements = (usedRows ?? [])
       .map((r) => r.statement)
@@ -236,7 +249,7 @@ export default function Lobby() {
       .limit(1)
       .maybeSingle();
 
-    if (lastErr) return Alert.alert(copy.errorRoundsLast, lastErr.message);
+    if (lastErr) return showAlert(copy.errorRoundsLast, lastErr.message);
 
     const nextNumber = (last?.round_number ?? 0) + 1;
     if (nextNumber > 5) return router.replace({ pathname: "/results", params: { roomId } });
@@ -254,7 +267,7 @@ export default function Lobby() {
         round_number: nextNumber,
       });
 
-    if (insErr) return Alert.alert(copy.errorRoundsInsert, insErr.message);
+    if (insErr) return showAlert(copy.errorRoundsInsert, insErr.message);
   };
 
   useEffect(() => {
@@ -336,216 +349,133 @@ export default function Lobby() {
       ? copy.descPlaying
       : copy.descFinished;
 
-  const Button = ({
-    title,
-    onPress,
-    disabled,
-    variant = "primary",
-  }: {
-    title: string;
-    onPress: () => void;
-    disabled?: boolean;
-    variant?: "primary" | "secondary";
-  }) => {
-    const bg = variant === "primary" ? "#000000" : "#374151";
-    return (
-      <Pressable
-        onPress={onPress}
-        disabled={disabled}
-        style={({ pressed }) => ({
-          height: 52,
-          borderRadius: 16,
+  const inviteMessage =
+    language === "sv"
+      ? `Häng med och spela ${GAME.title} på Picklo! Rumskod: ${roomCode}`
+      : `Join my ${GAME.title} game on Picklo! Room code: ${roomCode}`;
+
+  const categoryLocked = !isHost || phase === "playing" || phase === "finished";
+
+  const waitingText =
+    phase === "lobby" ? copy.waitHostContinue : phase === "picking" ? copy.waitHostStart : copy.waitHostRound;
+
+  const hostAction =
+    phase === "lobby"
+      ? { label: copy.continueToImages, onPress: startPicking, icon: "images" as const }
+      : phase === "picking"
+      ? { label: copy.startGame, onPress: startRound, icon: "play" as const }
+      : phase === "playing"
+      ? { label: copy.startNewRound, onPress: startRound, icon: "play" as const }
+      : null;
+
+  const footer =
+    isHost && hostAction ? (
+      <>
+        {phase === "lobby" || phase === "picking" ? (
+          <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>
+            {players.length < 2 ? copy.tooFewPlayersBody : phase === "lobby" ? copy.hostHintLobby : copy.hostHintPicking}
+          </Text>
+        ) : null}
+        <Button label={hostAction.label} icon={hostAction.icon} accent={ACCENT} onPress={hostAction.onPress} />
+      </>
+    ) : (
+      <View
+        style={{
+          minHeight: 56,
+          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: bg,
-          opacity: disabled ? 0.5 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-        })}
+          gap: space.md,
+          paddingHorizontal: space.lg,
+          borderRadius: radius.md,
+          backgroundColor: withAlpha(ACCENT, 0.1),
+          borderWidth: 1,
+          borderColor: withAlpha(ACCENT, 0.3),
+        }}
       >
-        <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>{title}</Text>
-      </Pressable>
+        <ActivityIndicator color={ACCENT} />
+        <Text style={[type.bodyStrong, { color: colors.text, flexShrink: 1 }]}>{waitingText}</Text>
+      </View>
     );
-  };
-
-  const PlayerRow = ({ name, isHostRow }: { name: string; isHostRow: boolean }) => (
-    <View
-      style={{
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: "#1F2937",
-        backgroundColor: "#0B1222",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}
-    >
-      <Text style={{ color: "white", fontWeight: "800", fontSize: 16 }}>{name}</Text>
-      {isHostRow ? (
-        <View
-          style={{
-            paddingVertical: 4,
-            paddingHorizontal: 10,
-            borderRadius: 999,
-            backgroundColor: "#111827",
-            borderWidth: 1,
-            borderColor: "#374151",
-          }}
-        >
-          <Text style={{ color: "white", fontWeight: "900", fontSize: 12 }}>{t("common.host").toUpperCase()}</Text>
-        </View>
-      ) : null}
-    </View>
-  );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#0B0F19" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={{ flex: 1, padding: 16, gap: 12 }}>
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "white", fontSize: 24, fontWeight: "900" }}>{copy.lobby}</Text>
+    <Screen topBar={<TopBar title={GAME.title} onBack={leave} />} footer={footer}>
+      {/* Room code + invite */}
+      <Card accent={ACCENT} style={{ alignItems: "center", paddingVertical: space.xl }}>
+        <RoomCodeBadge code={roomCode || "----"} label={copy.code} accent={ACCENT} />
+        {roomCode ? (
+          <View style={{ alignSelf: "stretch" }}>
+            <ShareButton label={t("common.invite")} message={inviteMessage} url={inviteUrl} accentColor={ACCENT} />
+          </View>
+        ) : null}
+      </Card>
 
-              <View
-                style={{
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  backgroundColor: "#0F172A",
-                  borderWidth: 1,
-                  borderColor: "#1F2937",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Text style={{ color: "#9CA3AF", fontWeight: "800" }}>{copy.code}</Text>
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 16, letterSpacing: 3 }}>
-                  {roomCode || "----"}
-                </Text>
-              </View>
-            </View>
+      {/* Phase */}
+      <View style={{ gap: space.xs }}>
+        <Chip label={phaseLabel} color={ACCENT} icon="time-outline" />
+        <Text style={[type.body, { color: colors.textSecondary }]}>{phaseDesc}</Text>
+      </View>
 
-            <Pressable
-              onPress={copyInvite}
-              disabled={!roomCode}
-              style={({ pressed }) => ({
-                marginTop: 10,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                backgroundColor: "#111827",
+      {/* Category */}
+      <View style={{ gap: space.sm }}>
+        <SectionLabel>{copy.categoryTitle}</SectionLabel>
+        <SegmentedControl
+          options={categoryOptions}
+          value={selectedCategory}
+          onChange={(value) => {
+            if (!categoryLocked) setCategory(value);
+          }}
+          accent={ACCENT}
+          disabled={categoryLocked}
+        />
+        <Text style={[type.small, { color: colors.textMuted }]}>{copy.categoryBody}</Text>
+      </View>
+
+      {/* Players */}
+      <View style={{ gap: space.sm }}>
+        <SectionLabel
+          right={
+            <Text style={[type.caption, { color: colors.textMuted }]}>
+              {players.length} {copy.playersCount}
+            </Text>
+          }
+        >
+          {copy.player}
+        </SectionLabel>
+        {players.map((p) => {
+          const isMe = p.id === playerId;
+          return (
+            <View
+              key={p.id}
+              style={{
+                minHeight: 56,
+                paddingHorizontal: space.lg,
+                paddingVertical: space.sm,
+                borderRadius: radius.md,
                 borderWidth: 1,
-                borderColor: "#1F2937",
-                opacity: !roomCode ? 0.5 : pressed ? 0.9 : 1,
-              })}
+                borderColor: isMe ? withAlpha(ACCENT, 0.5) : colors.border,
+                backgroundColor: isMe ? withAlpha(ACCENT, 0.08) : colors.surface,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: space.sm,
+              }}
             >
-              <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase", textAlign: "center" }}>
-                {copy.copyInvite}
+              <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text, flex: 1 }]}>
+                {p.name}
+                {isMe ? <Text style={{ color: colors.textMuted, fontWeight: "600" }}>{`  (${copy.you})`}</Text> : null}
               </Text>
-            </Pressable>
-            {showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
-
-            <View
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 14,
-                backgroundColor: "#0F172A",
-                borderWidth: 1,
-                borderColor: "#1F2937",
-              }}
-            >
-              <Text style={{ color: "white", fontWeight: "900" }}>{phaseLabel}</Text>
-              <Text style={{ color: "#9CA3AF", marginTop: 6, lineHeight: 20 }}>{phaseDesc}</Text>
+              {isMe && phase === "picking" ? (
+                <Chip
+                  label={copy.photosReady}
+                  color={handCount >= 5 ? colors.success : colors.warning}
+                  icon={handCount >= 5 ? "checkmark-circle" : "images-outline"}
+                />
+              ) : null}
+              {p.id === hostId ? <Chip label={t("common.host")} color={ACCENT} icon="star" /> : null}
             </View>
-
-            <View
-              style={{
-                paddingVertical: 12,
-                paddingHorizontal: 12,
-                borderRadius: 14,
-                backgroundColor: "#0F172A",
-                borderWidth: 1,
-                borderColor: "#1F2937",
-                gap: 10,
-              }}
-            >
-              <View>
-                <Text style={{ color: "white", fontWeight: "900" }}>{copy.categoryTitle}</Text>
-                <Text style={{ color: "#9CA3AF", marginTop: 4, lineHeight: 20 }}>{copy.categoryBody}</Text>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {categoryOptions.map((option) => {
-                  const active = option.value === selectedCategory;
-                  const disabled = !isHost || phase === "playing" || phase === "finished";
-
-                  return (
-                    <Pressable
-                      key={option.value}
-                      onPress={() => setCategory(option.value)}
-                      disabled={disabled}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        paddingVertical: 12,
-                        paddingHorizontal: 10,
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: active ? "#38BDF8" : "#1F2937",
-                        backgroundColor: active ? "#0B1222" : "#111827",
-                        opacity: disabled ? 0.7 : pressed ? 0.92 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          color: "white",
-                          fontWeight: "900",
-                          textAlign: "center",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "#0F172A",
-              borderRadius: 20,
-              padding: 14,
-              borderWidth: 1,
-              borderColor: "#1F2937",
-              gap: 12,
-            }}
-          >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "white", fontSize: 18, fontWeight: "900" }}>{copy.player}</Text>
-              <Text style={{ color: "#9CA3AF", fontWeight: "900" }}>{players.length} {copy.playersCount}</Text>
-            </View>
-
-            <FlatList
-              data={players}
-              keyExtractor={(p) => p.id}
-              contentContainerStyle={{ gap: 10, paddingBottom: 8 }}
-              renderItem={({ item }) => <PlayerRow name={item.name} isHostRow={item.id === hostId} />}
-            />
-
-            {isHost && phase === "lobby" && <Button title={copy.continueToImages} onPress={startPicking} />}
-            {isHost && phase === "picking" && <Button title={copy.startGame} onPress={startRound} />}
-            {isHost && phase === "playing" && <Button title={copy.startNewRound} onPress={startRound} />}
-          </View>
-
-          <Button title={copy.back} onPress={() => router.replace("/picklo")} variant="secondary" />
-        </View>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+          );
+        })}
+      </View>
+    </Screen>
   );
 }

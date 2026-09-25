@@ -1,145 +1,200 @@
 import React from "react";
-import { Platform, Pressable, ScrollView, Text, View } from "react-native";
-import { router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { Text, View } from "react-native";
 import { useI18n } from "../src/lib/i18n";
-import { RelatedGamesSection } from "../src/components/RelatedGamesSection";
+import { GAMES, GAME_ORDER, type GameId } from "../src/games/catalog";
+import { CatalogGameRow, RelatedGamesSection } from "../src/components/RelatedGamesSection";
 import { TopicLinksSection } from "../src/components/TopicLinksSection";
 import { WebMarketingSection } from "../src/components/WebMarketingSection";
 import { WebSeo } from "../src/components/WebSeo";
+import { Screen, SectionLabel, TopBar } from "../src/ui/components";
+import { colors, gameAccents, space, type } from "../src/ui/theme";
+import { siteUrl } from "../src/lib/site";
 
-const isWeb = Platform.OS === "web";
+const PATH = "/quiz-games";
+const ACCENT = gameAccents.musicQuiz;
+const TOPIC_GAMES: GameId[] = ["trivia", "musicQuiz"];
 
 export default function QuizGamesPage() {
-  const { language, t } = useI18n();
+  const { language } = useI18n();
   const copy =
     language === "sv"
       ? {
-          title: "Quizspel för game nights, kontor och vänskapsgrupper",
-          description:
-            "Hitta quizspel med kategorier, musikfrågor, rumskoder och snabb poängsättning på Picklo.",
+          seoTitle: "Quizspel för game nights, kontor och vänskapsgrupper",
+          description: "Spela quizspel med kategorier, musikfrågor, rumskoder och snabb poängsättning på Picklo. Gratis i mobilen, inget konto.",
           eyebrow: "Quizspel",
-          bodyTitle: "En tydligare destination för quiz- och triviaintention",
-          paragraphs: [
-            "Quiztrafik konverterar ofta bra när sidan tydligt visar vad gruppen får: enkla regler, snabb start och ett format som fungerar för många deltagare.",
-            "Picklo kombinerar vanlig trivia och musikquiz, vilket gör den här sidan mer användbar än en enskild spelsida för personer som fortfarande väljer format.",
+          heading: "Quizspel för game nights, kontor och kompisgäng",
+          intro:
+            "Två sätt att tävla: klassisk Trivia med kategorier och muntliga svar, eller Music Quiz där ni gissar låtar. Alla är med från sin egen mobil och värden håller koll på poängen.",
+          gamesTitle: "Quizspel på Picklo",
+          howEyebrow: "Så funkar det",
+          howTitle: "Starta ett quiz",
+          howParagraphs: ["Den som skapar rummet blir värd och delar ut poängen, så utse gärna någon som gillar att leda."],
+          howSteps: [
+            "Välj Trivia eller Music Quiz och tryck på Skapa rum.",
+            "Dela rumskoden så att alla kan gå med från sin mobil.",
+            "Trivia: svara högt på frågan. Music Quiz: värden spelar låten på Spotify och alla gissar.",
+            "Värden delar ut poäng. Flest poäng vinner.",
           ],
-          bullets: [
-            "Fungerar för både klassisk trivia och musikfrågor",
-            "Passar klassrum, kontor, förfester och hemmakvällar",
-            "Rumskoder gör det lätt att få in hela gruppen snabbt",
+          pickTitle: "Passar för",
+          pickParagraphs: ["Quizen funkar lika bra i vardagsrummet som på jobbet eftersom ingen behöver tävla i att skriva snabbt."],
+          pickBullets: [
+            "Spelkvällar och förfester",
+            "Fikapauser och afterwork på kontoret",
+            "Familjekvällar och klassrum",
+            "Bilresor, med Music Quiz på högtalaren",
           ],
+          faqTitle: "Vanliga frågor",
           faq: [
             {
               question: "Vilket quizspel ska vi börja med?",
-              answer: "Trivia passar bra för klassiska frågor och kategorier, medan Music Quiz passar grupper som vill ha ett mer musikdrivet upplägg.",
+              answer: "Trivia passar bra för klassiska frågor och kategorier, medan Music Quiz passar grupper som hellre vill gissa låtar.",
+            },
+            {
+              question: "Behöver alla ha Spotify för Music Quiz?",
+              answer: "Nej. Det räcker att värden spelar låtarna på Spotify i en högtalare. Övriga spelare svarar i sina egna mobiler.",
+            },
+            {
+              question: "Hur många kan vara med?",
+              answer: "Trivia passar 2–12 spelare och Music Quiz 2–20, så båda funkar för allt från en liten middag till en större fest.",
             },
           ],
-          relatedTitle: "Quizspel på Picklo",
-          exploreTitle: "Fler sätt att hitta rätt spel",
+          moreTitle: "Fler spel",
+          exploreTitle: "Hitta mer att spela",
+          topics: [
+            { href: "/party-games", title: "Partyspel", description: "Alla spel på Picklo samlade på ett ställe.", accentColor: colors.brand },
+            { href: "/social-deduction-games", title: "Bluffspel", description: "Mafia och Imposter när ni hellre vill bluffa.", accentColor: gameAccents.mafia },
+          ],
         }
       : {
-          title: "Quiz Games for Game Nights, Offices and Friend Groups",
-          description:
-            "Find quiz games with categories, music rounds, room codes and fast scoring on Picklo.",
+          seoTitle: "Quiz Games for Game Nights, Offices and Friend Groups",
+          description: "Play quiz games with categories, music rounds, room codes and fast scoring on Picklo. Free on your phone, no account.",
           eyebrow: "Quiz Games",
-          bodyTitle: "A clearer destination for quiz and trivia intent",
-          paragraphs: [
-            "Quiz traffic often converts well when the page makes the value clear: easy rules, quick setup and a format that works for multiple players.",
-            "Picklo combines classic trivia with music quiz formats, which makes this page more useful than a single game page for visitors who are still choosing the style they want.",
+          heading: "Quiz games for game nights, offices and friend groups",
+          intro:
+            "Two ways to compete: classic Trivia with categories and spoken answers, or Music Quiz where you guess the song. Everyone plays on their own phone while the host keeps score.",
+          gamesTitle: "Quiz games on Picklo",
+          howEyebrow: "How it works",
+          howTitle: "Start a quiz",
+          howParagraphs: ["Whoever creates the room becomes the host and awards the points, so pick someone who likes running the show."],
+          howSteps: [
+            "Choose Trivia or Music Quiz and tap Create room.",
+            "Share the room code so everyone can join on their phone.",
+            "Trivia: answer the question out loud. Music Quiz: the host plays the track on Spotify and everyone guesses.",
+            "The host awards points. Highest score wins.",
           ],
-          bullets: [
-            "Works for both classic trivia and music rounds",
-            "Fits classrooms, offices, pregames and house nights",
-            "Room codes make it easy to bring the whole group in fast",
+          pickTitle: "Great for",
+          pickParagraphs: ["The quizzes work just as well in a living room as at the office, because nobody has to race to type on a tiny keyboard."],
+          pickBullets: [
+            "Game nights and pregames",
+            "Office breaks and after-work",
+            "Family nights and classrooms",
+            "Road trips, with Music Quiz on the car speakers",
           ],
+          faqTitle: "FAQ",
           faq: [
             {
               question: "Which quiz game should we start with?",
-              answer: "Trivia is a strong option for classic categories and spoken questions, while Music Quiz is better for groups that want a more song-focused setup.",
+              answer: "Trivia is a great pick for classic categories and spoken questions, while Music Quiz suits groups that would rather guess songs.",
+            },
+            {
+              question: "Does everyone need Spotify for Music Quiz?",
+              answer: "No. Only the host needs to play the tracks on Spotify through a speaker. Everyone else answers on their own phone.",
+            },
+            {
+              question: "How many people can play?",
+              answer: "Trivia suits 2–12 players and Music Quiz 2–20, so both work for anything from a small dinner to a bigger party.",
             },
           ],
-          relatedTitle: "Quiz Games on Picklo",
-          exploreTitle: "More Ways To Find The Right Game",
+          moreTitle: "More games",
+          exploreTitle: "Find more to play",
+          topics: [
+            { href: "/party-games", title: "Party Games", description: "Every game on Picklo in one place.", accentColor: colors.brand },
+            { href: "/social-deduction-games", title: "Social Deduction Games", description: "Mafia and Imposter for when you'd rather bluff.", accentColor: gameAccents.mafia },
+          ],
         };
 
   const structuredData = [
     {
       "@context": "https://schema.org",
       "@type": "WebPage",
-      name: copy.title,
+      name: copy.seoTitle,
       description: copy.description,
-      url: "https://picklo.se/quiz-games",
+      url: siteUrl(PATH),
     },
     {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Picklo", item: "https://picklo.se/" },
-        { "@type": "ListItem", position: 2, name: copy.eyebrow, item: "https://picklo.se/quiz-games" },
+        { "@type": "ListItem", position: 1, name: "Picklo", item: siteUrl("/") },
+        { "@type": "ListItem", position: 2, name: copy.eyebrow, item: siteUrl(PATH) },
       ],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: copy.gamesTitle,
+      itemListElement: TOPIC_GAMES.map((id, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: GAMES[id].title,
+        url: siteUrl(GAMES[id].href),
+      })),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: copy.faq.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
     },
   ];
 
-  const relatedGames =
-    language === "sv"
-      ? [
-          { href: "/trivia", title: "Trivia", description: "Kategorier, muntliga svar och enkel hoststyrd rättning.", accentColor: "#F97316" },
-          { href: "/music-quiz", title: "Music Quiz", description: "Spotify-länkar, omslagsreveal och snabb poängsättning.", accentColor: "#22C55E" },
-        ]
-      : [
-          { href: "/trivia", title: "Trivia", description: "Categories, spoken answers and simple host scoring.", accentColor: "#F97316" },
-          { href: "/music-quiz", title: "Music Quiz", description: "Spotify links, cover reveals and fast scoring.", accentColor: "#22C55E" },
-        ];
-
-  const topicLinks =
-    language === "sv"
-      ? [
-          { href: "/party-games", title: "Partyspel", description: "En bredare guide till gruppspel på Picklo.", accentColor: "#38BDF8" },
-          { href: "/social-deduction-games", title: "Social deduction-spel", description: "För grupper som vill ha bluff och roller i stället.", accentColor: "#F43F5E" },
-        ]
-      : [
-          { href: "/party-games", title: "Party Games", description: "A broader guide to multiplayer group games on Picklo.", accentColor: "#38BDF8" },
-          { href: "/social-deduction-games", title: "Social Deduction Games", description: "For groups that want bluffing and hidden roles instead.", accentColor: "#F43F5E" },
-        ];
-
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
+    <Screen topBar={<TopBar backHref="/" />}>
       <WebSeo
-        title={copy.title}
+        title={copy.seoTitle}
         description={copy.description}
         lang={language}
-        path="/quiz-games"
+        path={PATH}
         keywords={["quiz games", "trivia game", "music quiz", "multiplayer quiz", "quiz game for friends"]}
         structuredData={structuredData}
       />
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 20, paddingTop: isWeb ? 32 : 20, paddingBottom: 32, alignItems: "center" }}>
-        <View style={{ width: "100%", maxWidth: 760 }}>
-          <Text style={{ color: "#86EFAC", fontSize: 12, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>{copy.eyebrow}</Text>
-          <Text style={{ color: "#F8FAFC", fontSize: 36, fontWeight: "900", marginTop: 10 }}>{copy.title}</Text>
-          <Text style={{ color: "#94A3B8", fontSize: 16, lineHeight: 26, marginTop: 12 }}>{copy.description}</Text>
-          <Pressable
-            onPress={() => router.replace("/")}
-            style={({ pressed }) => ({
-              marginTop: 18,
-              alignSelf: "flex-start",
-              paddingVertical: 12,
-              paddingHorizontal: 16,
-              borderRadius: 16,
-              backgroundColor: "#111827",
-              borderWidth: 1,
-              borderColor: "#1F2937",
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={{ color: "white", fontWeight: "900" }}>{t("common.back_to_home")}</Text>
-          </Pressable>
-          <WebMarketingSection eyebrow={copy.eyebrow} title={copy.bodyTitle} paragraphs={copy.paragraphs} bullets={copy.bullets} faq={copy.faq} />
-          <RelatedGamesSection title={copy.relatedTitle} games={relatedGames} />
-          <TopicLinksSection title={copy.exploreTitle} topics={topicLinks} />
-        </View>
-      </ScrollView>
-    </View>
+
+      <View style={{ gap: space.sm }}>
+        <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{copy.eyebrow}</Text>
+        <Text accessibilityRole="header" style={[type.title, { color: colors.text }]}>
+          {copy.heading}
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 25 }}>{copy.intro}</Text>
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <SectionLabel>{copy.gamesTitle}</SectionLabel>
+        {TOPIC_GAMES.map((id) => (
+          <CatalogGameRow key={id} gameId={id} />
+        ))}
+      </View>
+
+      <WebMarketingSection
+        eyebrow={copy.howEyebrow}
+        title={copy.howTitle}
+        paragraphs={copy.howParagraphs}
+        bullets={copy.howSteps}
+        accentColor={ACCENT}
+      />
+      <WebMarketingSection
+        title={copy.pickTitle}
+        paragraphs={copy.pickParagraphs}
+        bullets={copy.pickBullets}
+        faq={copy.faq}
+        faqTitle={copy.faqTitle}
+        accentColor={ACCENT}
+      />
+
+      <RelatedGamesSection title={copy.moreTitle} gameIds={GAME_ORDER.filter((id) => !TOPIC_GAMES.includes(id))} />
+      <TopicLinksSection title={copy.exploreTitle} topics={copy.topics} />
+    </Screen>
   );
 }

@@ -1,11 +1,15 @@
 import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
-import { router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { Text, View } from "react-native";
+import { Link } from "expo-router";
 import { useI18n } from "../src/lib/i18n";
+import { WebSeo } from "../src/components/WebSeo";
+import { Screen, TopBar } from "../src/ui/components";
+import { colors, space, type } from "../src/ui/theme";
+
+const PAGE_PATH = "/privacy-policy";
 
 export default function PrivacyPolicyScreen() {
-  const { language, t } = useI18n();
+  const { language } = useI18n();
 
   const copy =
     language === "sv"
@@ -24,14 +28,15 @@ export default function PrivacyPolicyScreen() {
             [
               "Hur vi använder information",
               [
-                "Vi använder information för att driva spelrum, synka live-spel, lagra resultat, hantera uppladdat innehåll, stödja premiumfunktioner, svara på supportärenden, förbättra tillförlitlighet och hålla plattformen säker.",
+                "Vi använder information för att driva spelrum, synka live-spel, lagra resultat, hantera uppladdat innehåll, svara på supportärenden, förbättra tillförlitlighet och hålla plattformen säker.",
                 "På webben kan vi också använda cookies, lokal lagring eller liknande teknik för att komma ihåg inställningar, hålla sessioner igång och stödja webbplatsens funktioner.",
+                "Picklo visar ingen reklam och använder inga spårnings- eller annonscookies. Lokal lagring används bara för inställningar som språk och ditt senaste spelarnamn, samt för att hålla din anonyma spelsession igång.",
               ],
             ],
             [
               "Hur information delas",
               [
-                "Vi kan dela information med tjänsteleverantörer som hjälper oss att hosta appen, lagra innehåll, hantera betalningar, leverera prenumerationer, tillhandahålla infrastruktur och visa annonser. Vi säljer inte personuppgifter för pengar.",
+                "Vi kan dela information med tjänsteleverantörer som hjälper oss att hosta appen, lagra innehåll, och tillhandahålla infrastruktur. Vi säljer inte personuppgifter för pengar.",
                 "Vi kan också lämna ut information när lagen kräver det, för att upprätthålla våra villkor eller för att skydda användare, appen eller allmänheten.",
               ],
             ],
@@ -72,14 +77,15 @@ export default function PrivacyPolicyScreen() {
             [
               "How we use information",
               [
-                "We use information to operate game rooms, sync live gameplay, store results, process uploaded content, support premium access, respond to support requests, improve reliability, and keep the platform safe.",
+                "We use information to operate game rooms, sync live gameplay, store results, process uploaded content, respond to support requests, improve reliability, and keep the platform safe.",
                 "On the web, we may also use cookies, local storage, or similar technologies to remember preferences, maintain sessions, and support site functionality.",
+                "Picklo shows no ads and uses no tracking or advertising cookies. Local storage is only used for settings such as language and your last player name, and to keep your anonymous game session signed in.",
               ],
             ],
             [
               "How information is shared",
               [
-                "We may share information with service providers that help us host the app, store content, process payments, deliver subscriptions, provide infrastructure, and serve advertising. We do not sell personal information for money.",
+                "We may share information with service providers that help us host the app, store content, and provide infrastructure. We do not sell personal information for money.",
                 "We may also disclose information when required by law, to enforce our terms, or to protect users, the app, or the public.",
               ],
             ],
@@ -107,39 +113,32 @@ export default function PrivacyPolicyScreen() {
         };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-        <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>{copy.title}</Text>
-        <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{copy.intro}</Text>
+    <Screen topBar={<TopBar backHref="/" />}>
+      <WebSeo title={`${copy.title} | Picklo`} description={copy.intro} lang={language} path={PAGE_PATH} />
 
-        {copy.sections.map(([title, paragraphs]) => (
-          <View key={title} style={{ gap: 12, backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B" }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 18 }}>{title}</Text>
-            {paragraphs.map((paragraph) => (
-              <Text key={paragraph} style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                {paragraph}
-              </Text>
-            ))}
-          </View>
-        ))}
+      <View style={{ gap: space.sm }}>
+        <Text accessibilityRole="header" style={[type.title, { color: colors.text }]}>
+          {copy.title}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 15, lineHeight: 23 }}>{copy.intro}</Text>
+      </View>
 
-        <Pressable
-          onPress={() => router.replace("/")}
-          style={({ pressed }) => ({
-            height: 52,
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#111827",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-            opacity: pressed ? 0.9 : 1,
-          })}
-        >
-          <Text style={{ color: "white", fontWeight: "900" }}>{t("common.back_to_home")}</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+      {copy.sections.map(([title, paragraphs]) => (
+        <View key={title} style={{ gap: space.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.lg }}>
+          <Text accessibilityRole="header" style={[type.heading, { color: colors.text }]}>
+            {title}
+          </Text>
+          {paragraphs.map((paragraph) => (
+            <Text key={paragraph} style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 25 }}>
+              {paragraph}
+            </Text>
+          ))}
+        </View>
+      ))}
+
+      <Link href="/contact" style={{ color: colors.brand, fontSize: 15, fontWeight: "700", paddingVertical: space.sm }}>
+        {language === "sv" ? "Frågor? Kontakta oss" : "Questions? Contact us"}
+      </Link>
+    </Screen>
   );
 }

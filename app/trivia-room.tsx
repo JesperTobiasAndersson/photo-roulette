@@ -1,16 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Easing, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { SupportPicklo } from "../src/components/SupportPicklo";
+import { ActivityIndicator, Animated, Easing, Platform, Pressable, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import * as Clipboard from "expo-clipboard";
-import { Image } from "react-native";
-import { CopyToast } from "../src/components/CopyToast";
+import { Ionicons } from "@expo/vector-icons";
+import { ShareButton } from "../src/components/ShareButton";
+import { GAMES } from "../src/games/catalog";
 import { TRIVIA_CATEGORIES, type TriviaCategory } from "../src/games/trivia/data";
 import { revealTriviaAnswer, resetTriviaToLobby, scoreTriviaTurn, startTriviaGame } from "../src/games/trivia/api";
 import { useTriviaRoom } from "../src/games/trivia/useTriviaRoom";
 import { useI18n } from "../src/lib/i18n";
+import { confirmAction, showAlert } from "../src/lib/notify";
+import { Button, Card, Chip, RoomCodeBadge, Screen, SectionLabel, TopBar, type IconName } from "../src/ui/components";
+import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
+import { SITE_URL } from "../src/lib/site";
 
 const QUESTIONS_PER_PLAYER = 6;
+const GAME = GAMES.trivia;
+const ACCENT = GAME.accent;
 
 function asString(value: unknown): string {
   if (typeof value === "string") return value;
@@ -25,13 +31,11 @@ export default function TriviaRoomScreen() {
   const playerId = asString(params.playerId);
   const { room, players, myPlayer, currentTurn, loading, refresh } = useTriviaRoom(roomId, playerId);
   const [busy, setBusy] = useState<string | null>(null);
-  const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<TriviaCategory[]>(["Mat"]);
-  const baseUrl = Platform.OS === "web" ? window.location.origin : "https://picklo.app";
+  const baseUrl = SITE_URL;
   const questionOpacity = useRef(new Animated.Value(1)).current;
   const questionTranslateY = useRef(new Animated.Value(0)).current;
   const questionScale = useRef(new Animated.Value(1)).current;
-  const questionGlow = useRef(new Animated.Value(0.18)).current;
   const revealOpacity = useRef(new Animated.Value(0)).current;
   const revealTranslateY = useRef(new Animated.Value(18)).current;
   const revealScale = useRef(new Animated.Value(0.96)).current;
@@ -76,6 +80,28 @@ export default function TriviaRoomScreen() {
           category: "Kategori",
           question: "Fråga",
           answer: "Svar",
+          // UI pass additions
+          youHost: "Du är värd",
+          youPlayer: "Du spelar",
+          you: "Du",
+          hostLobbyTitle: "Välj kategori och starta",
+          playerLobbyTitle: "Väntar på värden",
+          hostQuestionTitle: "Läs upp frågan högt",
+          hostQuestionTitleSelf: "Din tur – läs upp och svara",
+          hostQuestionBody: "Låt {player} svara muntligt och tryck sedan på Visa svar.",
+          activeQuestionTitle: "Din tur! Svara högt",
+          activeQuestionBody: "Värden visar facit när du har svarat.",
+          hostRevealTitle: "Var svaret rätt?",
+          hostRevealBody: "Tryck Rätt eller Fel nedan för {player}.",
+          playerRevealTitle: "Värden dömer svaret",
+          answering: "Svarar",
+          playerDoneBody: "Värden kan starta en ny omgång från lobbyn.",
+          leaveTitle: "Lämna rummet?",
+          leaveBody: "Du lämnar spelet. Du kan gå med igen med rumskoden.",
+          leave: "Lämna",
+          cancel: "Avbryt",
+          shareMessage: "Kör Trivia med mig på Picklo! Rumskod: {code}",
+          categoryTurn: "Du väljer en kategori för hela spelet.",
         }
       : {
           loading: "Loading Trivia",
@@ -113,6 +139,28 @@ export default function TriviaRoomScreen() {
           category: "Category",
           question: "Question",
           answer: "Answer",
+          // UI pass additions
+          youHost: "You're the host",
+          youPlayer: "You're playing",
+          you: "You",
+          hostLobbyTitle: "Pick a category and start",
+          playerLobbyTitle: "Waiting for the host",
+          hostQuestionTitle: "Read the question out loud",
+          hostQuestionTitleSelf: "Your turn: read it and answer",
+          hostQuestionBody: "Let {player} answer out loud, then tap Show answer.",
+          activeQuestionTitle: "Your turn! Answer out loud",
+          activeQuestionBody: "The host reveals the answer once you've said it.",
+          hostRevealTitle: "Was the answer right?",
+          hostRevealBody: "Tap Correct or Wrong below for {player}.",
+          playerRevealTitle: "The host is judging the answer",
+          answering: "Answering",
+          playerDoneBody: "The host can start a new round from the lobby.",
+          leaveTitle: "Leave the room?",
+          leaveBody: "You'll leave the game. You can rejoin with the room code.",
+          leave: "Leave",
+          cancel: "Cancel",
+          shareMessage: "Play Trivia with me on Picklo! Room code: {code}",
+          categoryTurn: "You pick one category for the whole game.",
         };
 
   const isHost = !!room && !!myPlayer && room.host_player_id === myPlayer.id;
@@ -136,7 +184,6 @@ export default function TriviaRoomScreen() {
     questionOpacity.setValue(0);
     questionTranslateY.setValue(26);
     questionScale.setValue(0.97);
-    questionGlow.setValue(0.08);
     revealOpacity.setValue(room?.state === "reveal" ? 1 : 0);
     revealTranslateY.setValue(room?.state === "reveal" ? 0 : 18);
     revealScale.setValue(room?.state === "reveal" ? 1 : 0.96);
@@ -160,22 +207,8 @@ export default function TriviaRoomScreen() {
         tension: 56,
         useNativeDriver: true,
       }),
-      Animated.sequence([
-        Animated.timing(questionGlow, {
-          toValue: 0.34,
-          duration: 220,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(questionGlow, {
-          toValue: 0.18,
-          duration: 520,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: false,
-        }),
-      ]),
     ]).start();
-  }, [currentTurn?.id, questionGlow, questionOpacity, questionScale, questionTranslateY, revealOpacity, revealScale, revealTranslateY, room?.state]);
+  }, [currentTurn?.id, questionOpacity, questionScale, questionTranslateY, revealOpacity, revealScale, revealTranslateY, room?.state]);
 
   useEffect(() => {
     if (room?.state !== "reveal") {
@@ -236,17 +269,10 @@ export default function TriviaRoomScreen() {
       await fn();
       await refresh();
     } catch (error) {
-      Alert.alert(copy.actionFailed, String((error as Error)?.message ?? error));
+      showAlert(copy.actionFailed, String((error as Error)?.message ?? error));
     } finally {
       setBusy(null);
     }
-  };
-
-  const copyInvite = async () => {
-    if (!inviteUrl) return;
-    await Clipboard.setStringAsync(inviteUrl);
-    setShowCopiedToast(true);
-    setTimeout(() => setShowCopiedToast(false), 1400);
   };
 
   const toggleCategory = (category: TriviaCategory) => {
@@ -264,325 +290,387 @@ export default function TriviaRoomScreen() {
   const markTurn = (wasCorrect: boolean) => run(wasCorrect ? "correct" : "wrong", async () => scoreTriviaTurn(roomId, playerId, wasCorrect));
   const resetGame = () => run("reset", async () => resetTriviaToLobby(roomId, playerId));
 
+  const leaveRoom = async () => {
+    if (room?.state !== "completed") {
+      const ok = await confirmAction(copy.leaveTitle, copy.leaveBody, { confirmLabel: copy.leave, cancelLabel: copy.cancel, destructive: true });
+      if (!ok) return;
+    }
+    router.replace(GAME.href as any);
+  };
+
   if (loading || !room) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
-        <StatusBar style="light" />
-        <Text style={{ color: "white", fontSize: 32, fontWeight: "900", textAlign: "center" }}>{copy.loading}</Text>
-      </View>
+      <Screen topBar={<TopBar title={GAME.title} backHref={GAME.href} />} centered>
+        <View style={{ alignItems: "center", gap: space.md }}>
+          <ActivityIndicator color={ACCENT} size="large" />
+          <Text style={[type.bodyStrong, { color: colors.textSecondary }]}>{copy.loading}</Text>
+        </View>
+      </Screen>
     );
   }
 
+  const activeName = activePlayer?.display_name ?? "-";
+  const inTurn = gameInProgress && !!currentTurn;
+
+  // What this phone should do right now.
+  const banner: { icon: IconName; title: string; body?: string | null } | null =
+    room.state === "lobby"
+      ? isHost
+        ? { icon: "options", title: copy.hostLobbyTitle, body: copy.setupBody }
+        : { icon: "hourglass", title: copy.playerLobbyTitle, body: room.public_message ?? copy.waitingHost }
+      : inTurn
+        ? room.state === "question"
+          ? isHost
+            ? {
+                icon: "megaphone",
+                title: isActivePlayer ? copy.hostQuestionTitleSelf : copy.hostQuestionTitle,
+                body: copy.hostQuestionBody.replace("{player}", activeName),
+              }
+            : isActivePlayer
+              ? { icon: "mic", title: copy.activeQuestionTitle, body: copy.activeQuestionBody }
+              : { icon: "hourglass", title: copy.waitingForReveal, body: copy.currentQuestionFor.replace("{player}", activeName) }
+          : isHost
+            ? { icon: "checkmark-done", title: copy.hostRevealTitle, body: copy.hostRevealBody.replace("{player}", activeName) }
+            : { icon: "hourglass", title: copy.playerRevealTitle, body: isActivePlayer ? null : copy.waitingForTurn }
+        : room.state === "completed"
+          ? isHost ? null : { icon: "trophy", title: copy.finalTitle, body: copy.playerDoneBody }
+          : { icon: "hourglass", title: room.public_message ?? copy.waitingHost };
+
+  // ---------------------------------------------------------------------------
+  // Footer: host controls in thumb reach.
+  // ---------------------------------------------------------------------------
+  let footer: React.ReactNode = null;
+  if (room.state === "lobby" && isHost) {
+    footer = <Button label={copy.startGame} icon="play" accent={ACCENT} onPress={beginGame} loading={busy === "start"} />;
+  } else if (inTurn && isHost && room.state === "question") {
+    footer = <Button label={copy.reveal} icon="eye" accent={ACCENT} onPress={revealAnswer} loading={busy === "reveal"} disabled={!canReveal} />;
+  } else if (inTurn && isHost && room.state === "reveal") {
+    footer = (
+      <View style={{ flexDirection: "row", gap: space.sm }}>
+        <Button
+          label={copy.markWrong}
+          icon="close-circle"
+          variant="danger"
+          onPress={() => markTurn(false)}
+          loading={busy === "wrong"}
+          disabled={busy === "correct"}
+          style={{ flex: 1, minHeight: 64 }}
+        />
+        <Button
+          label={copy.markCorrect}
+          icon="checkmark-circle"
+          accent={colors.success}
+          onPress={() => markTurn(true)}
+          loading={busy === "correct"}
+          disabled={busy === "wrong"}
+          style={{ flex: 1, minHeight: 64 }}
+        />
+      </View>
+    );
+  } else if (room.state === "completed" && isHost) {
+    footer = <Button label={copy.reset} icon="refresh" accent={ACCENT} onPress={resetGame} loading={busy === "reset"} />;
+  }
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-        <View style={{ gap: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View
-              style={{
-                width: 58,
-                height: 58,
-                borderRadius: 16,
-                overflow: "hidden",
-                borderWidth: 1,
-                borderColor: "rgba(249,115,22,0.35)",
-                backgroundColor: "#111827",
-              }}
-            >
-              <Image source={require("../assets/trivia.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+    <Screen
+      topBar={
+        <TopBar
+          title={GAME.title}
+          onBack={leaveRoom}
+          right={room.state !== "lobby" ? <Chip label={room.code} icon="key" color={colors.textMuted} /> : undefined}
+        />
+      }
+      footer={footer}
+    >
+      {banner ? <RoleBanner isHost={isHost} roleLabel={isHost ? copy.youHost : copy.youPlayer} icon={banner.icon} title={banner.title} body={banner.body} /> : null}
+
+      {/* Lobby */}
+      {room.state === "lobby" ? (
+        <>
+          <Card accent={ACCENT} style={{ alignItems: "center", gap: space.md }}>
+            <RoomCodeBadge code={room.code} label={t("common.room_code")} accent={ACCENT} />
+            <View style={{ alignSelf: "stretch" }}>
+              <ShareButton label={t("common.invite")} message={copy.shareMessage.replace("{code}", room.code)} url={inviteUrl} accentColor={ACCENT} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "white", fontSize: 30, fontWeight: "900" }}>Trivia</Text>
-              <Text style={{ color: "#94A3B8" }}>{copy.roomCode.replace("{code}", room.code)}</Text>
-            </View>
+          </Card>
+
+          <View style={{ gap: space.sm }}>
+            <SectionLabel right={<Text style={[type.caption, { color: colors.textMuted }]}>{players.length}</Text>}>{copy.players}</SectionLabel>
+            {players.map((player) => (
+              <PlayerRow
+                key={player.id}
+                name={player.display_name}
+                isHost={player.id === room.host_player_id}
+                isMe={player.id === myPlayer?.id}
+                hostLabel={t("common.host")}
+                youLabel={copy.you}
+              />
+            ))}
+            {isHost && players.length < 2 ? <Text style={[type.small, { color: colors.warning }]}>{copy.needPlayers}</Text> : null}
           </View>
-          {!gameInProgress ? <Text style={{ color: "#E2E8F0", fontWeight: "900" }}>{room.public_message ?? copy.waitingHost}</Text> : null}
-        </View>
 
-        {!gameInProgress ? (
-        <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{copy.players}</Text>
-            <Text style={{ color: "#94A3B8", fontWeight: "900" }}>{players.length}</Text>
-          </View>
-          {players.map((player) => (
-            <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={{ color: "white", fontWeight: "900" }}>{player.display_name}</Text>
-                <Text style={{ color: "#94A3B8" }}>{copy.answered.replace("{count}", String(player.correct_answers ?? 0))}</Text>
+          {isHost ? (
+            <Card>
+              <Text style={[type.heading, { color: colors.text }]}>{copy.category}</Text>
+              <Text style={[type.small, { color: colors.textMuted }]}>{copy.categoryTurn}</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+                {TRIVIA_CATEGORIES.map((category) => (
+                  <CategoryChip key={category} label={category} active={selectedCategories.includes(category)} onPress={() => toggleCategory(category)} />
+                ))}
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {player.id === room.host_player_id ? (
-                  <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(249,115,22,0.14)", borderWidth: 1, borderColor: "rgba(249,115,22,0.3)" }}>
-                    <Text style={{ color: "#FDBA74", fontWeight: "900", fontSize: 12 }}>{copy.host}</Text>
-                  </View>
-                ) : null}
-                <Text style={{ color: "#E2E8F0", fontWeight: "900" }}>{player.score}p</Text>
-              </View>
-            </View>
-          ))}
-          <Pressable onPress={copyInvite} style={({ pressed }) => ({ height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#111827", borderWidth: 1, borderColor: "#1F2937", opacity: pressed ? 0.92 : 1 })}>
-            <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.copyInvite}</Text>
-          </Pressable>
-          {showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
-        </View>
-        ) : null}
-
-        {room.state === "lobby" ? (
-          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{copy.setup}</Text>
-            <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{copy.setupBody}</Text>
-            {isHost ? (
-              <>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  {TRIVIA_CATEGORIES.map((category) => {
-                    const active = selectedCategories.includes(category);
-                    return (
-                      <Pressable
-                        key={category}
-                        onPress={() => toggleCategory(category)}
-                        style={({ pressed }) => ({
-                          paddingVertical: 12,
-                          paddingHorizontal: 14,
-                          borderRadius: 999,
-                          backgroundColor: active ? "#7C2D12" : "#111827",
-                          borderWidth: active ? 2 : 1,
-                          borderColor: active ? "#FDBA74" : "#334155",
-                          opacity: pressed ? 0.92 : 1,
-                        })}
-                      >
-                        <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{category}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <View style={{ paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: "#111827", borderWidth: 1, borderColor: "#1F2937", gap: 4 }}>
-                  <Text style={{ color: "#94A3B8", fontSize: 12, fontWeight: "800", textTransform: "uppercase" }}>{copy.selected}</Text>
-                  <Text style={{ color: "white", fontWeight: "900" }}>{copy.selectedCategories}: {selectedCategories.join(", ")}</Text>
-                </View>
-                <Pressable onPress={beginGame} disabled={busy === "start"} style={({ pressed }) => ({ minHeight: 54, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#EA580C", opacity: busy === "start" ? 0.6 : pressed ? 0.92 : 1 })}>
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.startGame}</Text>
-                </Pressable>
-              </>
-            ) : (
-              <Text style={{ color: "#CBD5E1" }}>{copy.waitingHost}</Text>
-            )}
-          </View>
-        ) : null}
-
-        {(room.state === "question" || room.state === "reveal") && currentTurn ? (
-          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{copy.turnLive}</Text>
-            <Animated.View
-              style={{
-                opacity: questionOpacity,
-                transform: [{ translateY: questionTranslateY }, { scale: questionScale }],
-              }}
-            >
-              <View
-                style={{
-                  padding: 16,
-                  borderRadius: 20,
-                  backgroundColor: "#020617",
-                  borderWidth: 1,
-                  borderColor: "#1F2937",
-                  gap: 10,
-                  shadowColor: "#FB923C",
-                  shadowOpacity: questionGlow as any,
-                  shadowRadius: 22,
-                  shadowOffset: { width: 0, height: 10 },
-                  elevation: 12,
-                }}
-              >
-                <Text style={{ color: "#94A3B8", fontWeight: "800", textTransform: "uppercase", fontSize: 12 }}>{copy.question}</Text>
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 28, lineHeight: 36 }}>{currentTurn.question_text}</Text>
-                <View style={{ alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, backgroundColor: "#7C2D12", borderWidth: 1, borderColor: "#FDBA74" }}>
-                  <Text style={{ color: "white", fontWeight: "900" }}>
-                    {copy.category.toUpperCase()}: {currentTurn.category.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-            </Animated.View>
-
-            <Animated.View
-              style={{
-                opacity: questionOpacity,
-                transform: [{ translateY: questionTranslateY.interpolate({ inputRange: [0, 26], outputRange: [0, 10] }) }],
-              }}
-            >
-              <View style={{ padding: 16, borderRadius: 18, backgroundColor: "#111827", borderWidth: 1, borderColor: "#1F2937", gap: 8 }}>
-                <Text style={{ color: "#94A3B8", fontWeight: "800", textTransform: "uppercase", fontSize: 12 }}>{copy.activePlayer}</Text>
-                <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 26 }}>{activePlayer?.display_name ?? "-"}</Text>
-                <Text style={{ color: "#E2E8F0", fontWeight: "900" }}>
-                  {copy.roundCount.replace("{current}", String(currentTurn.turn_number)).replace("{total}", String(totalTurns))}
-                </Text>
-                <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                  {copy.playerCount.replace("{player}", activePlayer?.display_name ?? "-").replace("{current}", String(currentTurn.player_question_number)).replace("{total}", String(room.questions_per_player ?? QUESTIONS_PER_PLAYER))}
-                </Text>
-                <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                  {isActivePlayer || isHost ? copy.spokenHint : copy.currentQuestionFor.replace("{player}", activePlayer?.display_name ?? "-")}
-                </Text>
-              </View>
-            </Animated.View>
-
-            {room.state === "reveal" || isActivePlayer || isHost ? (
-              <View style={{ gap: 12 }}>
-                {room.state === "question" ? (
-                  isHost ? (
-                    <Pressable onPress={revealAnswer} disabled={!canReveal || busy === "reveal"} style={({ pressed }) => ({ minHeight: 54, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#EA580C", opacity: !canReveal || busy === "reveal" ? 0.6 : pressed ? 0.92 : 1 })}>
-                      <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.reveal}</Text>
-                    </Pressable>
-                  ) : null
-                ) : (
-                  <Animated.View
-                    style={{
-                      opacity: revealOpacity,
-                      transform: [{ translateY: revealTranslateY }, { scale: revealScale }],
-                    }}
-                  >
-                  <View style={{ padding: 16, borderRadius: 18, backgroundColor: "#1A0F03", borderWidth: 1, borderColor: "#FB923C", gap: 8, shadowColor: "#FB923C", shadowOpacity: 0.34, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 12 }}>
-                    <Text style={{ color: "#FDBA74", fontWeight: "800", textTransform: "uppercase", fontSize: 12 }}>{copy.answer}</Text>
-                    <Text style={{ color: "#FFF7ED", fontWeight: "900", fontSize: 24, lineHeight: 32 }}>{currentTurn.answer_text}</Text>
-                    <Text style={{ color: "#FED7AA", lineHeight: 22 }}>{copy.revealBody}</Text>
-                  </View>
-                  </Animated.View>
-                )}
-              </View>
-            ) : (
-              <View style={{ padding: 18, borderRadius: 18, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", gap: 8 }}>
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 20 }}>
-                  {room.state === "question" ? copy.waitingForReveal : copy.waitingForTurn}
-                </Text>
-                <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{copy.currentQuestionFor.replace("{player}", activePlayer?.display_name ?? "-")}</Text>
-              </View>
-            )}
-
-            {room.state === "reveal" && isHost ? (
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <Pressable onPress={() => markTurn(false)} disabled={busy === "wrong"} style={({ pressed }) => ({ flex: 1, minHeight: 54, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#1F2937", borderWidth: 1, borderColor: "#475569", opacity: busy === "wrong" ? 0.6 : pressed ? 0.92 : 1 })}>
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.markWrong}</Text>
-                </Pressable>
-                <Pressable onPress={() => markTurn(true)} disabled={busy === "correct"} style={({ pressed }) => ({ flex: 1, minHeight: 54, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#15803D", opacity: busy === "correct" ? 0.6 : pressed ? 0.92 : 1 })}>
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.markCorrect}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {room.state === "completed" ? (
-          <Animated.View style={{ opacity: finalOpacity, transform: [{ scale: finalScale }] }}>
-            <View
-              style={{
-                borderRadius: 28,
-                padding: 20,
-                borderWidth: 1,
-                borderColor: "rgba(251,146,60,0.32)",
-                backgroundColor: "#120A02",
-                overflow: "hidden",
-                gap: 14,
-                shadowColor: "#FB923C",
-                shadowOpacity: 0.3,
-                shadowRadius: 28,
-                shadowOffset: { width: 0, height: 12 },
-                elevation: 14,
-              }}
-            >
-              <View style={{ position: "absolute", top: -40, right: -20, width: 180, height: 180, borderRadius: 999, backgroundColor: "rgba(251,146,60,0.14)" }} />
-              <View style={{ position: "absolute", bottom: -70, left: -20, width: 180, height: 180, borderRadius: 999, backgroundColor: "rgba(245,158,11,0.12)" }} />
-
-              <Text style={{ color: "#FDBA74", fontWeight: "900", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                {copy.finalTitle}
+              <Text style={[type.small, { color: colors.textSecondary }]}>
+                {copy.selectedCategories}: <Text style={{ color: ACCENT, fontWeight: "800" }}>{selectedCategories.join(", ")}</Text>
               </Text>
-              <Text style={{ color: "#FFF7ED", fontWeight: "900", fontSize: 40, lineHeight: 44 }}>
-                {winner?.display_name ?? "-"}
+            </Card>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* Live question */}
+      {inTurn && currentTurn ? (
+        <>
+          <Animated.View style={{ opacity: questionOpacity, transform: [{ translateY: questionTranslateY }, { scale: questionScale }] }}>
+            <Card accent={ACCENT} style={{ gap: space.md, padding: space.xl }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+                <Chip label={currentTurn.category.toUpperCase()} color={ACCENT} icon="pricetag" />
+                <Chip
+                  label={copy.roundCount.replace("{current}", String(currentTurn.turn_number)).replace("{total}", String(totalTurns))}
+                  color={colors.textMuted}
+                />
+              </View>
+              <Text accessibilityRole="header" style={{ color: colors.text, fontWeight: "900", fontSize: 30, lineHeight: 38 }}>
+                {currentTurn.question_text}
               </Text>
-              <View
-                style={{
-                  alignSelf: "flex-start",
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  borderRadius: 999,
-                  backgroundColor: "rgba(251,146,60,0.14)",
-                  borderWidth: 1,
-                  borderColor: "rgba(253,186,116,0.34)",
-                }}
-              >
-                <Text style={{ color: "#FFF7ED", fontWeight: "900", fontSize: 18 }}>
-                  {winner ? `${winner.score}p · ${copy.answered.replace("{count}", String(winner.correct_answers ?? 0))}` : ""}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <Ionicons name={isActivePlayer ? "mic" : "person"} size={18} color={isActivePlayer ? ACCENT : colors.textMuted} />
+                <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text, flex: 1 }]}>
+                  <Text style={{ color: colors.textMuted, fontWeight: "700" }}>{copy.answering}: </Text>
+                  {activeName}
+                  {isActivePlayer ? <Text style={{ color: ACCENT }}>{` (${copy.you})`}</Text> : null}
+                </Text>
+                <Text style={[type.small, { color: colors.textMuted }]}>
+                  {currentTurn.player_question_number}/{room.questions_per_player ?? QUESTIONS_PER_PLAYER}
                 </Text>
               </View>
-            </View>
-
-            <View
-              style={{
-                marginTop: 14,
-                backgroundColor: "#0F172A",
-                borderRadius: 22,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: "#1E293B",
-                gap: 10,
-              }}
-            >
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{copy.score}</Text>
-              {sortedPlayers.map((player, index) => (
-                <View
-                  key={`final-${player.id}`}
-                  style={{
-                    paddingVertical: 14,
-                    paddingHorizontal: 14,
-                    borderRadius: 16,
-                    backgroundColor: index === 0 ? "rgba(251,146,60,0.14)" : index === 1 ? "rgba(148,163,184,0.12)" : index === 2 ? "rgba(180,83,9,0.16)" : "#020617",
-                    borderWidth: 1,
-                    borderColor: index === 0 ? "rgba(253,186,116,0.34)" : "#1F2937",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-                    <Text style={{ color: index === 0 ? "#FDBA74" : "#94A3B8", fontWeight: "900", width: 26 }}>
-                      #{index + 1}
-                    </Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: "white", fontWeight: "900", fontSize: 16 }}>{player.display_name}</Text>
-                      <Text style={{ color: "#94A3B8" }}>{copy.answered.replace("{count}", String(player.correct_answers ?? 0))}</Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: "#FFF7ED", fontWeight: "900", fontSize: 22 }}>{player.score}p</Text>
-                </View>
-              ))}
-              {isHost ? (
-                <Pressable onPress={resetGame} disabled={busy === "reset"} style={({ pressed }) => ({ minHeight: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#EA580C", opacity: busy === "reset" ? 0.6 : pressed ? 0.92 : 1, marginTop: 4 })}>
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.reset}</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            </Card>
           </Animated.View>
-        ) : null}
 
-        {room.state !== "completed" ? (
-        <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-          <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{copy.score}</Text>
-          {sortedPlayers.map((player, index) => (
-            <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: index === 0 ? "rgba(234,88,12,0.14)" : "#020617", borderWidth: 1, borderColor: index === 0 ? "rgba(253,186,116,0.3)" : "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: "white", fontWeight: "900" }}>{player.display_name}</Text>
-                <Text style={{ color: "#94A3B8" }}>{copy.answered.replace("{count}", String(player.correct_answers ?? 0))}</Text>
+          {room.state === "reveal" ? (
+            <Animated.View style={{ opacity: revealOpacity, transform: [{ translateY: revealTranslateY }, { scale: revealScale }] }}>
+              <View
+                style={{
+                  padding: space.xl,
+                  borderRadius: radius.lg,
+                  backgroundColor: withAlpha(ACCENT, 0.12),
+                  borderWidth: 2,
+                  borderColor: ACCENT,
+                  gap: space.sm,
+                }}
+              >
+                <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{copy.answer}</Text>
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 28, lineHeight: 34 }}>{currentTurn.answer_text}</Text>
+                <Text style={[type.small, { color: colors.textSecondary }]}>{copy.revealBody}</Text>
               </View>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>{player.score}p</Text>
-            </View>
+            </Animated.View>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* Completed */}
+      {room.state === "completed" ? (
+        <Animated.View style={{ opacity: finalOpacity, transform: [{ scale: finalScale }], gap: space.lg }}>
+          <View
+            style={{
+              borderRadius: radius.xl,
+              padding: space.xl,
+              borderWidth: 1,
+              borderColor: withAlpha(ACCENT, 0.45),
+              backgroundColor: withAlpha(ACCENT, 0.1),
+              alignItems: "center",
+              gap: space.sm,
+            }}
+          >
+            <Ionicons name="trophy" size={40} color={colors.warning} />
+            <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{copy.finalTitle}</Text>
+            <Text style={[type.display, { color: colors.text, fontSize: 36, lineHeight: 42, textAlign: "center" }]}>{winner?.display_name ?? "-"}</Text>
+            <Chip
+              label={winner ? `${winner.score}p · ${copy.answered.replace("{count}", String(winner.correct_answers ?? 0))}` : ""}
+              color={ACCENT}
+            />
+          </View>
+
+          <View style={{ gap: space.sm }}>
+            <SectionLabel>{copy.score}</SectionLabel>
+            <Text style={[type.small, { color: colors.textMuted }]}>{copy.finalBody}</Text>
+            {sortedPlayers.map((player, index) => (
+              <ScoreRow
+                key={`final-${player.id}`}
+                rank={index + 1}
+                name={player.display_name}
+                detail={copy.answered.replace("{count}", String(player.correct_answers ?? 0))}
+                score={player.score}
+                leader={index === 0}
+                isMe={player.id === myPlayer?.id}
+                youLabel={copy.you}
+              />
+            ))}
+          </View>
+          <SupportPicklo />
+        </Animated.View>
+      ) : null}
+
+      {/* Live scoreboard */}
+      {gameInProgress ? (
+        <View style={{ gap: space.sm }}>
+          <SectionLabel>{copy.score}</SectionLabel>
+          {sortedPlayers.map((player, index) => (
+            <ScoreRow
+              key={player.id}
+              rank={index + 1}
+              name={player.display_name}
+              detail={copy.answered.replace("{count}", String(player.correct_answers ?? 0))}
+              score={player.score}
+              leader={index === 0 && (player.score ?? 0) > 0}
+              isMe={player.id === myPlayer?.id}
+              youLabel={copy.you}
+              answering={player.id === currentTurn?.player_id}
+            />
           ))}
         </View>
-        ) : null}
+      ) : null}
+    </Screen>
+  );
+}
 
-        <Pressable onPress={() => router.replace("/")} style={({ pressed }) => ({ minHeight: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#111827", borderWidth: 1, borderColor: "#1F2937", opacity: pressed ? 0.92 : 1 })}>
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.back || t("common.back_to_games")}</Text>
-        </Pressable>
-      </ScrollView>
+// ---------------------------------------------------------------------------
+// Local building blocks
+// ---------------------------------------------------------------------------
+
+function RoleBanner({ isHost, roleLabel, icon, title, body }: { isHost: boolean; roleLabel: string; icon: IconName; title: string; body?: string | null }) {
+  const tint = isHost ? ACCENT : colors.brand;
+  return (
+    <View
+      accessibilityRole="summary"
+      style={{
+        flexDirection: "row",
+        gap: space.md,
+        padding: space.md,
+        borderRadius: radius.lg,
+        backgroundColor: withAlpha(tint, 0.1),
+        borderWidth: 1,
+        borderColor: withAlpha(tint, 0.35),
+      }}
+    >
+      <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: withAlpha(tint, 0.18) }}>
+        <Ionicons name={icon} size={22} color={tint} />
+      </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Chip label={roleLabel} color={tint} icon={isHost ? "star" : "person"} />
+        <Text style={[type.bodyStrong, { color: colors.text }]}>{title}</Text>
+        {body ? <Text style={[type.small, { color: colors.textSecondary }]}>{body}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+function PlayerRow({ name, isHost, isMe, hostLabel, youLabel }: { name: string; isHost: boolean; isMe: boolean; hostLabel: string; youLabel: string }) {
+  return (
+    <View
+      style={{
+        minHeight: 52,
+        paddingHorizontal: space.md,
+        borderRadius: radius.md,
+        backgroundColor: isMe ? withAlpha(ACCENT, 0.08) : colors.surface,
+        borderWidth: 1,
+        borderColor: isMe ? withAlpha(ACCENT, 0.35) : colors.border,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.sm,
+      }}
+    >
+      <Ionicons name="person-circle" size={24} color={isMe ? ACCENT : colors.textSubtle} />
+      <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text, flex: 1 }]}>
+        {name}
+        {isMe ? <Text style={{ color: colors.textMuted, fontWeight: "600" }}>{` (${youLabel})`}</Text> : null}
+      </Text>
+      {isHost ? <Chip label={hostLabel} color={ACCENT} icon="star" /> : null}
+    </View>
+  );
+}
+
+function CategoryChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      style={({ pressed }) => ({
+        minHeight: 44,
+        paddingHorizontal: space.lg,
+        borderRadius: radius.pill,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: active ? withAlpha(ACCENT, 0.2) : colors.sunken,
+        borderWidth: active ? 2 : 1,
+        borderColor: active ? ACCENT : colors.border,
+        opacity: pressed ? 0.85 : 1,
+      })}
+    >
+      {active ? <Ionicons name="checkmark" size={16} color={ACCENT} /> : null}
+      <Text style={{ color: active ? colors.text : colors.textSecondary, fontWeight: "800", fontSize: 15 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ScoreRow({
+  rank,
+  name,
+  detail,
+  score,
+  leader,
+  isMe,
+  youLabel,
+  answering,
+}: {
+  rank: number;
+  name: string;
+  detail: string;
+  score: number;
+  leader: boolean;
+  isMe: boolean;
+  youLabel: string;
+  answering?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        minHeight: 52,
+        paddingHorizontal: space.md,
+        paddingVertical: space.sm,
+        borderRadius: radius.md,
+        backgroundColor: leader ? withAlpha(ACCENT, 0.12) : colors.surface,
+        borderWidth: 1,
+        borderColor: leader ? withAlpha(ACCENT, 0.45) : colors.border,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+      }}
+    >
+      {leader ? (
+        <Ionicons name="trophy" size={18} color={colors.warning} style={{ width: 24, textAlign: "center" }} />
+      ) : (
+        <Text style={{ width: 24, textAlign: "center", color: colors.textMuted, fontWeight: "900", fontSize: 14 }}>{rank}</Text>
+      )}
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text }]}>
+          {name}
+          {isMe ? <Text style={{ color: colors.textMuted, fontWeight: "600" }}>{` (${youLabel})`}</Text> : null}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 13 }}>{detail}</Text>
+      </View>
+      {answering ? <Ionicons name="mic" size={18} color={ACCENT} /> : null}
+      <Text style={{ color: leader ? ACCENT : colors.text, fontWeight: "900", fontSize: 18 }}>{score}p</Text>
     </View>
   );
 }

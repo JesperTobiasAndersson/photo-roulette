@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useMemo, useState } from "react";
-import { Alert, Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
+import { SupportPicklo } from "../src/components/SupportPicklo";
+import { ActivityIndicator, Animated, Easing, Pressable, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import * as Clipboard from "expo-clipboard";
 import { AnimatedEntrance } from "../src/components/AnimatedEntrance";
-import { CopyToast } from "../src/components/CopyToast";
+import { ShareButton } from "../src/components/ShareButton";
 import {
   advanceChicagoPokerScore,
   declareChicago,
@@ -15,9 +15,63 @@ import {
 import { cardId, evaluatePokerHand } from "../src/games/chicago/logic";
 import type { ChicagoCard, ChicagoSuit } from "../src/games/chicago/types";
 import { useChicagoRoom } from "../src/games/chicago/useChicagoRoom";
+import { GAMES } from "../src/games/catalog";
 import { useI18n } from "../src/lib/i18n";
+import { confirmAction, showAlert } from "../src/lib/notify";
+import { Button, Card, Chip, RoomCodeBadge, Screen, SectionLabel, TopBar } from "../src/ui/components";
+import { colors, gameAccents, radius, space, type, withAlpha } from "../src/ui/theme";
+import { SITE_URL } from "../src/lib/site";
 
 const BUY_STOP_SCORE = 46;
+const WIN_SCORE = 52;
+const ACCENT = gameAccents.chicago;
+const CHICAGO_COLOR = colors.warning;
+const RED_SUIT = "#FB7185";
+
+const COPY = {
+  en: {
+    leaveTitle: "Leave the game?",
+    leaveBody: "You will drop out of this Chicago game and the table may get stuck without you.",
+    leaveConfirm: "Leave",
+    cancel: "Cancel",
+    declareTitle: "Call CHICAGO?",
+    declareBody: "You must win every trick this round. If you lose a single trick you lose 15 points.",
+    declareConfirm: "Call Chicago",
+    playCard: "Play {card}",
+    pickCard: "Tap a card to play",
+    waitingFor: "Waiting for {name}…",
+    raceTo: "First to {score}",
+    turn: "Turn",
+    needPlayers: "At least 2 players are needed to deal.",
+    selected: "{count} selected",
+    tapToSwap: "Tap the cards you want to swap",
+    shareMessage: "Join my Chicago game on Picklo! Room code {code}",
+    waitingDraws: "Waiting for the rest of the table…",
+  },
+  sv: {
+    leaveTitle: "Lämna spelet?",
+    leaveBody: "Du lämnar det här Chicago-spelet och bordet kan fastna utan dig.",
+    leaveConfirm: "Lämna",
+    cancel: "Avbryt",
+    declareTitle: "Ropa CHICAGO?",
+    declareBody: "Du måste vinna varje stick den här rundan. Förlorar du ett enda stick förlorar du 15 poäng.",
+    declareConfirm: "Ropa Chicago",
+    playCard: "Spela {card}",
+    pickCard: "Tryck på ett kort för att spela",
+    waitingFor: "Väntar på {name}…",
+    raceTo: "Först till {score}",
+    turn: "Tur",
+    needPlayers: "Minst 2 spelare behövs för att dela ut.",
+    selected: "{count} valda",
+    tapToSwap: "Tryck på korten du vill byta",
+    shareMessage: "Häng med i mitt Chicago-spel på Picklo! Rumskod {code}",
+    waitingDraws: "Väntar på resten av bordet…",
+  },
+} as const;
+
+function fill(template: string, values: Record<string, string | number>) {
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ""));
+}
 
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -28,89 +82,161 @@ function asString(v: unknown): string {
 function getSuitSymbol(suit: ChicagoSuit): string {
   switch (suit) {
     case "clubs":
-      return "\u2663";
+      return "♣";
     case "diamonds":
-      return "\u2666";
+      return "♦";
     case "hearts":
-      return "\u2665";
+      return "♥";
     case "spades":
-      return "\u2660";
+      return "♠";
     default:
       return "";
   }
 }
 
 function getSuitColor(suit: ChicagoSuit): string {
-  return suit === "hearts" || suit === "diamonds" ? "#B91C1C" : "#111827";
+  return suit === "hearts" || suit === "diamonds" ? RED_SUIT : colors.text;
 }
 
+function cardLabel(card: ChicagoCard) {
+  return `${card.rank}${getSuitSymbol(card.suit)}`;
+}
+
+/**
+ * Dark-faced playing card. "hand" cards share the row width (five always fit a 360px phone);
+ * "mini" cards are used for the cards on the table.
+ */
 function PlayingCard({
   card,
   selected = false,
-  compact = false,
+  size = "hand",
+  dimmed = false,
   onPress,
 }: {
   card: ChicagoCard;
   selected?: boolean;
-  compact?: boolean;
+  size?: "hand" | "mini";
+  dimmed?: boolean;
   onPress?: () => void;
 }) {
   const suitColor = getSuitColor(card.suit);
   const suitSymbol = getSuitSymbol(card.suit);
-  const width = compact ? 68 : 82;
-  const height = compact ? 98 : 122;
-  const rankSize = compact ? 16 : 20;
-  const cornerSuitSize = compact ? 11 : 13;
-  const pipSize = compact ? 28 : 38;
-  const paperTone = "#FFFFFF";
-  const edgeTone = selected ? "#38BDF8" : "#E7E5E4";
+  const mini = size === "mini";
+  const rankSize = mini ? 17 : 22;
+  const cornerSuitSize = mini ? 13 : 16;
+  const pipSize = mini ? 22 : 26;
 
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityState={onPress ? { selected } : undefined}
+      accessibilityLabel={`${card.rank} ${card.suit}`}
       style={({ pressed }) => ({
-        width,
-        height,
-        borderRadius: 12,
-        paddingHorizontal: compact ? 7 : 9,
-        paddingVertical: compact ? 7 : 8,
-        justifyContent: "space-between",
-        backgroundColor: paperTone,
+        ...(mini ? { width: 52, height: 72 } : { flex: 1, maxWidth: 84, aspectRatio: 5 / 7 }),
+        borderRadius: mini ? radius.sm - 2 : radius.sm,
+        paddingHorizontal: mini ? 5 : 6,
+        paddingVertical: mini ? 4 : 6,
+        backgroundColor: selected ? withAlpha(ACCENT, 0.2) : colors.surfaceRaised,
         borderWidth: selected ? 2.5 : 1.5,
-        borderColor: edgeTone,
-        boxShadow: selected ? "0px 14px 24px rgba(15,23,42,0.22)" : "0px 8px 16px rgba(15,23,42,0.14)",
-        elevation: selected ? 8 : 4,
-        transform: [{ translateY: selected ? -6 : pressed ? -2 : 0 }],
-        opacity: pressed ? 0.95 : 1,
+        borderColor: selected ? ACCENT : onPress ? colors.borderStrong : colors.border,
+        opacity: dimmed ? 0.55 : 1,
+        transform: [{ translateY: selected ? -12 : pressed ? -3 : 0 }],
         overflow: "hidden",
       })}
     >
-      <View style={{ alignSelf: "flex-start", alignItems: "center", minWidth: 18, gap: 0 }}>
-        <Text style={{ color: suitColor, fontSize: rankSize, fontWeight: "900", lineHeight: rankSize + 1 }}>{card.rank}</Text>
-        <Text style={{ color: suitColor, fontSize: cornerSuitSize, fontWeight: "900", lineHeight: cornerSuitSize }}>{suitSymbol}</Text>
+      <View style={{ alignSelf: "flex-start", alignItems: "center", minWidth: 16 }}>
+        <Text style={{ color: suitColor, fontSize: rankSize, fontWeight: "900", lineHeight: rankSize + 2 }}>{card.rank}</Text>
+        <Text style={{ color: suitColor, fontSize: cornerSuitSize, fontWeight: "900", lineHeight: cornerSuitSize + 1 }}>{suitSymbol}</Text>
       </View>
-
-      <View style={{ alignItems: "center", justifyContent: "center", flex: 1 }}>
-        <Text style={{ color: suitColor, fontSize: pipSize, fontWeight: "700", lineHeight: pipSize + 2 }}>{suitSymbol}</Text>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: suitColor, fontSize: pipSize, lineHeight: pipSize + 2 }}>{suitSymbol}</Text>
       </View>
-
-      <View style={{ alignSelf: "flex-end", alignItems: "center", minWidth: 18, gap: 0, transform: [{ rotate: "180deg" }] }}>
-        <Text style={{ color: suitColor, fontSize: rankSize, fontWeight: "900", lineHeight: rankSize + 1 }}>{card.rank}</Text>
-        <Text style={{ color: suitColor, fontSize: cornerSuitSize, fontWeight: "900", lineHeight: cornerSuitSize }}>{suitSymbol}</Text>
-      </View>
+      {selected && !mini ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 4,
+            right: 4,
+            width: 18,
+            height: 18,
+            borderRadius: 9,
+            backgroundColor: ACCENT,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="checkmark" size={13} color={colors.bg} />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
 
+function HandRow({ children }: { children: React.ReactNode }) {
+  // Top padding leaves room for selected cards to lift without being clipped.
+  return <View style={{ flexDirection: "row", gap: 6, paddingTop: 14, justifyContent: "center" }}>{children}</View>;
+}
+
+function Notice({ color, title, body }: { color: string; title: string; body: string }) {
+  return (
+    <View
+      style={{
+        borderRadius: radius.md,
+        paddingHorizontal: space.md,
+        paddingVertical: space.md,
+        backgroundColor: withAlpha(color, 0.12),
+        borderWidth: 1,
+        borderColor: withAlpha(color, 0.35),
+        gap: 4,
+      }}
+    >
+      <Text style={[type.caption, { color, textTransform: "uppercase" }]}>{title}</Text>
+      <Text style={[type.small, { color: colors.text }]}>{body}</Text>
+    </View>
+  );
+}
+
+function WaitingLine({ label }: { label: string }) {
+  return (
+    <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm }}>
+      <ActivityIndicator color={colors.textMuted} size="small" />
+      <Text style={[type.small, { color: colors.textSecondary, flexShrink: 1, textAlign: "center" }]}>{label}</Text>
+    </View>
+  );
+}
+
+function ModalShell({ children, zIndex, dim = 0.72 }: { children: React.ReactNode; zIndex: number; dim?: number }) {
+  return (
+    <View
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex,
+        backgroundColor: `rgba(4,8,18,${dim})`,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: space.xl,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
 export default function ChicagoRoomScreen() {
-  const { t, translateChicagoPublicMessage, translatePokerName } = useI18n();
+  const { t, language, translateChicagoPublicMessage, translatePokerName } = useI18n();
+  const copy = COPY[language === "sv" ? "sv" : "en"];
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
   const [busy, setBusy] = useState<string | null>(null);
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
-  const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [selectedPlayCard, setSelectedPlayCard] = useState<string | null>(null);
   const [showPokerRevealModal, setShowPokerRevealModal] = useState(false);
   const [shownPokerRevealKey, setShownPokerRevealKey] = useState<string | null>(null);
   const [showTrickWinnerModal, setShowTrickWinnerModal] = useState(false);
@@ -151,9 +277,10 @@ export default function ChicagoRoomScreen() {
     try {
       await fn();
       setSelectedCards([]);
+      setSelectedPlayCard(null);
       await refresh();
     } catch (error) {
-      Alert.alert(t("common.action_failed"), String((error as Error)?.message ?? error));
+      showAlert(t("common.action_failed"), String((error as Error)?.message ?? error));
     } finally {
       setBusy(null);
     }
@@ -177,7 +304,7 @@ export default function ChicagoRoomScreen() {
       advanceChicagoPokerScore(roomId, playerId)
         .then(() => refresh())
         .catch((error) => {
-          Alert.alert(t("common.action_failed"), String((error as Error)?.message ?? error));
+          showAlert(t("common.action_failed"), String((error as Error)?.message ?? error));
         })
         .finally(() => {
           scheduledPokerScoreKeyRef.current = null;
@@ -410,246 +537,316 @@ export default function ChicagoRoomScreen() {
     setSelectedCards([]);
   }, [isBuyStopped, selectedCards.length]);
 
+  const myHandIds = (myHand?.cards ?? []).map((card) => cardId(card)).join(",");
+  useEffect(() => {
+    // Drop a pending "play" selection once it is no longer our turn or the card left the hand.
+    if (!selectedPlayCard) return;
+    if (room?.state !== "trick_phase" || !isMyTurn || !myHandIds.split(",").includes(selectedPlayCard)) {
+      setSelectedPlayCard(null);
+    }
+  }, [isMyTurn, myHandIds, room?.state, selectedPlayCard]);
+
+  const leaveGame = async () => {
+    const midGame = !!room && room.state !== "lobby" && room.state !== "game_over";
+    if (midGame) {
+      const ok = await confirmAction(copy.leaveTitle, copy.leaveBody, {
+        confirmLabel: copy.leaveConfirm,
+        cancelLabel: copy.cancel,
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    router.replace(GAMES.chicago.href as any);
+  };
+
+  const topBar = <TopBar title="Chicago" onBack={leaveGame} />;
+
   if (loading || !room || !myPlayer) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
-        <StatusBar style="light" />
-        <Text style={{ color: "white", fontSize: 32, fontWeight: "900" }}>{t("common.loading_chicago")}</Text>
-      </View>
+      <Screen topBar={topBar} centered>
+        <View style={{ alignItems: "center", gap: space.lg }}>
+          <ActivityIndicator color={ACCENT} size="large" />
+          <Text style={[type.heading, { color: colors.text }]}>{t("common.loading_chicago")}</Text>
+        </View>
+      </Screen>
     );
   }
 
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://picklo.app";
+  const baseUrl = SITE_URL;
   const inviteUrl = `${baseUrl}/chicago?code=${room.code}`;
-  const copyInviteLink = async () => {
-    await Clipboard.setStringAsync(inviteUrl);
-    setShowCopiedToast(true);
-    setTimeout(() => setShowCopiedToast(false), 1400);
+
+  const isDrawPhase = room.state === "draw_phase_1" || room.state === "draw_phase_2" || room.state === "draw_phase_3";
+  const isPokerScore = room.state === "poker_score_1" || room.state === "poker_score_2";
+  const cardsWord = (count: number) => (language === "sv" ? "kort" : count === 1 ? "card" : "cards");
+  const playCard = (myHand?.cards ?? []).find((card) => cardId(card) === selectedPlayCard) ?? null;
+
+  const declare = async () => {
+    const ok = await confirmAction(copy.declareTitle, copy.declareBody, {
+      confirmLabel: copy.declareConfirm,
+      cancelLabel: copy.cancel,
+      destructive: true,
+    });
+    if (!ok) return;
+    await run("declare-chicago", () => declareChicago(roomId, playerId));
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
-      <StatusBar style="light" />
-      {showPokerRevealModal ? (
-        <View
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 20,
-            backgroundColor: "rgba(2,6,23,0.72)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
-          <Animated.View
-            style={{
-              width: "100%",
-              maxWidth: 420,
-              borderRadius: 28,
-              padding: 24,
-              backgroundColor: "#0E1726",
-              borderWidth: 1,
-              borderColor: "rgba(125,211,252,0.32)",
-              shadowColor: "#38BDF8",
-              shadowOpacity: 0.3,
-              shadowRadius: 30,
-              shadowOffset: { width: 0, height: 16 },
-              elevation: 18,
-              alignItems: "center",
-              opacity: pokerRevealOpacity,
-              transform: [{ scale: pokerRevealScale }, { translateY: pokerRevealTranslateY }],
+  // -------------------------------------------------------------------------
+  // Sticky footer: the phase's main action.
+  // -------------------------------------------------------------------------
+  let footer: React.ReactNode = null;
+  if (room.state === "lobby") {
+    footer = isHost ? (
+      <>
+        {players.length < 2 ? (
+          <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>{copy.needPlayers}</Text>
+        ) : null}
+        <Button
+          label={t("room.deal_round")}
+          icon="play"
+          accent={ACCENT}
+          loading={busy === "start-round"}
+          disabled={players.length < 2}
+          onPress={() => run("start-round", () => startChicagoRound(roomId, playerId))}
+        />
+      </>
+    ) : (
+      <WaitingLine label={t("room.wait_host_start")} />
+    );
+  } else if (isDrawPhase) {
+    footer = (
+      <Button
+        label={
+          myPlayer.draw_ready
+            ? t("room.exchange_submitted")
+            : isBuyStopped
+              ? t("room.buy_stop_keep")
+              : selectedDiscardCards.length === 0
+                ? t("room.keep_current")
+                : t("room.exchange_cards", {
+                    count: selectedDiscardCards.length,
+                    cards_upper: cardsWord(selectedDiscardCards.length),
+                  })
+        }
+        icon={myPlayer.draw_ready ? "checkmark-circle" : selectedDiscardCards.length > 0 ? "swap-horizontal" : "hand-left"}
+        accent={ACCENT}
+        variant={selectedDiscardCards.length > 0 || myPlayer.draw_ready ? "primary" : "secondary"}
+        loading={busy === "submit-draw"}
+        disabled={!myHand || myPlayer.draw_ready}
+        onPress={() => run("submit-draw", () => submitChicagoDraw(roomId, playerId, selectedDiscardCards))}
+      />
+    );
+  } else if (isPokerScore) {
+    footer = (
+      <Button
+        label={t("room.reveal_now")}
+        icon="eye"
+        variant="secondary"
+        loading={busy === "score-phase"}
+        onPress={() => run("score-phase", () => advanceChicagoPokerScore(roomId, playerId))}
+      />
+    );
+  } else if (room.state === "trick_phase") {
+    footer = (
+      <>
+        {canDeclareChicago ? (
+          <Button
+            label={t("room.call_chicago")}
+            icon="flame"
+            accent={CHICAGO_COLOR}
+            size="md"
+            loading={busy === "declare-chicago"}
+            onPress={declare}
+          />
+        ) : null}
+        {isMyTurn ? (
+          <Button
+            label={playCard ? fill(copy.playCard, { card: cardLabel(playCard) }) : copy.pickCard}
+            icon="arrow-up-circle"
+            accent={ACCENT}
+            loading={!!busy && busy.startsWith("play-")}
+            disabled={!playCard}
+            onPress={() => {
+              if (!playCard) return;
+              run(`play-${cardId(playCard)}`, () => playChicagoCard(roomId, playerId, playCard));
             }}
-          >
+          />
+        ) : (
+          <WaitingLine label={fill(copy.waitingFor, { name: currentTurnPlayer?.display_name ?? t("common.player") })} />
+        )}
+      </>
+    );
+  } else if (room.state === "result") {
+    footer = isHost ? (
+      <Button
+        label={t("room.deal_next_round")}
+        icon="play"
+        accent={ACCENT}
+        loading={busy === "next-round"}
+        onPress={() => run("next-round", () => startChicagoRound(roomId, playerId))}
+      />
+    ) : (
+      <WaitingLine label={t("room.wait_host_next")} />
+    );
+  } else if (room.state === "game_over") {
+    footer = (
+      <Button
+        label={t("common.play_again")}
+        icon="refresh"
+        accent={ACCENT}
+        onPress={() => router.replace(GAMES.chicago.href as any)}
+      />
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Scoreboard: one compact row per player, race to 52.
+  // -------------------------------------------------------------------------
+  const scoreboard = (
+    <View style={{ gap: space.sm }}>
+      <SectionLabel right={<Text style={[type.caption, { color: colors.textSubtle }]}>{fill(copy.raceTo, { score: WIN_SCORE })}</Text>}>
+        {t("room.scoreboard")}
+      </SectionLabel>
+      <View
+        style={{
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          overflow: "hidden",
+        }}
+      >
+        {players.map((player, index) => {
+          const isTurn = room.state === "trick_phase" && player.id === room.current_turn_player_id;
+          const isMe = player.id === playerId;
+          const buyStop = player.score >= BUY_STOP_SCORE;
+          const progress = Math.max(0, Math.min(1, player.score / WIN_SCORE));
+          const barColor = room.winner_player_id === player.id ? colors.success : buyStop ? colors.warning : ACCENT;
+          return (
             <View
+              key={player.id}
               style={{
-                width: 96,
-                height: 96,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(3,105,161,0.26)",
-                borderWidth: 1,
-                borderColor: "rgba(125,211,252,0.34)",
-                marginBottom: 18,
+                paddingHorizontal: space.md,
+                paddingVertical: 10,
+                gap: 6,
+                borderTopWidth: index === 0 ? 0 : 1,
+                borderTopColor: colors.border,
+                backgroundColor: isTurn ? withAlpha(ACCENT, 0.12) : "transparent",
+                borderLeftWidth: 3,
+                borderLeftColor: isTurn ? ACCENT : "transparent",
               }}
             >
-              <Text style={{ color: "#7DD3FC", fontSize: 42, fontWeight: "900" }}>H</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+                {isTurn ? <Ionicons name="caret-forward" size={14} color={ACCENT} /> : null}
+                <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text, flexShrink: 1 }]}>
+                  {player.display_name}
+                </Text>
+                {isMe ? <Text style={[type.caption, { color: ACCENT }]}>{t("common.you").toUpperCase()}</Text> : null}
+                {player.id === room.host_player_id ? (
+                  <Ionicons name="star" size={12} color={colors.textMuted} accessibilityLabel={t("common.host")} />
+                ) : null}
+                {player.chicago_declared ? <Ionicons name="flame" size={14} color={CHICAGO_COLOR} /> : null}
+                <View style={{ flex: 1 }} />
+                {buyStop ? <Chip label={t("room.no_swaps")} color={colors.warning} /> : null}
+                <Text style={{ color: colors.text, fontSize: 18, fontWeight: "900", minWidth: 28, textAlign: "right" }}>
+                  {player.score}
+                </Text>
+              </View>
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.sunken, overflow: "hidden" }}>
+                <View style={{ width: `${progress * 100}%`, height: "100%", borderRadius: 2, backgroundColor: barColor }} />
+                <View
+                  style={{
+                    position: "absolute",
+                    left: `${(BUY_STOP_SCORE / WIN_SCORE) * 100}%`,
+                    top: 0,
+                    bottom: 0,
+                    width: 1.5,
+                    backgroundColor: withAlpha(colors.warning, 0.7),
+                  }}
+                />
+              </View>
             </View>
-            <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 13, letterSpacing: 2, textTransform: "uppercase" }}>
-              {t("modal.best_hand_revealed")}
-            </Text>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center", marginTop: 12 }}>
-              {t("modal.poker_scoring").toUpperCase()}
-            </Text>
-            <Text style={{ color: "#E2E8F0", fontWeight: "800", fontSize: 16, textAlign: "center", marginTop: 10 }}>
-              {translatedPublicMessage ?? t("modal.poker_fallback")}
-            </Text>
-          </Animated.View>
-        </View>
-      ) : null}
-      {showTrickWinnerModal ? (
-        <View
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 19,
-            backgroundColor: "rgba(2,6,23,0.48)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
-          <Animated.View
-            style={{
-              width: "100%",
-              maxWidth: 390,
-              borderRadius: 24,
-              padding: 22,
-              backgroundColor: "#0F172A",
-              borderWidth: 1,
-              borderColor: "rgba(125,211,252,0.28)",
-              shadowColor: "#38BDF8",
-              shadowOpacity: 0.24,
-              shadowRadius: 26,
-              shadowOffset: { width: 0, height: 12 },
-              elevation: 16,
-              alignItems: "center",
-              opacity: trickWinnerOpacity,
-              transform: [{ scale: trickWinnerScale }, { translateY: trickWinnerTranslateY }],
-              gap: 8,
-            }}
-          >
-            <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 12, letterSpacing: 1.8, textTransform: "uppercase" }}>
-              {t("modal.trick_winner")}
-            </Text>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center" }}>
-              {trickWinnerName ?? "A player"}
-            </Text>
-            <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 15, textAlign: "center" }}>
-              {t("modal.won_this_trick").toUpperCase()}
-            </Text>
-          </Animated.View>
-        </View>
-      ) : null}
-      {buyStopEvent ? (
-        <View
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 21,
-            backgroundColor: "rgba(2,6,23,0.58)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-          }}
-        >
-          <Animated.View
-            style={{
-              width: "100%",
-              maxWidth: 420,
-              borderRadius: 28,
-              paddingVertical: 26,
-              paddingHorizontal: 24,
-              backgroundColor: buyStopEvent.tone === "penalty" ? "#2A0F16" : "#1E1B0E",
-              borderWidth: 1,
-              borderColor: buyStopEvent.tone === "penalty" ? "rgba(251,113,133,0.42)" : "rgba(251,191,36,0.38)",
-              shadowColor: buyStopEvent.tone === "penalty" ? "#FB7185" : "#FBBF24",
-              shadowOpacity: 0.32,
-              shadowRadius: 30,
-              shadowOffset: { width: 0, height: 18 },
-              elevation: 20,
-              alignItems: "center",
-              gap: 10,
-              opacity: buyStopOpacity,
-              transform: [{ scale: buyStopScale }, { rotate: buyStopRotate.interpolate({ inputRange: [-1, 1], outputRange: ["-1rad", "1rad"] }) }],
-            }}
-          >
-            <Text style={{ fontSize: 52 }}>{buyStopEvent.tone === "penalty" ? "\ud83d\udca5" : "\ud83d\uded2" }</Text>
-            <Text
-              style={{
-                color: buyStopEvent.tone === "penalty" ? "#FDA4AF" : "#FCD34D",
-                fontWeight: "900",
-                fontSize: 13,
-                letterSpacing: 2,
-                textTransform: "uppercase",
-              }}
-            >
-              {buyStopEvent.title}
-            </Text>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 30, textAlign: "center" }}>
-              {buyStopEvent.tone === "penalty" ? t("modal.no_swap_only_chaos") : t("modal.buy_stop_activated")}
-            </Text>
-            <Text style={{ color: "#E2E8F0", fontWeight: "800", fontSize: 16, textAlign: "center", lineHeight: 24 }}>
-              {buyStopEvent.message}
-            </Text>
-          </Animated.View>
-        </View>
-      ) : null}
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const handTitle = (right?: React.ReactNode) => <SectionLabel right={right}>{t("room.your_hand")}</SectionLabel>;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <Screen topBar={topBar} footer={footer}>
+        {/* Status */}
         <AnimatedEntrance enterKey={`header-${room.state}-${room.phase_number}`}>
           <View style={{ gap: 6 }}>
-            <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>Chicago</Text>
-            <Text style={{ color: "#94A3B8" }}>{t("room.room_code", { code: room.code, round: room.current_round || 0 })}</Text>
-            <Text style={{ color: "#CBD5E1" }}>{translatedPublicMessage}</Text>
+            <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>
+              {t("room.room_code", { code: room.code, round: room.current_round || 0 })}
+            </Text>
+            <Text style={[type.bodyStrong, { color: colors.text }]}>{translatedPublicMessage}</Text>
           </View>
         </AnimatedEntrance>
 
+        {/* Lobby */}
         {room.state === "lobby" ? (
           <AnimatedEntrance enterKey="lobby-card" delay={40}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.players")}</Text>
-              {players.map((player) => (
-                <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ color: "white", fontWeight: "800" }}>{player.display_name}</Text>
-                  <Text style={{ color: player.id === room.host_player_id ? "#7DD3FC" : "#64748B", fontWeight: "800" }}>
-                    {player.id === room.host_player_id ? t("common.host").toUpperCase() : `${player.score} PTS`}
-                  </Text>
-                </View>
-              ))}
-              <Pressable
-                onPress={copyInviteLink}
-                style={({ pressed }) => ({
-                  height: 46,
-                  borderRadius: 14,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#111827",
-                  borderWidth: 1,
-                  borderColor: "#1F2937",
-                  opacity: pressed ? 0.9 : 1,
+            <View style={{ gap: space.lg }}>
+              <Card accent={ACCENT} style={{ alignItems: "stretch" }}>
+                <RoomCodeBadge code={room.code} label={t("common.room_code")} accent={ACCENT} />
+                <ShareButton
+                  label={t("common.invite")}
+                  message={fill(copy.shareMessage, { code: room.code })}
+                  url={inviteUrl}
+                  accentColor={ACCENT}
+                />
+              </Card>
+              <View style={{ gap: space.sm }}>
+                <SectionLabel right={<Text style={[type.caption, { color: colors.textSubtle }]}>{players.length}</Text>}>
+                  {t("room.players")}
+                </SectionLabel>
+                {players.map((player) => {
+                  const isMe = player.id === playerId;
+                  return (
+                    <View
+                      key={player.id}
+                      style={{
+                        minHeight: 52,
+                        paddingHorizontal: space.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.surface,
+                        borderWidth: 1,
+                        borderColor: isMe ? withAlpha(ACCENT, 0.5) : colors.border,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: space.sm,
+                      }}
+                    >
+                      <Ionicons name="person-circle" size={24} color={isMe ? ACCENT : colors.textSubtle} />
+                      <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text, flexShrink: 1 }]}>
+                        {player.display_name}
+                      </Text>
+                      {isMe ? <Text style={[type.caption, { color: ACCENT }]}>{t("common.you").toUpperCase()}</Text> : null}
+                      <View style={{ flex: 1 }} />
+                      {player.id === room.host_player_id ? <Chip label={t("common.host")} color={ACCENT} icon="star" /> : null}
+                    </View>
+                  );
                 })}
-              >
-                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.copy_invite_link").toUpperCase()}</Text>
-              </Pressable>
-              {showCopiedToast ? <CopyToast visible={showCopiedToast} /> : null}
-              {isHost ? (
-                <Pressable
-                  onPress={() => run("start-round", () => startChicagoRound(roomId, playerId))}
-                  disabled={busy === "start-round" || players.length < 2}
-                  style={({ pressed }) => ({
-                    height: 54,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#0369A1",
-                    opacity: busy === "start-round" || players.length < 2 ? 0.5 : pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("room.deal_round").toUpperCase()}</Text>
-                </Pressable>
-              ) : (
-                <Text style={{ color: "#94A3B8" }}>{t("room.wait_host_start")}</Text>
-              )}
+              </View>
             </View>
           </AnimatedEntrance>
         ) : null}
 
-        {myHand && room.state !== "trick_phase" && room.state !== "result" ? (
-          <AnimatedEntrance enterKey={`hand-${room.phase_number}`} delay={60}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.your_hand")}</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+        {/* Draw / poker phases: the hand comes first */}
+        {myHand && room.state !== "trick_phase" && room.state !== "result" && room.state !== "lobby" ? (
+          <AnimatedEntrance enterKey={`hand-${room.phase_number}`} delay={40}>
+            <View style={{ gap: space.xs }}>
+              {handTitle(
+                isDrawPhase && selectedDiscardCards.length > 0 ? (
+                  <Text style={[type.caption, { color: ACCENT }]}>
+                    {fill(copy.selected, { count: selectedDiscardCards.length }).toUpperCase()}
+                  </Text>
+                ) : undefined
+              )}
+              <HandRow>
                 {myHand.cards.map((card) => {
                   const selected = selectedCards.includes(cardId(card));
                   return (
@@ -658,7 +855,7 @@ export default function ChicagoRoomScreen() {
                       card={card}
                       selected={selected}
                       onPress={
-                        (room.state === "draw_phase_1" || room.state === "draw_phase_2" || room.state === "draw_phase_3") && !isBuyStopped
+                        isDrawPhase && !isBuyStopped && !myPlayer.draw_ready
                           ? () =>
                               setSelectedCards((current) =>
                                 current.includes(cardId(card)) ? current.filter((id) => id !== cardId(card)) : [...current, cardId(card)]
@@ -668,272 +865,158 @@ export default function ChicagoRoomScreen() {
                     />
                   );
                 })}
-              </View>
+              </HandRow>
               {myEvaluation ? (
-                <Text style={{ color: "#94A3B8" }}>
-                  {t("room.current_read")} <Text style={{ color: "#F8FAFC", fontWeight: "900" }}>{translatePokerName(myEvaluation.name).toUpperCase()}</Text>
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: space.sm }}>
+                  <Text style={[type.small, { color: colors.textMuted }]}>{t("room.current_read")}</Text>
+                  <Text style={[type.bodyStrong, { color: ACCENT }]}>{translatePokerName(myEvaluation.name)}</Text>
+                </View>
               ) : null}
             </View>
           </AnimatedEntrance>
         ) : null}
 
-        {room.state === "draw_phase_1" || room.state === "draw_phase_2" || room.state === "draw_phase_3" ? (
+        {isDrawPhase ? (
           <AnimatedEntrance enterKey={`draw-${room.state}`} delay={80}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.draw_cards").toUpperCase()}</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                {t("room.draw_help")}
-              </Text>
+            <View style={{ gap: space.md }}>
               {isBuyStopped ? (
-                <View
-                  style={{
-                    borderRadius: 16,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    backgroundColor: "rgba(251,191,36,0.14)",
-                    borderWidth: 1,
-                    borderColor: "rgba(251,191,36,0.34)",
-                    gap: 4,
-                  }}
-                >
-                  <Text style={{ color: "#FCD34D", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>{t("room.buy_stop_active")}</Text>
-                  <Text style={{ color: "#F8FAFC", lineHeight: 21 }}>
-                    {t("room.buy_stop_body", { score: BUY_STOP_SCORE })}
-                  </Text>
-                </View>
+                <Notice
+                  color={colors.warning}
+                  title={t("room.buy_stop_active")}
+                  body={t("room.buy_stop_body", { score: BUY_STOP_SCORE })}
+                />
               ) : null}
               {myPlayer.draw_ready ? (
-                <View
-                  style={{
-                    borderRadius: 16,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    backgroundColor: "rgba(125,211,252,0.12)",
-                    borderWidth: 1,
-                    borderColor: "rgba(125,211,252,0.3)",
-                    gap: 4,
-                  }}
-                >
-                  <Text style={{ color: "#7DD3FC", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>
-                    {t("room.decision_locked")}
-                  </Text>
-                  <Text style={{ color: "#E2E8F0", lineHeight: 21 }}>
-                    {selectedDiscardCards.length > 0
-                      ? t("room.exchange_waiting", { count: selectedDiscardCards.length, cards: selectedDiscardCards.length === 1 ? "card" : "cards" })
-                      : t("room.waiting_table")}
+                <Notice
+                  color={ACCENT}
+                  title={t("room.decision_locked")}
+                  body={
+                    selectedDiscardCards.length > 0
+                      ? t("room.exchange_waiting", {
+                          count: selectedDiscardCards.length,
+                          cards: cardsWord(selectedDiscardCards.length),
+                        })
+                      : t("room.waiting_table")
+                  }
+                />
+              ) : !isBuyStopped ? (
+                <View style={{ gap: 4 }}>
+                  <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{t("room.draw_cards")}</Text>
+                  <Text style={[type.small, { color: colors.textSecondary }]}>
+                    {selectedDiscardCards.length === 0 ? `${copy.tapToSwap}. ${t("room.no_cards_selected")}` : t("room.draw_help")}
                   </Text>
                 </View>
               ) : null}
-              {selectedDiscardCards.length === 0 ? (
-                <Text style={{ color: "#7DD3FC", fontWeight: "800" }}>
-                  {t("room.no_cards_selected")}
-                </Text>
-              ) : null}
-              <Pressable
-                onPress={() => run("submit-draw", () => submitChicagoDraw(roomId, playerId, selectedDiscardCards))}
-                disabled={busy === "submit-draw" || !myHand || myPlayer.draw_ready}
-                style={({ pressed }) => ({
-                  height: 52,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#0369A1",
-                  opacity: busy === "submit-draw" || myPlayer.draw_ready ? 0.6 : pressed ? 0.92 : 1,
-                })}
-              >
-                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
-                  {myPlayer.draw_ready
-                    ? t("room.exchange_submitted").toUpperCase()
-                    : isBuyStopped
-                      ? t("room.buy_stop_keep").toUpperCase()
-                    : selectedDiscardCards.length === 0
-                      ? t("room.keep_current").toUpperCase()
-                      : t("room.exchange_cards", { count: selectedDiscardCards.length, cards_upper: selectedDiscardCards.length === 1 ? "CARD" : "CARDS" }).toUpperCase()}
-                </Text>
-              </Pressable>
             </View>
           </AnimatedEntrance>
         ) : null}
 
-        {room.state === "poker_score_1" || room.state === "poker_score_2" ? (
+        {isPokerScore ? (
           <AnimatedEntrance enterKey={`score-${room.state}`} delay={80}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.best_hand_scoring").toUpperCase()}</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                {t("room.best_hand_body")}
-              </Text>
-              <Text style={{ color: "#7DD3FC", fontWeight: "800" }}>
-                {t("room.best_hand_wait")}
-              </Text>
-              <View
-                style={{
-                  minHeight: 52,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#111827",
-                  borderWidth: 1,
-                  borderColor: "#1F2937",
-                  paddingHorizontal: 16,
-                }}
-              >
-                <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
-                  {t("room.revealing_best_hand").toUpperCase()}
-                </Text>
+            <Card>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+                <ActivityIndicator color={ACCENT} size="small" />
+                <Text style={[type.heading, { color: colors.text, flex: 1 }]}>{t("room.revealing_best_hand")}</Text>
               </View>
-              <Text style={{ color: "#94A3B8", lineHeight: 21 }}>
-                {t("room.best_hand_hint")}
-              </Text>
-              <Pressable
-                onPress={() => run("score-phase", () => advanceChicagoPokerScore(roomId, playerId))}
-                disabled={busy === "score-phase"}
-                style={({ pressed }) => ({
-                  height: 48,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#0B1220",
-                  borderWidth: 1,
-                  borderColor: "#1F2937",
-                  opacity: busy === "score-phase" ? 0.6 : pressed ? 0.92 : 1,
-                })}
-              >
-                <Text style={{ color: "#E2E8F0", fontWeight: "900", textTransform: "uppercase" }}>{t("room.reveal_now").toUpperCase()}</Text>
-              </Pressable>
-            </View>
+              <Text style={[type.small, { color: colors.textSecondary }]}>{t("room.best_hand_body")}</Text>
+            </Card>
           </AnimatedEntrance>
         ) : null}
 
+        {/* Trick phase */}
         {room.state === "trick_phase" ? (
-          <AnimatedEntrance enterKey={`tricks-${room.phase_number}`} delay={80}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.trick_phase").toUpperCase()}</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                {t("room.trick_body")}
-              </Text>
+          <AnimatedEntrance enterKey={`tricks-${room.phase_number}`} delay={40}>
+            <View style={{ gap: space.lg }}>
               <View
                 style={{
-                  borderRadius: 18,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  backgroundColor: isMyTurn ? "rgba(56,189,248,0.14)" : "rgba(148,163,184,0.1)",
+                  borderRadius: radius.md,
+                  paddingHorizontal: space.md,
+                  paddingVertical: space.md,
+                  backgroundColor: isMyTurn ? withAlpha(ACCENT, 0.16) : colors.surface,
                   borderWidth: 1,
-                  borderColor: isMyTurn ? "rgba(125,211,252,0.34)" : "rgba(148,163,184,0.2)",
-                  gap: 4,
+                  borderColor: isMyTurn ? withAlpha(ACCENT, 0.6) : colors.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: space.md,
                 }}
               >
-                <Text style={{ color: isMyTurn ? "#7DD3FC" : "#CBD5E1", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>
-                  {isMyTurn ? t("room.your_turn") : t("room.waiting")}
-                </Text>
-                <Text style={{ color: "#F8FAFC", fontWeight: "800", lineHeight: 22 }}>
-                  {isMyTurn
-                    ? t("room.your_turn_body")
-                    : t("room.waiting_body", { name: currentTurnPlayer?.display_name ?? t("common.player") })}
-                </Text>
-              </View>
-              {canDeclareChicago ? (
-                <View
-                  style={{
-                    borderRadius: 18,
-                    padding: 14,
-                    backgroundColor: "rgba(124,45,18,0.2)",
-                    borderWidth: 1,
-                    borderColor: "rgba(251,146,60,0.3)",
-                    gap: 8,
-                  }}
-                >
-                  <Text style={{ color: "#FDBA74", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>{t("room.chicago_open")}</Text>
-                  <Text style={{ color: "#F8FAFC", lineHeight: 21 }}>
-                    {t("room.chicago_open_body")}
+                <Ionicons name={isMyTurn ? "hand-right" : "hourglass-outline"} size={22} color={isMyTurn ? ACCENT : colors.textMuted} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={[type.caption, { color: isMyTurn ? ACCENT : colors.textMuted, textTransform: "uppercase" }]}>
+                    {isMyTurn ? t("room.your_turn") : t("room.waiting")}
                   </Text>
-                  <Pressable
-                    onPress={() => run("declare-chicago", () => declareChicago(roomId, playerId))}
-                    disabled={busy === "declare-chicago"}
-                    style={({ pressed }) => ({
-                      minHeight: 52,
-                      borderRadius: 16,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "#7C2D12",
-                      borderWidth: 1,
-                      borderColor: "rgba(251,146,60,0.26)",
-                      opacity: busy === "declare-chicago" ? 0.6 : pressed ? 0.92 : 1,
-                    })}
-                  >
-                    <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>
-                      {t("room.call_chicago").toUpperCase()}
-                    </Text>
-                  </Pressable>
+                  <Text style={[type.small, { color: colors.text }]}>
+                    {isMyTurn ? t("room.your_turn_body") : fill(copy.waitingFor, { name: currentTurnPlayer?.display_name ?? t("common.player") })}
+                  </Text>
                 </View>
+                {round?.trick_number ? <Chip label={`${round.trick_number}/5`} color={colors.textMuted} icon="layers" /> : null}
+              </View>
+
+              {canDeclareChicago ? (
+                <Notice color={CHICAGO_COLOR} title={t("room.chicago_open")} body={t("room.chicago_open_body")} />
               ) : null}
               {chicagoCaller ? (
-                <View
-                  style={{
-                    borderRadius: 16,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    backgroundColor: "rgba(124,45,18,0.18)",
-                    borderWidth: 1,
-                    borderColor: "rgba(251,146,60,0.28)",
-                    gap: 4,
-                  }}
-                >
-                  <Text style={{ color: "#FDBA74", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>{t("room.chicago_claimed")}</Text>
-                  <Text style={{ color: "#E2E8F0", lineHeight: 21 }}>
-                    {t("room.chicago_claimed_body", { name: chicagoCaller.display_name })}
-                  </Text>
-                </View>
+                <Notice
+                  color={CHICAGO_COLOR}
+                  title={t("room.chicago_claimed")}
+                  body={t("room.chicago_claimed_body", { name: chicagoCaller.display_name })}
+                />
               ) : null}
-              <View style={{ gap: 8 }}>
-                <Text style={{ color: "#CBD5E1", fontWeight: "900" }}>{t("room.current_trick")}</Text>
-                {playedCards.length === 0 ? <Text style={{ color: "#94A3B8" }}>{t("room.no_cards_played")}</Text> : null}
-                {playedCards.map((entry) => {
-                  const player = players.find((candidate) => candidate.id === entry.player_id);
-                  return (
-                    <View key={`${entry.trick_id}-${entry.player_id}`} style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={{ color: "white", fontWeight: "800", flex: 1 }}>{player?.display_name ?? t("common.player")}</Text>
-                      <PlayingCard card={entry.card} compact />
-                    </View>
-                  );
-                })}
+
+              <View style={{ gap: space.sm }}>
+                <SectionLabel>{t("room.current_trick")}</SectionLabel>
+                {playedCards.length === 0 ? (
+                  <View
+                    style={{
+                      minHeight: 96,
+                      borderRadius: radius.md,
+                      borderWidth: 1,
+                      borderStyle: "dashed",
+                      borderColor: colors.borderStrong,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: space.md,
+                    }}
+                  >
+                    <Text style={[type.small, { color: colors.textMuted }]}>{t("room.no_cards_played")}</Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.md }}>
+                    {playedCards.map((entry) => {
+                      const player = players.find((candidate) => candidate.id === entry.player_id);
+                      return (
+                        <View key={`${entry.trick_id}-${entry.player_id}`} style={{ alignItems: "center", gap: 4, width: 64 }}>
+                          <PlayingCard card={entry.card} size="mini" />
+                          <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "700", maxWidth: 64 }}>
+                            {player?.display_name ?? t("common.player")}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
-              <View
-                style={{
-                  gap: 10,
-                  borderRadius: 20,
-                  padding: 14,
-                  backgroundColor: isMyTurn ? "rgba(2,132,199,0.12)" : "rgba(15,23,42,0.82)",
-                  borderWidth: 1,
-                  borderColor: isMyTurn ? "rgba(125,211,252,0.34)" : "#243041",
-                  shadowColor: isMyTurn ? "#38BDF8" : "#020617",
-                  shadowOpacity: isMyTurn ? 0.18 : 0.08,
-                  shadowRadius: 18,
-                  shadowOffset: { width: 0, height: 8 },
-                  elevation: isMyTurn ? 8 : 4,
-                }}
-              >
-                <Text style={{ color: isMyTurn ? "#7DD3FC" : "#94A3B8", fontWeight: "900", textTransform: "uppercase", fontSize: 12 }}>
-                  {isMyTurn ? t("room.use_these_cards") : t("room.cards_standby")}
-                </Text>
-                <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 18 }}>
-                  {isMyTurn ? t("room.tap_card") : t("room.cards_standby_title")}
-                </Text>
-                <Text style={{ color: isMyTurn ? "#CFFAFE" : "#CBD5E1", lineHeight: 21 }}>
-                  {isMyTurn
-                    ? t("room.use_cards_body")
-                    : t("room.cards_standby_body")}
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  {(myHand?.cards ?? []).map((card) => (
-                    <PlayingCard
-                      key={`play-${cardId(card)}`}
-                      card={card}
-                      compact
-                      onPress={isMyTurn ? () => run(`play-${cardId(card)}`, () => playChicagoCard(roomId, playerId, card)) : undefined}
-                    />
-                  ))}
-                </View>
+
+              <View style={{ gap: space.xs }}>
+                {handTitle(
+                  <Text style={[type.caption, { color: isMyTurn ? ACCENT : colors.textSubtle }]}>
+                    {(isMyTurn ? t("room.use_these_cards") : t("room.cards_standby")).toUpperCase()}
+                  </Text>
+                )}
+                <HandRow>
+                  {(myHand?.cards ?? []).map((card) => {
+                    const id = cardId(card);
+                    return (
+                      <PlayingCard
+                        key={`play-${id}`}
+                        card={card}
+                        selected={selectedPlayCard === id}
+                        dimmed={!isMyTurn}
+                        onPress={isMyTurn && !busy ? () => setSelectedPlayCard((current) => (current === id ? null : id)) : undefined}
+                      />
+                    );
+                  })}
+                </HandRow>
               </View>
             </View>
           </AnimatedEntrance>
@@ -941,83 +1024,134 @@ export default function ChicagoRoomScreen() {
 
         {room.state === "result" ? (
           <AnimatedEntrance enterKey={`result-${room.phase_number}`} delay={80}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{t("room.round_result").toUpperCase()}</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{translatedPublicMessage}</Text>
-              {isHost ? (
-                <Pressable
-                  onPress={() => run("next-round", () => startChicagoRound(roomId, playerId))}
-                  disabled={busy === "next-round"}
-                  style={({ pressed }) => ({
-                    height: 52,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#0369A1",
-                    opacity: pressed ? 0.92 : 1,
-                  })}
-                >
-                  <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("room.deal_next_round").toUpperCase()}</Text>
-                </Pressable>
-              ) : (
-                <Text style={{ color: "#94A3B8" }}>{t("room.wait_host_next")}</Text>
-              )}
-            </View>
+            <Card accent={ACCENT}>
+              <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{t("room.round_result")}</Text>
+              <Text style={[type.body, { color: colors.text }]}>{translatedPublicMessage}</Text>
+            </Card>
           </AnimatedEntrance>
         ) : null}
 
         {room.state === "game_over" ? (
           <AnimatedEntrance enterKey={`game-over-${room.phase_number}`} delay={80}>
-            <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 12 }}>
-              <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.game_over")}</Text>
-              <Text style={{ color: "#CBD5E1", lineHeight: 22 }}>{translatedPublicMessage}</Text>
-              <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 18 }}>
+            <Card accent={colors.success} style={{ alignItems: "center" }}>
+              <Ionicons name="trophy" size={40} color={colors.warning} />
+              <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{t("room.game_over")}</Text>
+              <Text style={[type.title, { color: colors.text, textAlign: "center" }]}>
                 {t("room.winner")} {players.find((player) => player.id === room.winner_player_id)?.display_name ?? t("common.unknown")}
               </Text>
-            </View>
+              <Text style={[type.small, { color: colors.textSecondary, textAlign: "center" }]}>{translatedPublicMessage}</Text>
+            </Card>
+            <SupportPicklo />
           </AnimatedEntrance>
         ) : null}
 
-        <AnimatedEntrance enterKey={`scores-${players.length}`} delay={100}>
-          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17 }}>{t("room.scoreboard")}</Text>
-            {players.map((player) => (
-              <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <View style={{ gap: 4 }}>
-                  <Text style={{ color: "white", fontWeight: "800" }}>{player.display_name}</Text>
-                  <Text style={{ color: "#64748B" }}>
-                    {player.score >= BUY_STOP_SCORE ? t("room.buy_stop_row", { score: BUY_STOP_SCORE }) : player.id === room.host_player_id ? t("common.host") : t("room.seat", { seat: player.seat_order })}
-                  </Text>
-                </View>
-                <View style={{ alignItems: "flex-end", gap: 4 }}>
-                  {player.score >= BUY_STOP_SCORE ? (
-                    <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(251,191,36,0.16)", borderWidth: 1, borderColor: "rgba(251,191,36,0.3)" }}>
-                      <Text style={{ color: "#FCD34D", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>{t("room.no_swaps")}</Text>
-                    </View>
-                  ) : null}
-                  <Text style={{ color: "#7DD3FC", fontWeight: "900", fontSize: 18 }}>{player.score}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </AnimatedEntrance>
+        {room.state !== "lobby" ? (
+          <AnimatedEntrance enterKey={`scores-${players.length}`} delay={100}>
+            {scoreboard}
+          </AnimatedEntrance>
+        ) : null}
+      </Screen>
 
-        <Pressable
-          onPress={() => router.replace("/")}
-          style={({ pressed }) => ({
-            height: 50,
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#111827",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-            opacity: pressed ? 0.9 : 1,
-          })}
-        >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{t("common.back_to_games").toUpperCase()}</Text>
-        </Pressable>
-      </ScrollView>
+      {/* Overlays */}
+      {showTrickWinnerModal ? (
+        <ModalShell zIndex={19} dim={0.5}>
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 360,
+              borderRadius: radius.xl,
+              padding: space.xl,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: withAlpha(ACCENT, 0.45),
+              alignItems: "center",
+              gap: space.sm,
+              opacity: trickWinnerOpacity,
+              transform: [{ scale: trickWinnerScale }, { translateY: trickWinnerTranslateY }],
+            }}
+          >
+            <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{t("modal.trick_winner")}</Text>
+            <Text style={[type.title, { color: colors.text, textAlign: "center" }]}>{trickWinnerName ?? t("common.player")}</Text>
+            <Text style={[type.small, { color: colors.textSecondary, textAlign: "center", fontWeight: "700" }]}>
+              {t("modal.won_this_trick")}
+            </Text>
+          </Animated.View>
+        </ModalShell>
+      ) : null}
+      {showPokerRevealModal ? (
+        <ModalShell zIndex={20}>
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 400,
+              borderRadius: radius.xl,
+              padding: space.xl,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: withAlpha(ACCENT, 0.45),
+              alignItems: "center",
+              gap: space.sm,
+              opacity: pokerRevealOpacity,
+              transform: [{ scale: pokerRevealScale }, { translateY: pokerRevealTranslateY }],
+            }}
+          >
+            <View
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: radius.pill,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(ACCENT, 0.18),
+                borderWidth: 1,
+                borderColor: withAlpha(ACCENT, 0.45),
+                marginBottom: space.xs,
+              }}
+            >
+              <Ionicons name="trophy" size={34} color={ACCENT} />
+            </View>
+            <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{t("modal.best_hand_revealed")}</Text>
+            <Text style={[type.title, { color: colors.text, textAlign: "center" }]}>{t("modal.poker_scoring")}</Text>
+            <Text style={[type.body, { color: colors.textSecondary, textAlign: "center", fontWeight: "700" }]}>
+              {translatedPublicMessage ?? t("modal.poker_fallback")}
+            </Text>
+          </Animated.View>
+        </ModalShell>
+      ) : null}
+      {buyStopEvent ? (
+        <ModalShell zIndex={21} dim={0.6}>
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: 400,
+              borderRadius: radius.xl,
+              paddingVertical: space.xl,
+              paddingHorizontal: space.xl,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: withAlpha(buyStopEvent.tone === "penalty" ? colors.danger : colors.warning, 0.5),
+              alignItems: "center",
+              gap: space.sm,
+              opacity: buyStopOpacity,
+              transform: [
+                { scale: buyStopScale },
+                { rotate: buyStopRotate.interpolate({ inputRange: [-1, 1], outputRange: ["-1rad", "1rad"] }) },
+              ],
+            }}
+          >
+            <Text style={{ fontSize: 48 }}>{buyStopEvent.tone === "penalty" ? "💥" : "🛒"}</Text>
+            <Text
+              style={[type.caption, { color: buyStopEvent.tone === "penalty" ? colors.danger : colors.warning, textTransform: "uppercase" }]}
+            >
+              {buyStopEvent.title}
+            </Text>
+            <Text style={[type.title, { color: colors.text, textAlign: "center" }]}>
+              {buyStopEvent.tone === "penalty" ? t("modal.no_swap_only_chaos") : t("modal.buy_stop_activated")}
+            </Text>
+            <Text style={[type.body, { color: colors.textSecondary, textAlign: "center" }]}>{buyStopEvent.message}</Text>
+          </Animated.View>
+        </ModalShell>
+      ) : null}
     </View>
   );
 }

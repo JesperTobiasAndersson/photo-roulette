@@ -1,34 +1,36 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Alert, FlatList, Pressable, SafeAreaView, StatusBar, Animated, Easing } from "react-native";
+import { Animated, Easing, Text, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
-import { AdSenseAd } from "../src/lib/ads";
 import { useI18n } from "../src/lib/i18n";
+import { showAlert } from "../src/lib/notify";
+import { ShareButton } from "../src/components/ShareButton";
+import { SupportPicklo } from "../src/components/SupportPicklo";
+import { GAMES } from "../src/games/catalog";
+import { Button, Card, Chip, Screen, SectionLabel, TopBar } from "../src/ui/components";
+import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
+import { siteUrl } from "../src/lib/site";
+
+const GAME = GAMES.memematch;
+const ACCENT = GAME.accent;
 
 type Row = { player_id: string; points: number; name?: string };
 
-const COLORS = {
-  bgTop: "#0B1020",
-  bgBottom: "#070A12",
-  card: "rgba(255,255,255,0.08)",
-  cardStrong: "rgba(255,255,255,0.12)",
-  border: "rgba(255,255,255,0.14)",
-  text: "#EAF0FF",
-  subText: "rgba(234,240,255,0.75)",
+const MEDAL = {
   gold: "#F6C85F",
   silver: "#C9D1E6",
   bronze: "#D08B5B",
 };
 
 function getMedal(place: number, language: "en" | "sv") {
-  if (place === 1) return { emoji: "👑", color: COLORS.gold, label: language === "sv" ? "1:a" : "1st" };
-  if (place === 2) return { emoji: "🥈", color: COLORS.silver, label: language === "sv" ? "2:a" : "2nd" };
-  if (place === 3) return { emoji: "🥉", color: COLORS.bronze, label: language === "sv" ? "3:a" : "3rd" };
-  return { emoji: "•", color: COLORS.subText, label: language === "sv" ? `${place}:a` : `${place}th` };
+  if (place === 1) return { emoji: "👑", color: MEDAL.gold, label: language === "sv" ? "1:a" : "1st" };
+  if (place === 2) return { emoji: "🥈", color: MEDAL.silver, label: language === "sv" ? "2:a" : "2nd" };
+  if (place === 3) return { emoji: "🥉", color: MEDAL.bronze, label: language === "sv" ? "3:a" : "3rd" };
+  return { emoji: "•", color: colors.textMuted, label: language === "sv" ? `${place}:a` : `${place}th` };
 }
 
 export default function ResultsScreen() {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,8 @@ export default function ResultsScreen() {
           noResults: "Inga resultat att visa.",
           back: "Tillbaka till MemeMatch",
           backBody: "Starta ett nytt rum eller gå med igen",
+          refresh: "Uppdatera",
+          shareResult: "Dela resultatet",
         }
       : {
           scoreError: "Error (scores)",
@@ -76,6 +80,8 @@ export default function ResultsScreen() {
           noResults: "No results to show.",
           back: "Back to MemeMatch",
           backBody: "Start a new room or join again",
+          refresh: "Refresh",
+          shareResult: "Share the result",
         };
 
   const load = async () => {
@@ -84,10 +90,10 @@ export default function ResultsScreen() {
 
     try {
       const { data: scores, error: sErr } = await supabase.from("room_scores").select("player_id,points").eq("room_id", roomId).order("points", { ascending: false });
-      if (sErr) return Alert.alert(copy.scoreError, sErr.message);
+      if (sErr) return showAlert(copy.scoreError, sErr.message);
 
       const { data: players, error: pErr } = await supabase.from("players").select("id,name").eq("room_id", roomId);
-      if (pErr) return Alert.alert(copy.playerError, pErr.message);
+      if (pErr) return showAlert(copy.playerError, pErr.message);
 
       const scoresMap = new Map((scores ?? []).map((s: any) => [s.player_id, s.points]));
       const merged = (players ?? []).map((p: any) => ({
@@ -99,7 +105,7 @@ export default function ResultsScreen() {
       merged.sort((a, b) => b.points - a.points);
       setRows(merged);
     } catch (error) {
-      Alert.alert(copy.failedLoad, String(error));
+      showAlert(copy.failedLoad, String(error));
     } finally {
       setLoading(false);
     }
@@ -180,178 +186,150 @@ export default function ResultsScreen() {
   const winnerName = top3[0]?.name ?? "—";
   const winnerPoints = top3[0]?.points ?? 0;
 
+  const shareMessage =
+    language === "sv"
+      ? `🏆 ${winnerName} vann MemeMatch på Picklo med ${winnerPoints} poäng! Tror du att du kan slå oss?`
+      : `🏆 ${winnerName} won MemeMatch on Picklo with ${winnerPoints} points! Think you can beat us?`;
+
+  const footer = (
+    <Button
+      label={t("common.play_again")}
+      icon="refresh"
+      accent={ACCENT}
+      onPress={() => router.replace(GAME.href as any)}
+    />
+  );
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bgBottom }}>
-      <StatusBar barStyle="light-content" />
-      <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280, backgroundColor: COLORS.bgTop }} />
-      <View style={{ position: "absolute", top: 70, left: -80, width: 240, height: 240, borderRadius: 999, backgroundColor: "rgba(124,92,255,0.22)" }} />
-      <View style={{ position: "absolute", top: 20, right: -90, width: 260, height: 260, borderRadius: 999, backgroundColor: "rgba(246,200,95,0.12)" }} />
-
-      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
-        <View style={{ gap: 6 }}>
-          <Text style={{ color: COLORS.text, fontSize: 26, fontWeight: "900" }}>{copy.title}</Text>
-          <Text style={{ color: COLORS.subText, fontSize: 13 }}>
-            {copy.room}: <Text style={{ color: COLORS.text, fontWeight: "700" }}>{roomId ?? "—"}</Text>
-          </Text>
-        </View>
-
-        <Animated.View
-          style={{
-            padding: 14,
-            borderRadius: 24,
-            backgroundColor: COLORS.cardStrong,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            overflow: "hidden",
-            opacity: heroOpacity,
-            transform: [{ translateY: heroLift }, { scale: heroScale }],
-          }}
-        >
+    <Screen topBar={<TopBar title={copy.title} backHref={GAME.href} />} footer={footer}>
+      {/* Winner spotlight + podium */}
+      <Animated.View
+        style={{
+          opacity: heroOpacity,
+          transform: [{ translateY: heroLift }, { scale: heroScale }],
+        }}
+      >
+        <Card accent={MEDAL.gold} style={{ alignItems: "center", paddingVertical: space.xl, overflow: "hidden" }}>
           <Animated.View
+            pointerEvents="none"
             style={{
               position: "absolute",
-              top: -36,
-              left: -18,
-              width: 240,
-              height: 240,
-              borderRadius: 999,
-              backgroundColor: "rgba(246,200,95,0.18)",
+              top: -60,
+              width: 260,
+              height: 260,
+              borderRadius: radius.pill,
+              backgroundColor: withAlpha(MEDAL.gold, 0.14),
               opacity: glowPulse,
               transform: [{ scale: glowPulse }],
             }}
           />
-          <Animated.View
-            style={{
-              position: "absolute",
-              top: 16,
-              right: -18,
-              width: 150,
-              height: 150,
-              borderRadius: 999,
-              backgroundColor: "rgba(124,92,255,0.14)",
-              opacity: glowPulse.interpolate({ inputRange: [0.72, 1], outputRange: [0.45, 0.8] }),
-              transform: [
-                {
-                  scale: glowPulse.interpolate({ inputRange: [0.72, 1], outputRange: [0.94, 1.08] }),
-                },
-              ],
-            }}
-          />
-          <Text style={{ color: COLORS.subText, fontSize: 12, fontWeight: "700", letterSpacing: 1.2 }}>
-            {copy.winnerSpotlight.toUpperCase()}
+          <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.winnerSpotlight}</Text>
+          <Text style={{ fontSize: 44, lineHeight: 52 }}>👑</Text>
+          <Text numberOfLines={1} style={[type.display, { color: colors.text, textAlign: "center" }]}>
+            {winnerName}
           </Text>
-          <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: COLORS.text, fontSize: 32, fontWeight: "900" }}>👑 {winnerName}</Text>
-              <Text style={{ color: COLORS.subText, marginTop: 6 }}>{copy.winnerBody}</Text>
-            </View>
-            <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, backgroundColor: "rgba(124,92,255,0.18)", borderWidth: 1, borderColor: "rgba(124,92,255,0.28)" }}>
-              <Text style={{ color: COLORS.text, fontWeight: "900", fontSize: 18 }}>{winnerPoints}</Text>
-              <Text style={{ color: COLORS.subText, fontWeight: "800", fontSize: 11, marginTop: 2 }}>
-                {copy.pointsLabel.toUpperCase()}
-              </Text>
-            </View>
-          </View>
+          <Chip label={`${winnerPoints} ${copy.pointsLabel}`} color={MEDAL.gold} icon="trophy" />
+          <Text style={[type.body, { color: colors.textSecondary }]}>{copy.winnerBody}</Text>
+        </Card>
 
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-            {top3.map((player, index) => {
-              const medal = getMedal(index + 1, language);
+        {top3.length > 1 ? (
+          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.md, alignItems: "flex-end" }}>
+            {[top3[1], top3[0], top3[2]].map((player, i) => {
+              if (!player) return <View key={`empty-${i}`} style={{ flex: 1 }} />;
+              const place = i === 1 ? 1 : i === 0 ? 2 : 3;
+              const medal = getMedal(place, language);
               return (
-                <View key={player.player_id} style={{ flex: 1, padding: 12, borderRadius: 16, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border }}>
-                  <Text style={{ color: medal.color, fontWeight: "900", fontSize: 14 }}>
-                    {medal.emoji} {medal.label}
-                  </Text>
-                  <Text numberOfLines={1} style={{ color: COLORS.text, fontWeight: "800", marginTop: 6 }}>
+                <View
+                  key={player.player_id}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    gap: 2,
+                    paddingVertical: place === 1 ? space.xl : place === 2 ? space.lg : space.md,
+                    paddingHorizontal: space.sm,
+                    borderRadius: radius.lg,
+                    backgroundColor: withAlpha(medal.color, 0.1),
+                    borderWidth: 1,
+                    borderColor: withAlpha(medal.color, 0.45),
+                  }}
+                >
+                  <Text style={{ fontSize: 24 }}>{medal.emoji}</Text>
+                  <Text style={{ color: medal.color, fontSize: 14, fontWeight: "900" }}>{medal.label}</Text>
+                  <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text }]}>
                     {player.name}
                   </Text>
-                  <Text style={{ color: COLORS.subText, marginTop: 4, fontWeight: "800" }}>{player.points}p</Text>
+                  <Text style={[type.small, { color: colors.textMuted, fontWeight: "800" }]}>{player.points}p</Text>
                 </View>
               );
             })}
           </View>
-        </Animated.View>
+        ) : null}
+      </Animated.View>
 
-        <View style={{ marginVertical: 12 }}>
-          <AdSenseAd />
-        </View>
+      <ShareButton label={copy.shareResult} message={shareMessage} url={siteUrl("/picklo")} accentColor={ACCENT} />
+      <SupportPicklo />
 
-        <Animated.View style={{ opacity: listOpacity, transform: [{ translateY: listLift }], flex: 1 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
-          <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "900" }}>{copy.leaderboard}</Text>
-          <Pressable
-            onPress={load}
-            style={({ pressed }) => ({
-              paddingVertical: 8,
-              paddingHorizontal: 10,
-              borderRadius: 12,
-              backgroundColor: pressed ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.08)",
-              borderWidth: 1,
-              borderColor: COLORS.border,
-            })}
-          >
-            <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: 12 }}>{loading ? copy.loading : copy.updating}</Text>
-          </Pressable>
-        </View>
-
-        <FlatList
-          data={rest}
-          keyExtractor={(item) => item.player_id}
-          contentContainerStyle={{ paddingBottom: 12 }}
-          ListEmptyComponent={
-            <View style={{ padding: 14, borderRadius: 16, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, marginTop: 6 }}>
-              <Text style={{ color: COLORS.subText }}>{rows.length <= 3 ? copy.noMorePlayers : copy.noResults}</Text>
-            </View>
+      {/* Rest of the leaderboard */}
+      <Animated.View style={{ opacity: listOpacity, transform: [{ translateY: listLift }], gap: space.sm }}>
+        <SectionLabel
+          right={
+            <Button
+              label={loading ? copy.loading : copy.refresh}
+              onPress={load}
+              variant="ghost"
+              size="sm"
+              icon="refresh"
+              loading={loading}
+            />
           }
-          renderItem={({ item, index }) => {
+        >
+          {copy.leaderboard}
+        </SectionLabel>
+
+        {rest.length === 0 ? (
+          <Text style={[type.small, { color: colors.textMuted }]}>
+            {rows.length <= 3 && rows.length > 0 ? copy.noMorePlayers : copy.noResults}
+          </Text>
+        ) : (
+          rest.map((item, index) => {
             const place = index + 4;
             return (
               <View
+                key={item.player_id}
                 style={{
-                  padding: 12,
-                  borderRadius: 16,
-                  backgroundColor: COLORS.card,
+                  minHeight: 56,
+                  paddingHorizontal: space.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.surface,
                   borderWidth: 1,
-                  borderColor: COLORS.border,
+                  borderColor: colors.border,
                   flexDirection: "row",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  marginTop: 8,
+                  gap: space.md,
                 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                  <View style={{ width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.10)" }}>
-                    <Text style={{ color: COLORS.text, fontWeight: "900" }}>{place}</Text>
-                  </View>
-                  <Text numberOfLines={1} style={{ color: COLORS.text, fontWeight: "800", flex: 1 }}>
-                    {item.name}
-                  </Text>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: radius.sm,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.surfaceRaised,
+                  }}
+                >
+                  <Text style={{ color: colors.textSecondary, fontWeight: "900" }}>{place}</Text>
                 </View>
-
-                <View style={{ paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.10)" }}>
-                  <Text style={{ color: COLORS.text, fontWeight: "900" }}>{item.points}p</Text>
-                </View>
+                <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text, flex: 1 }]}>
+                  {item.name}
+                </Text>
+                <Text style={[type.bodyStrong, { color: colors.textSecondary }]}>{item.points}p</Text>
               </View>
             );
-          }}
-        />
-        </Animated.View>
+          })
+        )}
+      </Animated.View>
 
-        <Pressable
-          onPress={() => router.replace("/picklo")}
-          style={({ pressed }) => ({
-            paddingVertical: 14,
-            borderRadius: 18,
-            backgroundColor: pressed ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.10)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.16)",
-            marginBottom: 14,
-          })}
-        >
-          <Text style={{ color: COLORS.text, textAlign: "center", fontWeight: "900", fontSize: 15 }}>{copy.back.toUpperCase()}</Text>
-          <Text style={{ color: COLORS.subText, textAlign: "center", marginTop: 2, fontSize: 12 }}>{copy.backBody}</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
-

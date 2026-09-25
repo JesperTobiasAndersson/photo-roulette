@@ -1,145 +1,198 @@
 import React from "react";
-import { Platform, Pressable, ScrollView, Text, View } from "react-native";
-import { router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { Text, View } from "react-native";
 import { useI18n } from "../src/lib/i18n";
-import { RelatedGamesSection } from "../src/components/RelatedGamesSection";
+import { GAMES, GAME_ORDER, type GameId } from "../src/games/catalog";
+import { CatalogGameRow, RelatedGamesSection } from "../src/components/RelatedGamesSection";
 import { TopicLinksSection } from "../src/components/TopicLinksSection";
 import { WebMarketingSection } from "../src/components/WebMarketingSection";
 import { WebSeo } from "../src/components/WebSeo";
+import { Screen, SectionLabel, TopBar } from "../src/ui/components";
+import { colors, gameAccents, space, type } from "../src/ui/theme";
+import { siteUrl } from "../src/lib/site";
 
-const isWeb = Platform.OS === "web";
+const PATH = "/social-deduction-games";
+const ACCENT = gameAccents.mafia;
+const TOPIC_GAMES: GameId[] = ["mafia", "imposter"];
 
 export default function SocialDeductionGamesPage() {
-  const { language, t } = useI18n();
+  const { language } = useI18n();
   const copy =
     language === "sv"
       ? {
-          title: "Social deduction-spel online för vänner och grupper",
+          seoTitle: "Social deduction-spel online för vänner och grupper",
           description:
-            "Utforska social deduction-spel med dolda roller, hemliga ord, rumskoder och snabba mobilvänliga flöden på Picklo.",
-          eyebrow: "Social Deduction",
-          bodyTitle: "En starkare sida för bluff, roller och grupppsykologi",
-          paragraphs: [
-            "Social deduction-sökningar har ofta hög intention eftersom användaren redan vet att gruppen vill spela något med bluff, roller och diskussion. Därför är det här en viktig trafikyta att äga.",
-            "Picklo täcker både snabba och djupare format genom Imposter och Mafia, vilket gör sidan relevant för både nybörjare och grupper som vill ha längre rundor.",
+            "Spela social deduction-spel med dolda roller och hemliga ord på Picklo. Gratis i mobilen med rumskoder, inget konto och ingen spelledare.",
+          eyebrow: "Bluffspel",
+          heading: "Social deduction-spel för vänner och grupper",
+          intro:
+            "I social deduction-spel har någon i gruppen en hemlighet, och resten måste lista ut vem. Det handlar om att bluffa, läsa av varandra och övertyga gruppen. Picklo sköter roller och röstning i mobilen, så alla får spela och ingen behöver vara spelledare.",
+          gamesTitle: "Bluffspel på Picklo",
+          howEyebrow: "Så funkar det",
+          howTitle: "Starta en runda",
+          howParagraphs: ["Ni behöver bara en mobil per person. Rollerna visas privat på varje skärm, så håll mobilen för dig själv."],
+          howSteps: [
+            "Välj Mafia eller Imposter och tryck på Skapa rum.",
+            "Dela rumskoden så att alla kan gå med från sin mobil.",
+            "Alla får en hemlig roll eller ett hemligt ord. Sedan börjar diskussionen.",
+            "Rösta ut den ni misstänker. Avslöja bluffarna innan de lurar resten av gruppen.",
           ],
-          bullets: [
-            "Snabb start med rumskoder",
-            "Både lättare och djupare deduction-spel i samma app",
-            "Starkt innehåll för delning i kompisgrupper och Discord",
+          pickTitle: "Mafia eller Imposter?",
+          pickParagraphs: ["Båda spelen bygger på bluff, men de passar olika tillfällen:"],
+          pickBullets: [
+            "Imposter: några minuter per runda, förklaras på en mening. Perfekt som icebreaker eller mellan andra spel. 4–12 spelare.",
+            "Mafia: längre spel med dag- och nattfaser och specialroller. Bäst för större grupper på 5–20 spelare.",
           ],
+          faqTitle: "Vanliga frågor",
           faq: [
             {
               question: "Vad är skillnaden mellan Mafia och Imposter?",
-              answer: "Imposter är snabbare och enklare att komma igång med, medan Mafia har fler roller och mer långsiktig social deduction.",
+              answer: "Imposter är snabbare och enklare att komma igång med, medan Mafia har fler roller och längre, mer strategiska omgångar.",
+            },
+            {
+              question: "Behöver vi en spelledare?",
+              answer: "Nej. Appen delar ut rollerna, sköter nattens handlingar och räknar rösterna, så alla kan vara med och spela.",
+            },
+            {
+              question: "Kan vi spela på distans?",
+              answer: "Ja. Eftersom alla har sin egen mobil funkar spelen över ett video- eller röstsamtal, till exempel på Discord.",
             },
           ],
-          relatedTitle: "Deduction-spel på Picklo",
-          exploreTitle: "Fler ingångar",
+          moreTitle: "Fler spel",
+          exploreTitle: "Hitta mer att spela",
+          topics: [
+            { href: "/party-games", title: "Partyspel", description: "Alla spel på Picklo samlade på ett ställe.", accentColor: colors.brand },
+            { href: "/quiz-games", title: "Quizspel", description: "Trivia och Music Quiz när ni vill tävla om poäng.", accentColor: gameAccents.musicQuiz },
+          ],
         }
       : {
-          title: "Online Social Deduction Games for Friends and Groups",
+          seoTitle: "Online Social Deduction Games for Friends and Groups",
           description:
-            "Explore social deduction games with hidden roles, secret words, room codes and fast mobile-friendly flows on Picklo.",
+            "Play social deduction games with hidden roles and secret words on Picklo. Free on your phone with room codes, no account and no narrator needed.",
           eyebrow: "Social Deduction",
-          bodyTitle: "A stronger page for bluffing, hidden roles and group psychology",
-          paragraphs: [
-            "Social deduction searches usually come with strong intent because the group already knows they want bluffing, hidden information and discussion. That makes this a valuable traffic surface to own.",
-            "Picklo covers both quick and deeper formats through Imposter and Mafia, which makes the page useful for new players as well as groups that want longer rounds.",
+          heading: "Social deduction games for friends and groups",
+          intro:
+            "In a social deduction game someone in the group has a secret, and everyone else has to work out who. It's all about bluffing, reading each other and winning the argument. Picklo handles the roles and voting on your phones, so everyone gets to play and nobody has to narrate.",
+          gamesTitle: "Social deduction games on Picklo",
+          howEyebrow: "How it works",
+          howTitle: "Start a round",
+          howParagraphs: ["All you need is one phone per person. Roles show up privately on each screen, so keep yours to yourself."],
+          howSteps: [
+            "Choose Mafia or Imposter and tap Create room.",
+            "Share the room code so everyone can join on their phone.",
+            "Everyone gets a secret role or word. Then the discussion begins.",
+            "Vote out whoever you suspect. Catch the bluffers before they fool the rest of the group.",
           ],
-          bullets: [
-            "Fast start with room codes",
-            "Both lighter and deeper deduction formats in one app",
-            "Strong sharing angle for friend groups and Discord servers",
+          pickTitle: "Mafia or Imposter?",
+          pickParagraphs: ["Both games are built on bluffing, but they suit different moments:"],
+          pickBullets: [
+            "Imposter: a few minutes per round and explained in one sentence. Perfect as an icebreaker or between other games. 4–12 players.",
+            "Mafia: a longer game with day and night phases and special roles. Best for bigger groups of 5–20 players.",
           ],
+          faqTitle: "FAQ",
           faq: [
             {
               question: "What is the difference between Mafia and Imposter?",
-              answer: "Imposter is faster and easier to start, while Mafia adds more roles and deeper social deduction over longer rounds.",
+              answer: "Imposter is faster and easier to start, while Mafia adds more roles and longer, more strategic rounds.",
+            },
+            {
+              question: "Do we need a narrator?",
+              answer: "No. The app deals the roles, runs the night actions and counts the votes, so everyone gets to play.",
+            },
+            {
+              question: "Can we play remotely?",
+              answer: "Yes. Since everyone has their own phone, the games work over a video or voice call, for example on Discord.",
             },
           ],
-          relatedTitle: "Deduction Games on Picklo",
-          exploreTitle: "More Entry Points",
+          moreTitle: "More games",
+          exploreTitle: "Find more to play",
+          topics: [
+            { href: "/party-games", title: "Party Games", description: "Every game on Picklo in one place.", accentColor: colors.brand },
+            { href: "/quiz-games", title: "Quiz Games", description: "Trivia and Music Quiz for when you want to compete for points.", accentColor: gameAccents.musicQuiz },
+          ],
         };
 
   const structuredData = [
     {
       "@context": "https://schema.org",
       "@type": "WebPage",
-      name: copy.title,
+      name: copy.seoTitle,
       description: copy.description,
-      url: "https://picklo.se/social-deduction-games",
+      url: siteUrl(PATH),
     },
     {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Picklo", item: "https://picklo.se/" },
-        { "@type": "ListItem", position: 2, name: copy.eyebrow, item: "https://picklo.se/social-deduction-games" },
+        { "@type": "ListItem", position: 1, name: "Picklo", item: siteUrl("/") },
+        { "@type": "ListItem", position: 2, name: copy.eyebrow, item: siteUrl(PATH) },
       ],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: copy.gamesTitle,
+      itemListElement: TOPIC_GAMES.map((id, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: GAMES[id].title,
+        url: siteUrl(GAMES[id].href),
+      })),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: copy.faq.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
     },
   ];
 
-  const relatedGames =
-    language === "sv"
-      ? [
-          { href: "/mafia", title: "Mafia", description: "Dolda roller, nattfaser och mer strategisk social deduction.", accentColor: "#F43F5E" },
-          { href: "/imposter", title: "Imposter", description: "Snabbare bluffrundor med hemligt ord.", accentColor: "#F59E0B" },
-        ]
-      : [
-          { href: "/mafia", title: "Mafia", description: "Hidden roles, night phases and deeper strategic deduction.", accentColor: "#F43F5E" },
-          { href: "/imposter", title: "Imposter", description: "Faster bluff rounds built around a hidden word.", accentColor: "#F59E0B" },
-        ];
-
-  const topicLinks =
-    language === "sv"
-      ? [
-          { href: "/party-games", title: "Partyspel", description: "En bredare startsida för olika gruppspel.", accentColor: "#38BDF8" },
-          { href: "/quiz-games", title: "Quizspel", description: "När gruppen vill byta från bluff till frågor och poäng.", accentColor: "#22C55E" },
-        ]
-      : [
-          { href: "/party-games", title: "Party Games", description: "A broader page for multiplayer group games.", accentColor: "#38BDF8" },
-          { href: "/quiz-games", title: "Quiz Games", description: "For groups that want to switch from bluffing to scoring.", accentColor: "#22C55E" },
-        ];
-
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
+    <Screen topBar={<TopBar backHref="/" />}>
       <WebSeo
-        title={copy.title}
+        title={copy.seoTitle}
         description={copy.description}
         lang={language}
-        path="/social-deduction-games"
+        path={PATH}
         keywords={["social deduction games", "hidden role games", "mafia game online", "imposter game", "bluffing games"]}
         structuredData={structuredData}
       />
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 20, paddingTop: isWeb ? 32 : 20, paddingBottom: 32, alignItems: "center" }}>
-        <View style={{ width: "100%", maxWidth: 760 }}>
-          <Text style={{ color: "#FCA5A5", fontSize: 12, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>{copy.eyebrow}</Text>
-          <Text style={{ color: "#F8FAFC", fontSize: 36, fontWeight: "900", marginTop: 10 }}>{copy.title}</Text>
-          <Text style={{ color: "#94A3B8", fontSize: 16, lineHeight: 26, marginTop: 12 }}>{copy.description}</Text>
-          <Pressable
-            onPress={() => router.replace("/")}
-            style={({ pressed }) => ({
-              marginTop: 18,
-              alignSelf: "flex-start",
-              paddingVertical: 12,
-              paddingHorizontal: 16,
-              borderRadius: 16,
-              backgroundColor: "#111827",
-              borderWidth: 1,
-              borderColor: "#1F2937",
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={{ color: "white", fontWeight: "900" }}>{t("common.back_to_home")}</Text>
-          </Pressable>
-          <WebMarketingSection eyebrow={copy.eyebrow} title={copy.bodyTitle} paragraphs={copy.paragraphs} bullets={copy.bullets} faq={copy.faq} />
-          <RelatedGamesSection title={copy.relatedTitle} games={relatedGames} />
-          <TopicLinksSection title={copy.exploreTitle} topics={topicLinks} />
-        </View>
-      </ScrollView>
-    </View>
+
+      <View style={{ gap: space.sm }}>
+        <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{copy.eyebrow}</Text>
+        <Text accessibilityRole="header" style={[type.title, { color: colors.text }]}>
+          {copy.heading}
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 25 }}>{copy.intro}</Text>
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <SectionLabel>{copy.gamesTitle}</SectionLabel>
+        {TOPIC_GAMES.map((id) => (
+          <CatalogGameRow key={id} gameId={id} />
+        ))}
+      </View>
+
+      <WebMarketingSection
+        eyebrow={copy.howEyebrow}
+        title={copy.howTitle}
+        paragraphs={copy.howParagraphs}
+        bullets={copy.howSteps}
+        accentColor={ACCENT}
+      />
+      <WebMarketingSection
+        title={copy.pickTitle}
+        paragraphs={copy.pickParagraphs}
+        bullets={copy.pickBullets}
+        faq={copy.faq}
+        faqTitle={copy.faqTitle}
+        accentColor={ACCENT}
+      />
+
+      <RelatedGamesSection title={copy.moreTitle} gameIds={GAME_ORDER.filter((id) => !TOPIC_GAMES.includes(id))} />
+      <TopicLinksSection title={copy.exploreTitle} topics={copy.topics} />
+    </Screen>
   );
 }

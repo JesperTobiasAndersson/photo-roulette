@@ -1,10 +1,15 @@
 import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { SupportPicklo } from "../src/components/SupportPicklo";
+import { Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { Image } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useMafiaRoom } from "../src/games/mafia/useMafiaRoom";
+import { GAMES } from "../src/games/catalog";
 import { useI18n } from "../src/lib/i18n";
+import { Button, Card, Chip, GameIcon, Screen, SectionLabel, TopBar } from "../src/ui/components";
+import { colors, gameAccents, radius, space, touch, type, withAlpha } from "../src/ui/theme";
+
+const ACCENT = gameAccents.mafia;
 
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -13,10 +18,10 @@ function asString(v: unknown): string {
 }
 
 function getRoleBadge(role: string | undefined, language: "en" | "sv") {
-  if (role === "mafia") return { label: "MAFIA", color: "#FDA4AF", backgroundColor: "rgba(244,63,94,0.12)", borderColor: "rgba(244,63,94,0.3)" };
-  if (role === "doctor") return { label: language === "sv" ? "DOKTOR" : "DOCTOR", color: "#86EFAC", backgroundColor: "rgba(134,239,172,0.12)", borderColor: "rgba(134,239,172,0.3)" };
-  if (role === "police") return { label: language === "sv" ? "POLIS" : "POLICE", color: "#93C5FD", backgroundColor: "rgba(147,197,253,0.12)", borderColor: "rgba(147,197,253,0.3)" };
-  return { label: language === "sv" ? "BYBO" : "VILLAGER", color: "#E2E8F0", backgroundColor: "rgba(148,163,184,0.12)", borderColor: "rgba(148,163,184,0.3)" };
+  if (role === "mafia") return { label: "MAFIA", color: ACCENT };
+  if (role === "doctor") return { label: language === "sv" ? "DOKTOR" : "DOCTOR", color: colors.success };
+  if (role === "police") return { label: language === "sv" ? "POLIS" : "POLICE", color: colors.brand };
+  return { label: language === "sv" ? "BYBO" : "VILLAGER", color: colors.textSecondary };
 }
 
 export default function MafiaResults() {
@@ -40,6 +45,7 @@ export default function MafiaResults() {
           survived: "Överlevde",
           eliminated: "Utslagen",
           back: "Tillbaka till Mafia",
+          you: "Du",
         }
       : {
           loading: "Loading Results",
@@ -53,94 +59,97 @@ export default function MafiaResults() {
           survived: "Survived",
           eliminated: "Eliminated",
           back: "Back to Mafia home",
+          you: "You",
         };
+
+  const goHome = () => router.replace(GAMES.mafia.href as any);
+  const topBar = <TopBar title="Mafia" onBack={goHome} />;
 
   if (loading || !room) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
-        <StatusBar style="light" />
-        <View style={{ width: "100%", maxWidth: 420, alignItems: "center" }}>
-          <View
-            style={{
-              width: 104,
-              height: 104,
-              borderRadius: 28,
-              overflow: "hidden",
-              backgroundColor: "#111827",
-              borderWidth: 1,
-              borderColor: "rgba(244,63,94,0.35)",
-              marginBottom: 18,
-            }}
-          >
-            <Image source={require("../assets/mafia.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          </View>
-          <Text style={{ color: "white", fontSize: 32, fontWeight: "900", textAlign: "center" }}>{copy.loading}</Text>
-          <Text style={{ color: "#94A3B8", fontSize: 15, lineHeight: 24, textAlign: "center", marginTop: 10 }}>{copy.loadingBody}</Text>
+      <Screen topBar={topBar} centered>
+        <View style={{ alignItems: "center", gap: space.md }}>
+          <GameIcon source={GAMES.mafia.icon} size={96} accent={ACCENT} />
+          <Text style={[type.title, { color: colors.text, textAlign: "center" }]}>{copy.loading}</Text>
+          <Text style={[type.body, { color: colors.textMuted, textAlign: "center" }]}>{copy.loadingBody}</Text>
         </View>
-      </View>
+      </Screen>
     );
   }
 
+  const mafiaWon = room.winner === "mafia";
+  const winColor = mafiaWon ? ACCENT : colors.brand;
+  const myBadge = myRole?.role ? getRoleBadge(myRole.role, language) : null;
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-        <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>{copy.ended}</Text>
-        <Text style={{ color: room.winner === "mafia" ? "#FDA4AF" : "#BAE6FD", fontWeight: "900", fontSize: 20 }}>
-          {room.winner === "mafia" ? copy.mafiaWins : copy.villageWins}
-        </Text>
-        <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{room.public_message}</Text>
-        <Text style={{ color: "#CBD5E1" }}>
-          {copy.yourRole}: {myRole?.role?.toUpperCase() ?? copy.unknown}
-        </Text>
-
-        <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-          <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{copy.table}</Text>
-          {players.map((player) => {
-            const playerRole = playerRoles.find((role) => role.player_id === player.id)?.role;
-            const roleBadge = getRoleBadge(playerRole, language);
-
-            return (
-              <View key={player.id} style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", gap: 8 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                  <Text style={{ color: "white", fontWeight: "900", flex: 1 }}>{player.display_name}</Text>
-                  <View
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 999,
-                      backgroundColor: roleBadge.backgroundColor,
-                      borderWidth: 1,
-                      borderColor: roleBadge.borderColor,
-                    }}
-                  >
-                    <Text style={{ color: roleBadge.color, fontWeight: "900", fontSize: 12 }}>{roleBadge.label}</Text>
-                  </View>
-                </View>
-                <Text style={{ color: player.status === "alive" ? "#86EFAC" : "#FCA5A5" }}>
-                  {player.status === "alive" ? copy.survived : copy.eliminated}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <Pressable
-          onPress={() => router.replace("/mafia")}
-          style={({ pressed }) => ({
-            height: 52,
-            borderRadius: 16,
+    <Screen topBar={topBar} footer={<Button label={copy.back} icon="refresh" accent={ACCENT} onPress={goHome} />}>
+      <Card accent={winColor} style={{ alignItems: "center", paddingVertical: space.xl }}>
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: radius.pill,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#111827",
+            backgroundColor: withAlpha(winColor, 0.18),
             borderWidth: 1,
-            borderColor: "#1F2937",
-            opacity: pressed ? 0.9 : 1,
-          })}
+            borderColor: withAlpha(winColor, 0.4),
+          }}
         >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.back}</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+          <Ionicons name={mafiaWon ? "skull" : "home"} size={38} color={winColor} />
+        </View>
+        <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.ended}</Text>
+        <Text accessibilityRole="header" style={[type.display, { color: winColor, textAlign: "center" }]}>
+          {mafiaWon ? copy.mafiaWins : copy.villageWins}
+        </Text>
+        {room.public_message ? (
+          <Text style={[type.body, { color: colors.textSecondary, textAlign: "center" }]}>{room.public_message}</Text>
+        ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <Text style={[type.small, { color: colors.textMuted }]}>{copy.yourRole}:</Text>
+          {myBadge ? <Chip label={myBadge.label} color={myBadge.color} /> : <Chip label={copy.unknown} />}
+        </View>
+      </Card>
+
+      <View style={{ gap: space.sm }}>
+        <SectionLabel>{copy.table}</SectionLabel>
+        {players.map((player) => {
+          const playerRole = playerRoles.find((role) => role.player_id === player.id)?.role;
+          const roleBadge = getRoleBadge(playerRole, language);
+          const alive = player.status === "alive";
+          const isMe = player.id === playerId;
+
+          return (
+            <View
+              key={player.id}
+              style={{
+                minHeight: touch.primary,
+                paddingHorizontal: space.lg,
+                paddingVertical: space.sm,
+                borderRadius: radius.md,
+                backgroundColor: isMe ? withAlpha(ACCENT, 0.08) : colors.surface,
+                borderWidth: 1,
+                borderColor: isMe ? withAlpha(ACCENT, 0.35) : colors.border,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: space.md,
+              }}
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text }]}>
+                  {player.display_name}
+                  {isMe ? <Text style={{ color: colors.textMuted, fontWeight: "600" }}>{`  (${copy.you})`}</Text> : null}
+                </Text>
+                <Text style={{ color: alive ? colors.success : colors.danger, fontSize: 14, fontWeight: "600" }}>
+                  {alive ? copy.survived : copy.eliminated}
+                </Text>
+              </View>
+              <Chip label={roleBadge.label} color={roleBadge.color} />
+            </View>
+          );
+        })}
+      </View>
+      <SupportPicklo />
+    </Screen>
   );
 }

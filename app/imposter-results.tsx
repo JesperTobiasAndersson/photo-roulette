@@ -1,12 +1,18 @@
 import React, { useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { SupportPicklo } from "../src/components/SupportPicklo";
+import { Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { Image } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { AnimatedEntrance } from "../src/components/AnimatedEntrance";
+import { GAMES } from "../src/games/catalog";
 import { getCategoryById } from "../src/games/imposter/logic";
 import { useImposterRoom } from "../src/games/imposter/useImposterRoom";
 import { useI18n } from "../src/lib/i18n";
+import { Button, Card, Chip, GameIcon, Screen, SectionLabel, TopBar } from "../src/ui/components";
+import { colors, radius, space, touch, type, withAlpha } from "../src/ui/theme";
+
+const GAME = GAMES.imposter;
+const ACCENT = GAME.accent;
 
 function asString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -14,22 +20,14 @@ function asString(v: unknown): string {
   return "";
 }
 
-function getRoleBadge(role: string | undefined, language: "en" | "sv") {
-  if (role === "imposter") {
-    return {
-      label: language === "sv" ? "IMPOSTER" : "IMPOSTER",
-      color: "#FCA5A5",
-      backgroundColor: "rgba(252,165,165,0.12)",
-      borderColor: "rgba(252,165,165,0.35)",
-    };
-  }
-  return {
-    label: language === "sv" ? "CREW" : "CREW",
-    color: "#FCD34D",
-    backgroundColor: "rgba(252,211,77,0.12)",
-    borderColor: "rgba(252,211,77,0.35)",
-  };
-}
+/** Server messages are stored in English; translate the known ones for Swedish players. */
+const PUBLIC_MESSAGES_SV: Record<string, string> = {
+  "The group found the imposter.": "Gruppen hittade impostern.",
+  "Only two players remain. The imposter takes the win.": "Bara två spelare är kvar. Impostern vinner.",
+  "Nobody voted. The imposter slipped through.": "Ingen röstade. Impostern slank igenom.",
+  "The vote tied. The imposter survives the round.": "Röstningen blev oavgjord. Impostern överlever rundan.",
+  "The group voted out the wrong player. The imposter wins.": "Gruppen röstade ut fel spelare. Impostern vinner.",
+};
 
 export default function ImposterResults() {
   const { language } = useI18n();
@@ -45,24 +43,32 @@ export default function ImposterResults() {
           ended: "Spelet är slut",
           crewWins: "Crew vinner",
           imposterWins: "Impostern vinner",
+          imposterWas: "Impostern var",
           category: "Kategori",
           word: "Hemligt ord",
           unknown: "OKÄND",
           table: "SLUTTABELL",
           votes: (count: number) => `${count} röst${count === 1 ? "" : "er"}`,
-          back: "Tillbaka till Imposter",
+          you: "Du",
+          out: "Ute",
+          playAgain: "Spela igen",
+          home: "Alla spel",
         }
       : {
           loading: "Loading Results",
           ended: "Game Ended",
           crewWins: "Crew wins",
           imposterWins: "Imposter wins",
+          imposterWas: "The imposter was",
           category: "Category",
           word: "Secret word",
           unknown: "UNKNOWN",
           table: "FINAL TABLE",
           votes: (count: number) => `${count} vote${count === 1 ? "" : "s"}`,
-          back: "Back to Imposter home",
+          you: "You",
+          out: "Out",
+          playAgain: "Play again",
+          home: "All games",
         };
 
   const voteTallies = useMemo(() => {
@@ -74,101 +80,144 @@ export default function ImposterResults() {
   }, [currentVotes]);
 
   const category = getCategoryById(room?.category_id ?? null);
+  const imposterIds = useMemo(
+    () => new Set(playerRoles.filter((entry) => entry.role === "imposter").map((entry) => entry.player_id)),
+    [playerRoles],
+  );
+  const imposterNames = players.filter((player) => imposterIds.has(player.id)).map((player) => player.display_name);
+
+  const topBar = <TopBar title={GAME.title} onBack={() => router.replace(GAME.href as any)} />;
 
   if (loading || !room) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#070B14", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
-        <StatusBar style="light" />
-        <View style={{ width: "100%", maxWidth: 420, alignItems: "center" }}>
-          <View
-            style={{
-              width: 104,
-              height: 104,
-              borderRadius: 28,
-              overflow: "hidden",
-              backgroundColor: "#111827",
-              borderWidth: 1,
-              borderColor: "rgba(245,158,11,0.35)",
-              marginBottom: 18,
-            }}
-          >
-            <Image source={require("../assets/imposter.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          </View>
-          <Text style={{ color: "white", fontSize: 32, fontWeight: "900", textAlign: "center" }}>{copy.loading}</Text>
+      <Screen centered topBar={topBar}>
+        <View style={{ alignItems: "center", gap: space.md }}>
+          <GameIcon source={GAME.icon} size={96} accent={ACCENT} />
+          <Text style={[type.title, { color: colors.text, textAlign: "center" }]}>{copy.loading}</Text>
         </View>
-      </View>
+      </Screen>
     );
   }
 
+  const winnerTone = room.winner === "crew" ? ACCENT : colors.danger;
+  const message = room.public_message
+    ? language === "sv"
+      ? PUBLIC_MESSAGES_SV[room.public_message] ?? room.public_message
+      : room.public_message
+    : "";
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-        <AnimatedEntrance enterKey={`results-${room.winner}`} delay={30}>
-          <View style={{ gap: 6 }}>
-            <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>{copy.ended}</Text>
-            <Text style={{ color: room.winner === "crew" ? "#FCD34D" : "#FCA5A5", fontWeight: "900", fontSize: 20 }}>
-              {room.winner === "crew" ? copy.crewWins : copy.imposterWins}
-            </Text>
-            <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{room.public_message}</Text>
-            <Text style={{ color: "#CBD5E1" }}>
-              {copy.category}: {category?.title?.toUpperCase() ?? copy.unknown}
-            </Text>
-            <Text style={{ color: "#CBD5E1" }}>
-              {copy.word}: {room.secret_prompt?.toUpperCase() ?? copy.unknown}
-            </Text>
+    <Screen
+      topBar={topBar}
+      footer={
+        <>
+          <Button label={copy.playAgain} icon="refresh" accent={ACCENT} onPress={() => router.replace(GAME.href as any)} />
+          <Button label={copy.home} icon="grid-outline" variant="ghost" size="md" onPress={() => router.replace("/")} />
+        </>
+      }
+    >
+      {/* Verdict */}
+      <AnimatedEntrance enterKey={`results-${room.winner}`} delay={30}>
+        <Card accent={winnerTone} style={{ alignItems: "center", paddingVertical: space.xl, backgroundColor: withAlpha(winnerTone, 0.08) }}>
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: radius.pill,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: withAlpha(winnerTone, 0.18),
+            }}
+          >
+            <Ionicons name={room.winner === "crew" ? "trophy" : "skull"} size={36} color={winnerTone} />
           </View>
-        </AnimatedEntrance>
+          <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.ended}</Text>
+          <Text style={[type.display, { color: winnerTone, textAlign: "center" }]}>
+            {room.winner === "crew" ? copy.crewWins : copy.imposterWins}
+          </Text>
+          {message ? <Text style={[type.body, { color: colors.textSecondary, textAlign: "center" }]}>{message}</Text> : null}
+        </Card>
+      </AnimatedEntrance>
 
-        <AnimatedEntrance enterKey={`table-${players.length}`} delay={80}>
-          <View style={{ backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B", gap: 10 }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 17, textTransform: "uppercase" }}>{copy.table}</Text>
-            {players.map((player, index) => {
-              const role = playerRoles.find((entry) => entry.player_id === player.id)?.role;
-              const badge = getRoleBadge(role, language);
-              const votes = voteTallies.get(player.id) ?? 0;
-              return (
-                <AnimatedEntrance key={player.id} enterKey={`result-${player.id}-${votes}`} delay={120 + index * 32} distance={10}>
-                  <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#020617", borderWidth: 1, borderColor: "#1F2937", gap: 8 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                      <Text style={{ color: "white", fontWeight: "900", flex: 1 }}>{player.display_name}</Text>
-                      <View
-                        style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 999,
-                          backgroundColor: badge.backgroundColor,
-                          borderWidth: 1,
-                          borderColor: badge.borderColor,
-                        }}
-                      >
-                        <Text style={{ color: badge.color, fontWeight: "900", fontSize: 12 }}>{badge.label}</Text>
-                      </View>
-                    </View>
-                    <Text style={{ color: "#94A3B8" }}>{copy.votes(votes)}</Text>
+      {/* Who was the imposter + the secret word */}
+      <AnimatedEntrance enterKey={`reveal-${room.id}`} delay={80}>
+        <View style={{ flexDirection: "row", gap: space.md }}>
+          <Card accent={colors.danger} style={{ flex: 1, gap: space.xs }}>
+            <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.imposterWas}</Text>
+            <Text adjustsFontSizeToFit numberOfLines={2} style={[type.title, { color: colors.danger }]}>
+              {imposterNames.length > 0 ? imposterNames.join(", ") : copy.unknown}
+            </Text>
+          </Card>
+          <Card accent={ACCENT} style={{ flex: 1, gap: space.xs }}>
+            <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.word}</Text>
+            <Text adjustsFontSizeToFit numberOfLines={2} style={[type.title, { color: colors.text }]}>
+              {room.secret_prompt?.toUpperCase() ?? copy.unknown}
+            </Text>
+            {category ? (
+              <Text style={[type.small, { color: colors.textMuted }]}>
+                {copy.category}: {category.title}
+              </Text>
+            ) : null}
+          </Card>
+        </View>
+      </AnimatedEntrance>
+
+      {/* Final table */}
+      <View style={{ gap: space.sm }}>
+        <SectionLabel>{copy.table}</SectionLabel>
+        {players.map((player, index) => {
+          const isImposter = imposterIds.has(player.id);
+          const votes = voteTallies.get(player.id) ?? 0;
+          const eliminated = player.status === "eliminated";
+          return (
+            <AnimatedEntrance key={player.id} enterKey={`result-${player.id}-${votes}`} delay={120 + index * 32} distance={10}>
+              <View
+                style={{
+                  minHeight: touch.min + 8,
+                  paddingVertical: space.sm,
+                  paddingHorizontal: space.md,
+                  borderRadius: radius.md,
+                  backgroundColor: isImposter ? withAlpha(colors.danger, 0.08) : colors.sunken,
+                  borderWidth: 1,
+                  borderColor: isImposter ? withAlpha(colors.danger, 0.4) : colors.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: space.md,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: withAlpha(isImposter ? colors.danger : ACCENT, 0.16),
+                  }}
+                >
+                  <Text style={{ color: isImposter ? colors.danger : ACCENT, fontWeight: "900", fontSize: 16 }}>
+                    {player.display_name.trim().charAt(0).toUpperCase() || "?"}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text numberOfLines={1} style={[type.bodyStrong, { color: colors.text, flexShrink: 1 }]}>
+                      {player.display_name}
+                    </Text>
+                    {player.id === playerId ? <Chip label={copy.you} color={colors.brand} /> : null}
                   </View>
-                </AnimatedEntrance>
-              );
-            })}
-          </View>
-        </AnimatedEntrance>
-
-        <Pressable
-          onPress={() => router.replace("/imposter")}
-          style={({ pressed }) => ({
-            height: 52,
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#111827",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-            opacity: pressed ? 0.9 : 1,
-          })}
-        >
-          <Text style={{ color: "white", fontWeight: "900", textTransform: "uppercase" }}>{copy.back}</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+                  <Text style={[type.small, { color: colors.textMuted }]}>
+                    {copy.votes(votes)}
+                    {eliminated ? ` · ${copy.out}` : ""}
+                  </Text>
+                </View>
+                <Chip label={isImposter ? "IMPOSTER" : "CREW"} color={isImposter ? colors.danger : ACCENT} />
+              </View>
+            </AnimatedEntrance>
+          );
+        })}
+      </View>
+      <SupportPicklo />
+    </Screen>
   );
 }

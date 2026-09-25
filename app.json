@@ -29,14 +29,7 @@
       "package": "com.anonymous.Picklo"
     },
     "web": {
-      "favicon": "./assets/Favicon.png",
-      "build": {
-        "babel": {
-          "include": [
-            "react-adsense"
-          ]
-        }
-      },
+      "favicon": "./assets/favicon.png",
       "meta": {
         "viewport": "width=device-width, initial-scale=1.0",
         "apple-mobile-web-app-capable": "yes",

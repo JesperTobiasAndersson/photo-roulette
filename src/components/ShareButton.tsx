@@ -1,59 +1,50 @@
 import { useState } from "react";
-import { Platform, Pressable, Text } from "react-native";
+import { Platform, Share, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { Button } from "../ui/components";
 import { CopyToast } from "./CopyToast";
 
 type ShareButtonProps = {
   label: string;
   message: string;
-  accentColor: string;
+  /** Link to share; defaults to the current page on web. */
+  url?: string;
+  accentColor?: string;
+  variant?: "primary" | "secondary" | "ghost";
+  size?: "lg" | "md" | "sm";
 };
 
-export function ShareButton({ label, message, accentColor }: ShareButtonProps) {
+/** Opens the phone's share sheet (WhatsApp, Messenger, Snapchat…) and falls back to copying the text. */
+export function ShareButton({ label, message, url, accentColor, variant = "secondary", size = "md" }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  const handlePress = async () => {
-    if (Platform.OS !== "web" || typeof window === "undefined") {
-      await Clipboard.setStringAsync(message);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      return;
-    }
+  const copy = async () => {
+    await Clipboard.setStringAsync(url && !message.includes(url) ? `${message} ${url}` : message);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
+  const handlePress = async () => {
     try {
-      if (navigator.share) {
-        await navigator.share({ text: message, url: window.location.href });
-      } else {
-        await Clipboard.setStringAsync(message);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+      if (Platform.OS === "web") {
+        if (typeof navigator !== "undefined" && navigator.share) {
+          await navigator.share({ text: message, url: url ?? window.location.href });
+          return;
+        }
+        await copy();
+        return;
       }
-    } catch {
-      await Clipboard.setStringAsync(message);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await Share.share({ message: url && !message.includes(url) ? `${message} ${url}` : message });
+    } catch (error) {
+      // The user closing the share sheet throws AbortError; only fall back for real failures.
+      if ((error as Error)?.name !== "AbortError") await copy();
     }
   };
 
   return (
-    <>
-      <Pressable
-        onPress={handlePress}
-        style={({ pressed }) => ({
-          minHeight: 52,
-          borderRadius: 16,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#020617",
-          borderWidth: 1,
-          borderColor: accentColor,
-          opacity: pressed ? 0.92 : 1,
-          paddingHorizontal: 16,
-        })}
-      >
-        <Text style={{ color: "white", fontWeight: "900", fontSize: 14, textTransform: "uppercase" }}>{label}</Text>
-      </Pressable>
+    <View>
+      <Button label={label} onPress={handlePress} variant={variant} size={size} icon="share-outline" accent={accentColor} />
       <CopyToast visible={copied} />
-    </>
+    </View>
   );
 }

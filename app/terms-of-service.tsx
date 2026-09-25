@@ -1,11 +1,15 @@
 import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
-import { router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { Text, View } from "react-native";
+import { Link } from "expo-router";
 import { useI18n } from "../src/lib/i18n";
+import { WebSeo } from "../src/components/WebSeo";
+import { Screen, TopBar } from "../src/ui/components";
+import { colors, space, type } from "../src/ui/theme";
+
+const PAGE_PATH = "/terms-of-service";
 
 export default function TermsOfServiceScreen() {
-  const { language, t } = useI18n();
+  const { language } = useI18n();
 
   const copy =
     language === "sv"
@@ -33,9 +37,9 @@ export default function TermsOfServiceScreen() {
               ],
             ],
             [
-              "Premiumfunktioner och betalningar",
+              "Gratis tjänst",
               [
-                "Vissa funktioner kan kräva betalning eller en aktiv prenumeration. Prissättning, debitering, förnyelse, uppsägning och återbetalningar kan bero på plattformen eller betalningskanalen du använder.",
+                "Picklo är gratis att använda och visar ingen reklam. Frivilliga bidrag är alltid valfria och ger inga extra funktioner.",
               ],
             ],
             [
@@ -83,9 +87,9 @@ export default function TermsOfServiceScreen() {
               ],
             ],
             [
-              "Premium features and payments",
+              "Free service",
               [
-                "Some features may require payment or an active subscription. Pricing, billing, renewal, cancellation, and refund handling may depend on the platform or payment channel you use.",
+                "Picklo is free to use and shows no ads. Voluntary tips are always optional and unlock nothing extra.",
               ],
             ],
             [
@@ -111,39 +115,32 @@ export default function TermsOfServiceScreen() {
         };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-        <Text style={{ color: "white", fontSize: 28, fontWeight: "900" }}>{copy.title}</Text>
-        <Text style={{ color: "#94A3B8", lineHeight: 22 }}>{copy.intro}</Text>
+    <Screen topBar={<TopBar backHref="/" />}>
+      <WebSeo title={`${copy.title} | Picklo`} description={copy.intro} lang={language} path={PAGE_PATH} />
 
-        {copy.sections.map(([title, paragraphs]) => (
-          <View key={title} style={{ gap: 12, backgroundColor: "#0F172A", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#1E293B" }}>
-            <Text style={{ color: "#F8FAFC", fontWeight: "900", fontSize: 18 }}>{title}</Text>
-            {paragraphs.map((paragraph) => (
-              <Text key={paragraph} style={{ color: "#CBD5E1", lineHeight: 22 }}>
-                {paragraph}
-              </Text>
-            ))}
-          </View>
-        ))}
+      <View style={{ gap: space.sm }}>
+        <Text accessibilityRole="header" style={[type.title, { color: colors.text }]}>
+          {copy.title}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 15, lineHeight: 23 }}>{copy.intro}</Text>
+      </View>
 
-        <Pressable
-          onPress={() => router.replace("/")}
-          style={({ pressed }) => ({
-            height: 52,
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#111827",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-            opacity: pressed ? 0.9 : 1,
-          })}
-        >
-          <Text style={{ color: "white", fontWeight: "900" }}>{t("common.back_to_home")}</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+      {copy.sections.map(([title, paragraphs]) => (
+        <View key={title} style={{ gap: space.sm, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.lg }}>
+          <Text accessibilityRole="header" style={[type.heading, { color: colors.text }]}>
+            {title}
+          </Text>
+          {paragraphs.map((paragraph) => (
+            <Text key={paragraph} style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 25 }}>
+              {paragraph}
+            </Text>
+          ))}
+        </View>
+      ))}
+
+      <Link href="/contact" style={{ color: colors.brand, fontSize: 15, fontWeight: "700", paddingVertical: space.sm }}>
+        {language === "sv" ? "Frågor? Kontakta oss" : "Questions? Contact us"}
+      </Link>
+    </Screen>
   );
 }

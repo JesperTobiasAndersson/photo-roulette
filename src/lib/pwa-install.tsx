@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, Platform } from "react-native";
+import { View, Text, Platform, Image } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "./i18n";
+import { Button, IconButton } from "../ui/components";
+import { colors, radius, space } from "../ui/theme";
 
 declare global {
   interface WindowEventMap {
@@ -18,33 +21,53 @@ interface PWAInstallProps {
 }
 
 const DISMISS_KEY = "picklo_install_banner_dismissed";
+const VISITS_KEY = "picklo_visits";
+/** Don't nag first-time visitors who came from an invite link; ask once they come back. */
+const MIN_VISITS_BEFORE_PROMPT = 2;
 
 function isStandaloneMode() {
   if (typeof window === "undefined") return false;
   return window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as any)?.standalone === true;
 }
 
+function readStorage(key: string) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // private mode / storage disabled: the banner simply shows again next time
+  }
+}
+
+function countVisit(): number {
+  const visits = Number(readStorage(VISITS_KEY) ?? "0") + 1;
+  writeStorage(VISITS_KEY, String(visits));
+  return visits;
+}
+
 export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
   const isWeb = Platform.OS === "web";
   const { t } = useI18n();
+  const insets = useSafeAreaInsets();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstall, setShowInstall] = useState(false);
 
   const installContext = useMemo(() => {
     if (!isWeb || typeof navigator === "undefined") {
-      return {
-        isMobile: false,
-        isIosSafari: false,
-      };
+      return { isMobile: false, isIosSafari: false };
     }
-
     const ua = navigator.userAgent;
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
     const isIos = /iPhone|iPad|iPod/i.test(ua);
     const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
-
     return {
-      isMobile,
+      isMobile: /Android|iPhone|iPad|iPod/i.test(ua),
       isIosSafari: isIos && isSafari,
     };
   }, [isWeb]);
@@ -52,17 +75,19 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
   useEffect(() => {
     if (!isWeb || !installContext.isMobile || typeof window === "undefined") return;
     if (isStandaloneMode()) return;
-    if (window.localStorage.getItem(DISMISS_KEY) === "1") return;
+    if (readStorage(DISMISS_KEY) === "1") return;
+
+    const eligible = countVisit() >= MIN_VISITS_BEFORE_PROMPT;
 
     if (installContext.isIosSafari) {
-      setShowInstall(true);
+      if (eligible) setShowInstall(true);
       return;
     }
 
     const handleBeforeInstallPrompt = (event: BeforeInstallPromptEvent) => {
       event.preventDefault();
       setDeferredPrompt(event);
-      setShowInstall(true);
+      if (eligible) setShowInstall(true);
     };
 
     const handleAppInstalled = () => {
@@ -80,20 +105,15 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
   }, [installContext.isIosSafari, installContext.isMobile, isWeb]);
 
   const dismiss = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(DISMISS_KEY, "1");
-    }
+    if (typeof window !== "undefined") writeStorage(DISMISS_KEY, "1");
     setShowInstall(false);
   };
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
-
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setShowInstall(false);
-    }
+    if (outcome === "accepted") setShowInstall(false);
     setDeferredPrompt(null);
   };
 
@@ -108,71 +128,39 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
     <>
       {children}
       <View
+        accessibilityRole="alert"
         style={{
           position: "fixed" as any,
-          left: 16,
-          right: 16,
-          bottom: 16,
-          backgroundColor: "#0F172A",
-          borderRadius: 20,
-          padding: 16,
+          left: space.md,
+          right: space.md,
+          bottom: Math.max(insets.bottom, space.md),
+          maxWidth: 520,
+          alignSelf: "center",
+          marginHorizontal: "auto" as any,
+          backgroundColor: colors.surfaceRaised,
+          borderRadius: radius.lg,
+          padding: space.md,
           borderWidth: 1,
-          borderColor: "#1E293B",
+          borderColor: colors.borderStrong,
           shadowColor: "#000",
-          shadowOpacity: 0.28,
-          shadowRadius: 18,
+          shadowOpacity: 0.4,
+          shadowRadius: 20,
           shadowOffset: { width: 0, height: 10 },
           zIndex: 1000,
-          gap: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: space.md,
         }}
       >
-        <Text style={{ color: "#F8FAFC", fontSize: 16, fontWeight: "900", textAlign: "center" }}>{t("pwa.title")}</Text>
-
-        {shouldShowIosInstructions ? (
-          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>{t("pwa.ios")}</Text>
-        ) : (
-          <Text style={{ color: "#CBD5E1", fontSize: 14, lineHeight: 21, textAlign: "center" }}>{t("pwa.body")}</Text>
-        )}
-
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          {shouldShowAndroidPrompt ? (
-            <Pressable
-              onPress={handleInstall}
-              style={({ pressed }) => ({
-                flex: 1,
-                minHeight: 48,
-                borderRadius: 14,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#000000",
-                opacity: pressed ? 0.92 : 1,
-              })}
-            >
-              <Text style={{ color: "white", fontWeight: "900" }}>{t("pwa.install")}</Text>
-            </Pressable>
-          ) : (
-            <View style={{ flex: 1, minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#111827", borderWidth: 1, borderColor: "#1F2937" }}>
-              <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>{t("pwa.safari")}</Text>
-            </View>
-          )}
-
-          <Pressable
-            onPress={dismiss}
-            style={({ pressed }) => ({
-              flex: 1,
-              minHeight: 48,
-              borderRadius: 14,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#111827",
-              borderWidth: 1,
-              borderColor: "#1F2937",
-              opacity: pressed ? 0.92 : 1,
-            })}
-          >
-            <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>{t("pwa.not_now")}</Text>
-          </Pressable>
+        <Image source={require("../../assets/icon.png")} style={{ width: 44, height: 44, borderRadius: 12 }} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: colors.text, fontSize: 15, fontWeight: "800" }}>{t("pwa.title")}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
+            {shouldShowIosInstructions ? t("pwa.ios") : t("pwa.body")}
+          </Text>
         </View>
+        {shouldShowAndroidPrompt ? <Button label={t("pwa.install")} onPress={handleInstall} size="sm" /> : null}
+        <IconButton icon="close" onPress={dismiss} accessibilityLabel={t("pwa.not_now")} color={colors.textMuted} />
       </View>
     </>
   );

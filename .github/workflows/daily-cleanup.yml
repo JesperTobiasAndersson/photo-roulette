@@ -1,0 +1,25 @@
+# Calls the `cleanup` Edge Function once a day. This deletes old rooms and photos
+# AND keeps the free Supabase project active so it never gets paused.
+#
+# Repository secrets needed (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL     e.g. https://abcd1234.supabase.co
+#   CLEANUP_SECRET   same value as `npx supabase secrets set CLEANUP_SECRET=...`
+#
+# Note: GitHub pauses scheduled workflows in repos with no commits for 60 days
+# (it emails you first). A free cron-job.org job calling the same URL with the
+# same header is a good backup.
+name: Daily cleanup & keep-alive
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cleanup function
+        run: |
+          curl --fail-with-body -sS -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/cleanup" \
+            -H "x-cleanup-secret: ${{ secrets.CLEANUP_SECRET }}"

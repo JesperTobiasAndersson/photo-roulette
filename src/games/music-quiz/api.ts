@@ -1,4 +1,4 @@
-import { supabase } from "../../lib/supabase";
+import { joinRoomByCode, supabase } from "../../lib/supabase";
 import { MUSIC_QUIZ_LIBRARY } from "./data";
 import { loadSpotifyTrackPreview } from "./spotify";
 import type { MusicQuizAnswerDto, MusicQuizPlayerDto, MusicQuizPromptType, MusicQuizRoomDto, MusicQuizSongPool } from "./types";
@@ -72,29 +72,10 @@ export async function createMusicQuizRoom(displayName: string) {
   return { roomId: room.id, playerId: player.id, code: room.code };
 }
 
+// Joining goes through the database so it can check the room code, game state and
+// player limit, and so a player re-joining from the same phone gets their old seat back.
 export async function joinMusicQuizRoom(code: string, displayName: string) {
-  const trimmedCode = code.trim().toUpperCase();
-  const trimmedName = displayName.trim();
-  if (!trimmedName) throw new Error("Enter a player name");
-  if (!trimmedCode) throw new Error("Enter a room code");
-
-  const { data: room, error: roomError } = await supabase.from("music_quiz_rooms").select("*").eq("code", trimmedCode).single();
-  if (roomError) throw roomError;
-
-  const { count, error: countError } = await supabase
-    .from("music_quiz_players")
-    .select("*", { count: "exact", head: true })
-    .eq("room_id", room.id);
-  if (countError) throw countError;
-
-  const { data: player, error: playerError } = await supabase
-    .from("music_quiz_players")
-    .insert({ room_id: room.id, display_name: trimmedName, seat_order: (count ?? 0) + 1, score: 0 })
-    .select("*")
-    .single();
-  if (playerError) throw playerError;
-
-  return { roomId: room.id, playerId: player.id, code: room.code };
+  return joinRoomByCode("musicQuiz", code, displayName);
 }
 
 export async function startMusicQuizRound(

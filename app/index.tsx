@@ -1,608 +1,197 @@
-import React, { useRef, useState } from "react";
-import {
-  Animated,
-  Easing,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
-import { router } from "expo-router";
-import { Image } from "react-native";
-import { StatusBar } from "expo-status-bar";
+import React from "react";
+import { Image, Pressable, Text, View } from "react-native";
+import { Link } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../src/lib/i18n";
+import { GAMES, GAME_ORDER, type GameId } from "../src/games/catalog";
 import { ShareButton } from "../src/components/ShareButton";
 import { TopicLinksSection } from "../src/components/TopicLinksSection";
-import { WebMarketingSection } from "../src/components/WebMarketingSection";
 import { WebSeo } from "../src/components/WebSeo";
-
-const isWeb = Platform.OS === "web";
-const GAME_ENTRY_DELAY_MS = 180;
+import { Chip, GameIcon, LanguageSwitch, Screen, SectionLabel } from "../src/ui/components";
+import { colors, radius, space, type } from "../src/ui/theme";
+import { siteUrl } from "../src/lib/site";
 
 export default function GameLibraryHome() {
   const { language, t } = useI18n();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 560;
-  const marketingCopy =
-    language === "sv"
-      ? {
-          shareMessage:
-            "Spela Picklo med kompisarna: partyspel, trivia, musikquiz, Mafia, Imposter och MemeMatch i en app. https://picklo.se/",
-          shareLabel: "Dela Picklo",
-          seoTitle: "Picklo Partyspel | Multiplayer-spel för webb och mobil",
-          seoDescription:
-            "Spela partyspel med rumskoder: MemeMatch, Mafia, Imposter, Chicago, Music Quiz och Trivia i en app.",
-          eyebrow: "För grupper",
-          title: "Partyspel för kompisgäng, förfester och spontana häng",
-          paragraphs: [
-            "Picklo är byggt för stunden när ett gäng vill ha något kul direkt. Öppna en länk, välj ett spel och få in alla i samma rum med en enkel kod.",
-            "Det gör sajten relevant för sökningar kring partyspel, social deduction-spel, mobiltrivia, icebreakers och gruppspel för vuxna.",
-          ],
-          bullets: [
-            "Snabb rumskods-flow som fungerar bra i gruppchattar och Stories",
-            "Flera spellägen så en delad länk kan fortsätta driva vidare trafik i appen",
-            "Korta sociala rundor som är lättare att klippa, dela och rekommendera",
-          ],
-          faq: [
-            {
-              question: "Vilka spel finns i Picklo?",
-              answer: "Picklo innehåller MemeMatch, Mafia, Imposter, Chicago, Music Quiz och Trivia för olika gruppstorlekar och stämningar.",
-            },
-            {
-              question: "Kan alla gå med från sin egen mobil?",
-              answer: "Ja. Picklo är byggt runt snabba rumskoder så grupper enkelt kan gå med via webben eller mobilen.",
-            },
-          ],
-        }
-      : {
-          shareMessage:
-            "Play Picklo with your group: party games, trivia, music quiz, Mafia, Imposter and MemeMatch in one app. https://picklo.se/",
-          shareLabel: "Share Picklo",
-          seoTitle: "Picklo Party Games | Multiplayer Party Games for Web and Mobile",
-          seoDescription:
-            "Play multiplayer party games with room codes: MemeMatch, Mafia, Imposter, Chicago, Music Quiz and Trivia in one app.",
-          eyebrow: "For Groups",
-          title: "Party games for friend groups, pregames and spontaneous hangouts",
-          paragraphs: [
-            "Picklo is designed for the moment when a group wants something fun immediately. Open one link, pick a game and get everyone into the same room with a simple code.",
-            "That makes the site relevant for searches around party games, social deduction games, mobile trivia, icebreaker games and group games for adults.",
-          ],
-          bullets: [
-            "Fast room-code flow that works well in group chats and Stories",
-            "Multiple game modes so one shared link can keep traffic exploring",
-            "Short, social rounds that are easier to clip and recommend",
-          ],
-          faq: [
-            {
-              question: "What kind of games are on Picklo?",
-              answer: "Picklo includes MemeMatch, Mafia, Imposter, Chicago, Music Quiz and Trivia for different group sizes and moods.",
-            },
-            {
-              question: "Can everyone join from their own phone?",
-              answer: "Yes. Picklo is built around quick room-code multiplayer so groups can join fast on web or mobile.",
-            },
-          ],
-        };
+  const sv = language === "sv";
+
+  const faq = sv
+    ? [
+        {
+          question: "Kostar Picklo något?",
+          answer: "Nej. Alla spel är gratis och kräver inget konto. Öppna sidan, skapa ett rum och dela koden.",
+        },
+        {
+          question: "Behöver alla ladda ner en app?",
+          answer: "Nej. Alla spelar direkt i mobilens webbläsare. Vill du ha Picklo på hemskärmen kan du lägga till det därifrån.",
+        },
+        {
+          question: "Hur många kan spela?",
+          answer: "Det beror på spelet: Chicago passar 2–6 spelare, Mafia fungerar för upp till 20.",
+        },
+      ]
+    : [
+        {
+          question: "Is Picklo free?",
+          answer: "Yes. Every game is free and there's no account to create. Open the site, create a room and share the code.",
+        },
+        {
+          question: "Does everyone need to download an app?",
+          answer: "No. Everyone plays right in their phone's browser. You can add Picklo to your home screen if you want it one tap away.",
+        },
+        {
+          question: "How many people can play?",
+          answer: "It depends on the game: Chicago suits 2–6 players, while Mafia works for up to 20.",
+        },
+      ];
+
   const structuredData = {
     "@context": "https://schema.org",
     "@graph": [
+      { "@type": "WebSite", name: "Picklo", url: siteUrl("/") },
+      { "@type": "Organization", name: "Picklo", url: siteUrl("/"), logo: siteUrl("/icon.png") },
       {
-        "@type": "WebSite",
-        name: "Picklo",
-        url: "https://picklo.se/",
-      },
-      {
-        "@type": "Organization",
-        name: "Picklo",
-        url: "https://picklo.se/",
-      },
-      {
-        "@type": "CollectionPage",
-        name: "Picklo Party Games",
-        description:
-          "Picklo is a multiplayer party game collection for web and mobile with MemeMatch, Mafia, Imposter, Chicago, Music Quiz and Trivia.",
-        url: "https://picklo.se/",
+        "@type": "ItemList",
+        name: "Picklo party games",
+        itemListElement: GAME_ORDER.map((id, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: GAMES[id].title,
+          url: siteUrl(GAMES[id].href),
+        })),
       },
       {
         "@type": "FAQPage",
-        mainEntity: marketingCopy.faq.map((item) => ({
+        mainEntity: faq.map((item) => ({
           "@type": "Question",
           name: item.question,
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: item.answer,
-          },
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
         })),
       },
     ],
   };
-  const topicLinks =
-    language === "sv"
-      ? [
-          { href: "/party-games", title: "Partyspel", description: "En bred guide till Picklo för fest, häng och gruppchattar.", accentColor: "#38BDF8" },
-          { href: "/social-deduction-games", title: "Social deduction-spel", description: "För spelare som letar efter Mafia, Imposter och bluffspel.", accentColor: "#F43F5E" },
-          { href: "/quiz-games", title: "Quizspel", description: "För grupper som söker trivia, musikquiz och poängjakt.", accentColor: "#22C55E" },
-        ]
-      : [
-          { href: "/party-games", title: "Party Games", description: "A broader guide to Picklo for hangouts, pregames and group chats.", accentColor: "#38BDF8" },
-          { href: "/social-deduction-games", title: "Social Deduction Games", description: "For players looking for Mafia, Imposter and bluffing games.", accentColor: "#F43F5E" },
-          { href: "/quiz-games", title: "Quiz Games", description: "For groups searching for trivia, music quiz and quick scoring.", accentColor: "#22C55E" },
-        ];
-  const games = [
-    {
-      slug: "picklo",
-      title: "MemeMatch",
-      tagline: t("game.memematch.tagline"),
-      recommendedPlayers: "3-12 players",
-      accent: "#38BDF8",
-      description: t("game.memematch.description"),
-      icon: require("../assets/Memematch.png"),
-      cta: t("game.memematch.cta"),
-      comingSoon: false,
-    },
-    {
-      slug: "mafia",
-      title: "Mafia",
-      tagline: t("game.mafia.tagline"),
-      recommendedPlayers: "5-20 players",
-      accent: "#F43F5E",
-      description: t("game.mafia.description"),
-      icon: require("../assets/mafia.png"),
-      cta: t("game.mafia.cta"),
-      comingSoon: false,
-    },
-    {
-      slug: "imposter",
-      title: "Imposter",
-      tagline: t("game.imposter.tagline"),
-      recommendedPlayers: "4-12 players",
-      accent: "#F59E0B",
-      description: t("game.imposter.description"),
-      icon: require("../assets/imposter.png"),
-      cta: t("game.imposter.cta"),
-      comingSoon: false,
-    },
-    {
-      slug: "chicago",
-      title: "Chicago",
-      tagline: t("game.chicago.tagline"),
-      recommendedPlayers: "2-6 players",
-      accent: "#38BDF8",
-      description: t("game.chicago.description"),
-      icon: require("../assets/chicago.png"),
-      cta: t("game.chicago.cta"),
-      comingSoon: false,
-    },
-    {
-      slug: "music-quiz",
-      title: "Music Quiz",
-      tagline: t("game.music.tagline"),
-      recommendedPlayers: "2-20 players",
-      accent: "#22C55E",
-      description: t("game.music.description"),
-      icon: require("../assets/musicquiz.png"),
-      cta: t("game.music.cta"),
-      comingSoon: false,
-    },
-    {
-      slug: "trivia",
-      title: "Trivia",
-      tagline: t("game.trivia.tagline"),
-      recommendedPlayers: "2-12 players",
-      accent: "#F97316",
-      description: t("game.trivia.description"),
-      icon: require("../assets/trivia.png"),
-      cta: t("game.trivia.cta"),
-      comingSoon: false,
-    },
-  ] as const;
+
+  const topicLinks = sv
+    ? [
+        { href: "/party-games", title: "Partyspel", description: "Alla spel för fest, häng och förfest.", accentColor: "#38BDF8" },
+        { href: "/social-deduction-games", title: "Bluffspel", description: "Mafia, Imposter och andra spel med dolda roller.", accentColor: "#F43F5E" },
+        { href: "/quiz-games", title: "Quizspel", description: "Trivia och musikquiz för spelkvällen.", accentColor: "#22C55E" },
+      ]
+    : [
+        { href: "/party-games", title: "Party Games", description: "Every game for parties, pregames and hangouts.", accentColor: "#38BDF8" },
+        { href: "/social-deduction-games", title: "Social Deduction Games", description: "Mafia, Imposter and other hidden-role games.", accentColor: "#F43F5E" },
+        { href: "/quiz-games", title: "Quiz Games", description: "Trivia and music quiz for game night.", accentColor: "#22C55E" },
+      ];
+
   const footerLinks = [
     { label: t("home.legal.privacy"), href: "/privacy-policy" },
     { label: t("home.legal.terms"), href: "/terms-of-service" },
     { label: t("home.legal.guidelines"), href: "/community-guidelines" },
     { label: t("home.legal.contact"), href: "/contact" },
   ];
-  const [transitioningGame, setTransitioningGame] = useState<(typeof games)[number] | null>(null);
-  const contentOpacity = useRef(new Animated.Value(1)).current;
-  const contentScale = useRef(new Animated.Value(1)).current;
-  const contentTranslateY = useRef(new Animated.Value(0)).current;
-  const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const overlayScale = useRef(new Animated.Value(0.96)).current;
-
-  const goToGame = (game: (typeof games)[number]) => {
-    if (transitioningGame) {
-      return;
-    }
-
-    setTransitioningGame(game);
-
-    Animated.parallel([
-      Animated.timing(contentOpacity, {
-        toValue: 0.12,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentScale, {
-        toValue: 0.972,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentTranslateY, {
-        toValue: 14,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(overlayOpacity, {
-        toValue: 1,
-        duration: 280,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(overlayScale, {
-        toValue: 1,
-        duration: 340,
-        easing: Easing.out(Easing.back(1.1)),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) {
-        setTimeout(() => {
-          router.push(`/${game.slug}` as any);
-        }, GAME_ENTRY_DELAY_MS);
-      }
-    });
-  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#070B14" }}>
+    <Screen>
       <WebSeo
-        title={marketingCopy.seoTitle}
-        description={marketingCopy.seoDescription}
+        title={sv ? "Picklo Partyspel | Gratis multiplayer-spel i mobilen" : "Picklo Party Games | Free Multiplayer Games on Your Phone"}
+        description={
+          sv
+            ? "Gratis partyspel med rumskoder: MemeMatch, Mafia, Imposter, Chicago, Music Quiz och Trivia. Inget konto, ingen nedladdning."
+            : "Free party games with room codes: MemeMatch, Mafia, Imposter, Chicago, Music Quiz and Trivia. No account, no download."
+        }
         lang={language}
-        keywords={[
-          "party games",
-          "multiplayer party games",
-          "social deduction games",
-          "web party games",
-          "icebreaker games",
-          "party games for friends",
-        ]}
+        keywords={["party games", "multiplayer party games", "social deduction games", "web party games", "icebreaker games", "party games for friends"]}
         structuredData={structuredData}
       />
-      <StatusBar style="light" />
 
-      <Animated.View
+      {/* Brand bar */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <Image source={require("../assets/icon.png")} style={{ width: 40, height: 40, borderRadius: 12 }} />
+        <Text style={{ color: colors.text, fontSize: 22, fontWeight: "900", flex: 1 }}>Picklo</Text>
+        <LanguageSwitch />
+      </View>
+
+      <View style={{ gap: space.xs, marginTop: space.sm }}>
+        <Text accessibilityRole="header" style={[type.title, { color: colors.text }]}>
+          {sv ? "Vad ska vi spela?" : "What are we playing?"}
+        </Text>
+        <Text style={[type.body, { color: colors.textMuted, fontSize: 15 }]}>{t("home.subtitle")}</Text>
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        {GAME_ORDER.map((id) => (
+          <GameRow key={id} gameId={id} />
+        ))}
+      </View>
+
+      <ShareButton
+        label={sv ? "Dela Picklo med gänget" : "Share Picklo with your group"}
+        message={sv ? "Gratis partyspel i mobilen: Mafia, Imposter, MemeMatch, quiz och mer." : "Free party games on your phone: Mafia, Imposter, MemeMatch, quizzes and more."}
+        url={siteUrl("/")}
+      />
+
+      {/* About + FAQ: useful for new players and the indexable body for search engines */}
+      <View style={{ gap: space.md, marginTop: space.sm }}>
+        <SectionLabel>{sv ? "Om Picklo" : "About Picklo"}</SectionLabel>
+        <Text style={{ color: colors.textMuted, fontSize: 15, lineHeight: 23 }}>
+          {sv
+            ? "Picklo samlar partyspel som alla spelar på sin egen mobil. En person skapar ett rum, resten går med med en kod på fyra tecken, och spelet synkas live mellan alla. Inget konto och ingen nedladdning."
+            : "Picklo is a collection of party games everyone plays on their own phone. One person creates a room, everyone else joins with a four-letter code, and the game syncs live for everyone. No account, no download."}
+        </Text>
+        {faq.map((item) => (
+          <View key={item.question} style={{ gap: 4 }}>
+            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{item.question}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 15, lineHeight: 22 }}>{item.answer}</Text>
+          </View>
+        ))}
+      </View>
+
+      <TopicLinksSection title={sv ? "Hitta rätt spel" : "Find the right game"} topics={topicLinks} />
+
+      <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space.lg, gap: space.md }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: space.lg, rowGap: space.sm }}>
+          {footerLinks.map((link) => (
+            <Link key={link.href} href={link.href as any} style={{ color: colors.textMuted, fontSize: 14, paddingVertical: 6 }}>
+              {link.label}
+            </Link>
+          ))}
+        </View>
+        <Text style={{ color: colors.textSubtle, fontSize: 12 }}>{t("home.footer")}</Text>
+      </View>
+    </Screen>
+  );
+}
+
+function GameRow({ gameId }: { gameId: GameId }) {
+  const game = GAMES[gameId];
+  const { language, t } = useI18n();
+  return (
+    <Link href={game.href as any} asChild>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`${game.title}. ${game.tagline[language]}`}
+        // Link asChild drops style callbacks, so the style is static here.
         style={{
-          flex: 1,
-          opacity: contentOpacity,
-          transform: [{ scale: contentScale }, { translateY: contentTranslateY }],
+          flexDirection: "row",
+          alignItems: "center",
+          gap: space.md,
+          padding: space.md,
+          borderRadius: radius.lg,
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
         }}
       >
-        <ScrollView
-          scrollEnabled={!transitioningGame}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingHorizontal: isCompact ? 16 : 20,
-            paddingTop: isCompact ? 26 : 36,
-            paddingBottom: isCompact ? 28 : 36,
-            alignItems: "center",
-          }}
-        >
-          <View style={{ width: "100%", maxWidth: isWeb ? 980 : 560, gap: isCompact ? 18 : 22 }}>
-            <View style={{ gap: isCompact ? 14 : 16, alignItems: "center" }}>
-              <View style={{ alignItems: "center", gap: 14 }}>
-                <View
-                  style={{
-                    width: isCompact ? 92 : isWeb ? 132 : 104,
-                    height: isCompact ? 92 : isWeb ? 132 : 104,
-                    borderRadius: isCompact ? 24 : 32,
-                    overflow: "hidden",
-                    borderWidth: 1,
-                    borderColor: "rgba(56,189,248,0.35)",
-                    backgroundColor: "#111827",
-                    shadowColor: "#38BDF8",
-                    shadowOpacity: 0.28,
-                    shadowRadius: 18,
-                    shadowOffset: { width: 0, height: 10 },
-                    elevation: 12,
-                  }}
-                >
-                  <Image source={require("../assets/icon.png")} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                </View>
-
-                <View style={{ gap: 4, alignItems: "center" }}>
-                  <Text accessibilityRole="header" style={{ color: "#F8FAFC", fontSize: isCompact ? 32 : isWeb ? 28 : 24, fontWeight: "900" }}>Picklo</Text>
-                </View>
-              </View>
-
-                <Text
-                style={{
-                  color: "#94A3B8",
-                  fontSize: isCompact ? 15 : 16,
-                  lineHeight: isCompact ? 22 : 24,
-                  maxWidth: 700,
-                  marginBottom: isCompact ? 4 : 8,
-                  marginTop: isCompact ? -4 : -8,
-                  textAlign: isCompact || isWeb ? "center" : "left",
-                }}
-                >
-                {t("home.subtitle")}
-              </Text>
-
-              {isWeb ? (
-                <View style={{ width: "100%", maxWidth: 420 }}>
-                  <ShareButton label={marketingCopy.shareLabel} message={marketingCopy.shareMessage} accentColor="#38BDF8" />
-                </View>
-              ) : null}
-            </View>
-
-            <View
-              style={{
-                backgroundColor: "#0F172A",
-                borderRadius: isCompact ? 22 : 28,
-                padding: isCompact ? 14 : 20,
-                borderWidth: 1,
-                borderColor: "#1E293B",
-                gap: isCompact ? 12 : 16,
-              }}
-            >
-              <Text style={{ color: "#E2E8F0", fontSize: 16, fontWeight: "800" }}>{t("home.featured")}</Text>
-
-              {games.map((game) => (
-                <Pressable
-                  key={game.slug}
-                  disabled={!!transitioningGame}
-                  onPress={() => goToGame(game)}
-                  style={({ pressed }) => ({
-                    borderRadius: 24,
-                    overflow: "hidden",
-                    backgroundColor: "#020617",
-                    borderWidth: 1,
-                    borderColor: pressed ? game.accent : "#1F2937",
-                    transform: [{ scale: pressed ? 0.99 : 1 }],
-                    opacity: game.comingSoon ? 0.92 : 1,
-                  })}
-                >
-                  <View
-                    style={{
-                      padding: isCompact ? 14 : 20,
-                      gap: isCompact ? 12 : 16,
-                      backgroundColor: "rgba(15,23,42,0.92)",
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: isCompact ? "column" : "row",
-                        alignItems: isCompact ? "flex-start" : "center",
-                        justifyContent: "space-between",
-                        gap: 12,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-                        <View
-                          style={{
-                            width: isCompact ? 70 : 72,
-                            height: isCompact ? 70 : 72,
-                            borderRadius: isCompact ? 16 : 20,
-                            overflow: "hidden",
-                            borderWidth: 1,
-                            borderColor: game.accent,
-                            backgroundColor: "#111827",
-                          }}
-                        >
-                          <Image source={game.icon} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                        </View>
-
-                        <View style={{ flex: 1, gap: 6 }}>
-                          <Text style={{ color: "#F8FAFC", fontSize: isCompact ? 22 : 28, fontWeight: "900" }}>{game.title}</Text>
-                          <Text style={{ color: "#94A3B8", fontSize: isCompact ? 14 : 15, lineHeight: isCompact ? 20 : 22 }}>
-                            {game.tagline}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {game.comingSoon ? (
-                        <View
-                          style={{
-                            alignSelf: isCompact ? "flex-start" : "center",
-                            paddingVertical: 7,
-                            paddingHorizontal: 10,
-                            borderRadius: 999,
-                            backgroundColor: "rgba(34,197,94,0.16)",
-                            borderWidth: 1,
-                            borderColor: "rgba(134,239,172,0.32)",
-                          }}
-                        >
-                          <Text style={{ color: "#BBF7D0", fontWeight: "900", fontSize: 12, textTransform: "uppercase" }}>
-                            {t("home.coming_soon")}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                    </View>
-
-                    <View style={{ flexDirection: "column", gap: 12 }}>
-                      <View
-                        style={{
-                          alignSelf: "flex-start",
-                          paddingVertical: 7,
-                          paddingHorizontal: 10,
-                          borderRadius: 999,
-                          backgroundColor: "#131a29",
-                          borderWidth: 1,
-                          borderColor: "#5d7393",
-                        }}
-                      >
-                        <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 12 }}>
-                          {t("home.recommended", { players: game.recommendedPlayers })}
-                        </Text>
-                      </View>
-
-                      <Text style={{ color: "#CBD5E1", fontSize: isCompact ? 13 : 14, lineHeight: isCompact ? 20 : 22, flex: 1 }}>
-                        {game.description}
-                      </Text>
-
-                      <View
-                        style={{
-                          alignSelf: "stretch",
-                          paddingVertical: 12,
-                          paddingHorizontal: 16,
-                          borderRadius: 16,
-                          backgroundColor: game.comingSoon ? "#0F172A" : "#000000",
-                          borderColor: game.comingSoon ? game.accent : "#f2f2f2",
-                          borderWidth: 1,
-                        }}
-                      >
-                        <Text style={{ color: "white", fontWeight: "900", textAlign: "center", fontSize: 14, textTransform: game.comingSoon ? "uppercase" : "none" }}>{game.cta}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-
-            <View
-              style={{
-                marginTop: isCompact ? 4 : 8,
-                paddingTop: isCompact ? 18 : 22,
-                paddingBottom: isCompact ? 6 : 10,
-                borderTopWidth: 1,
-                borderTopColor: "#182235",
-                gap: 14,
-              }}
-            >
-              <View style={{ gap: 6 }}>
-                <Text style={{ color: "#E2E8F0", fontSize: 14, fontWeight: "900" }}>{t("home.legal.title")}</Text>
-                <Text style={{ color: "#64748B", fontSize: 13, lineHeight: 20 }}>
-                  {t("home.legal.body")}
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 8,
-                }}
-              >
-                {footerLinks.map((link) => (
-                  <Pressable
-                    key={link.href}
-                    onPress={() => router.push(link.href as any)}
-                    style={({ pressed }) => ({
-                      width: isCompact ? "48.5%" : "48.8%",
-                      minHeight: 46,
-                      paddingVertical: 12,
-                      paddingHorizontal: 14,
-                      borderRadius: 14,
-                      backgroundColor: "#0B1222",
-                      borderWidth: 1,
-                      borderColor: "#1E293B",
-                      justifyContent: "center",
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <Text style={{ color: "#CBD5E1", fontWeight: "800", fontSize: 13 }}>{link.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text style={{ color: "#475569", fontSize: 12, lineHeight: 18 }}>
-                {t("home.footer")}
-              </Text>
-            </View>
-
-            <WebMarketingSection
-              eyebrow={marketingCopy.eyebrow}
-              title={marketingCopy.title}
-              paragraphs={marketingCopy.paragraphs}
-              bullets={marketingCopy.bullets}
-              faq={marketingCopy.faq}
-            />
-            <TopicLinksSection title={language === "sv" ? "Populära sätt att hitta spel" : "Popular Ways To Find Games"} topics={topicLinks} />
-          </View>
-        </ScrollView>
-      </Animated.View>
-
-      {transitioningGame ? (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            opacity: overlayOpacity,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 24,
-            backgroundColor: "rgba(7,11,20,0.72)",
-          }}
-        >
-          <Animated.View
-            style={{
-              width: "100%",
-              maxWidth: isCompact ? 280 : 360,
-              borderRadius: 30,
-              padding: isCompact ? 20 : 24,
-              backgroundColor: "#08111F",
-              borderWidth: 1,
-              borderColor: `${transitioningGame.accent}66`,
-              shadowColor: transitioningGame.accent,
-              shadowOpacity: 0.32,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 12 },
-              elevation: 18,
-              transform: [{ scale: overlayScale }],
-            }}
-          >
-            <View
-              style={{
-                alignSelf: "center",
-                width: isCompact ? 78 : 92,
-                height: isCompact ? 78 : 92,
-                borderRadius: isCompact ? 22 : 26,
-                overflow: "hidden",
-                borderWidth: 1,
-                borderColor: transitioningGame.accent,
-                backgroundColor: "#111827",
-              }}
-            >
-              <Image source={transitioningGame.icon} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-            </View>
-
-            <Text
-              style={{
-                color: "#F8FAFC",
-                textAlign: "center",
-                fontSize: isCompact ? 26 : 30,
-                fontWeight: "900",
-                marginTop: 18,
-              }}
-            >
-              {transitioningGame.title}
-            </Text>
-
-            <Text
-              style={{
-                color: "#94A3B8",
-                textAlign: "center",
-                fontSize: 14,
-                lineHeight: 22,
-                marginTop: 8,
-              }}
-            >
-              {t("home.opening")}
-            </Text>
-          </Animated.View>
-        </Animated.View>
-      ) : null}
-    </View>
+        <GameIcon source={game.icon} size={68} accent={game.accent} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: "900" }}>{game.title}</Text>
+          <Text numberOfLines={2} style={{ color: colors.textMuted, fontSize: 14, lineHeight: 19 }}>
+            {game.tagline[language]}
+          </Text>
+          <Chip label={t("common.players", { range: game.players })} color={game.accent} icon="people" />
+        </View>
+        <Ionicons name="chevron-forward" size={22} color={colors.textSubtle} />
+      </Pressable>
+    </Link>
   );
 }
