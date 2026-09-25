@@ -1381,7 +1381,7 @@ export default function MafiaRoomScreen() {
       {room.state === "lobby" ? (
         <>
           <Card accent={ACCENT} style={{ alignItems: "stretch", gap: space.lg }}>
-            <RoomCodeBadge code={room.code} label={L.roomCode} accent={ACCENT} />
+            <RoomCodeBadge code={room.code} label={L.roomCode} accent={ACCENT} inviteUrl={inviteUrl || undefined} />
             <ShareButton label={t("common.invite")} message={L.inviteMessage(room.code)} url={inviteUrl} accentColor={ACCENT} />
           </Card>
 

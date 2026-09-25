@@ -1045,7 +1045,7 @@ export default function ImposterLobbyScreen() {
       {room.state === "lobby" ? (
         <AnimatedEntrance enterKey="phase-lobby" delay={20} style={{ gap: space.lg }}>
           <Card accent={ACCENT} style={{ alignItems: "center", paddingVertical: space.xl }}>
-            <RoomCodeBadge code={room.code} label={copy.roomCode} accent={ACCENT} />
+            <RoomCodeBadge code={room.code} label={copy.roomCode} accent={ACCENT} inviteUrl={inviteUrl || undefined} />
             <Text style={[type.small, { color: colors.textMuted, textAlign: "center" }]}>{copy.lobbyHint}</Text>
             <View style={{ alignSelf: "stretch" }}>
               <ShareButton

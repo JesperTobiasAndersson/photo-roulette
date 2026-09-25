@@ -19,6 +19,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../lib/i18n";
 import { colors, contentMaxWidth, radius, space, touch, type, webInputReset, withAlpha } from "./theme";
+import { QRCode } from "./QRCode";
 
 export type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -486,14 +487,39 @@ export function GameIcon({ source, size = 64, accent }: { source: any; size?: nu
   );
 }
 
-/** Big, tappable room code that everyone at the table can read off one phone. */
-export function RoomCodeBadge({ code, label, accent = colors.brand }: { code: string; label: string; accent?: string }) {
+/**
+ * Big room code that everyone at the table can read off one phone. With `inviteUrl`
+ * it also shows a QR code: scanning it opens the game with the code already filled in.
+ */
+export function RoomCodeBadge({
+  code,
+  label,
+  accent = colors.brand,
+  inviteUrl,
+}: {
+  code: string;
+  label: string;
+  accent?: string;
+  inviteUrl?: string;
+}) {
+  const { language } = useI18n();
   return (
     <View style={{ alignItems: "center", gap: 2 }}>
       <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{label}</Text>
       <Text selectable style={{ color: accent, fontSize: 40, lineHeight: 46, fontWeight: "900", letterSpacing: 8 }}>
         {code}
       </Text>
+      {inviteUrl ? (
+        <View style={{ alignItems: "center", gap: space.sm, marginTop: space.sm }}>
+          <QRCode value={inviteUrl} size={196} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="scan" size={16} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: "600" }}>
+              {language === "sv" ? "Skanna med kameran för att gå med" : "Scan with the camera to join"}
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }

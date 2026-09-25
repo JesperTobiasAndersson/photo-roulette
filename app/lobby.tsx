@@ -402,7 +402,7 @@ export default function Lobby() {
     <Screen topBar={<TopBar title={GAME.title} onBack={leave} />} footer={footer}>
       {/* Room code + invite */}
       <Card accent={ACCENT} style={{ alignItems: "center", paddingVertical: space.xl }}>
-        <RoomCodeBadge code={roomCode || "----"} label={copy.code} accent={ACCENT} />
+        <RoomCodeBadge code={roomCode || "----"} label={copy.code} accent={ACCENT} inviteUrl={inviteUrl || undefined} />
         {roomCode ? (
           <View style={{ alignSelf: "stretch" }}>
             <ShareButton label={t("common.invite")} message={inviteMessage} url={inviteUrl} accentColor={ACCENT} />

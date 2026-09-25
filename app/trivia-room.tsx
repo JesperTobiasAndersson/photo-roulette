@@ -388,7 +388,7 @@ export default function TriviaRoomScreen() {
       {room.state === "lobby" ? (
         <>
           <Card accent={ACCENT} style={{ alignItems: "center", gap: space.md }}>
-            <RoomCodeBadge code={room.code} label={t("common.room_code")} accent={ACCENT} />
+            <RoomCodeBadge code={room.code} label={t("common.room_code")} accent={ACCENT} inviteUrl={inviteUrl || undefined} />
             <View style={{ alignSelf: "stretch" }}>
               <ShareButton label={t("common.invite")} message={copy.shareMessage.replace("{code}", room.code)} url={inviteUrl} accentColor={ACCENT} />
             </View>

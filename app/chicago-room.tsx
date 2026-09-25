@@ -791,7 +791,7 @@ export default function ChicagoRoomScreen() {
           <AnimatedEntrance enterKey="lobby-card" delay={40}>
             <View style={{ gap: space.lg }}>
               <Card accent={ACCENT} style={{ alignItems: "stretch" }}>
-                <RoomCodeBadge code={room.code} label={t("common.room_code")} accent={ACCENT} />
+                <RoomCodeBadge code={room.code} label={t("common.room_code")} accent={ACCENT} inviteUrl={inviteUrl || undefined} />
                 <ShareButton
                   label={t("common.invite")}
                   message={fill(copy.shareMessage, { code: room.code })}
