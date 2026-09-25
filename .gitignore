@@ -48,3 +48,6 @@ yarn-error.*
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
+
+.vercel
+.env*
