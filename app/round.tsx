@@ -146,7 +146,7 @@ export default function RoundScreen() {
       .eq("id", roundId)
       .single();
 
-    if (error) return showAlert("Error (round)", error.message);
+    if (error) return showAlert(copy.errorTitle, error.message);
 
     setStatement(data.statement ?? "");
     setStatus(data.status);
@@ -160,7 +160,7 @@ export default function RoundScreen() {
       .select("id,player_id,image_path")
       .eq("round_id", roundId);
 
-    if (error) return showAlert("Error (subs)", error.message);
+    if (error) return showAlert(copy.errorTitle, error.message);
 
     const list = data ?? [];
     setSubmissions(list);
@@ -178,7 +178,7 @@ export default function RoundScreen() {
       .eq("voter_player_id", playerId)
       .maybeSingle();
 
-    if (error) return showAlert("Error (vote)", error.message);
+    if (error) return showAlert(copy.errorTitle, error.message);
     setMyVoteSubmissionId(data?.submission_id ?? null);
   };
 
@@ -186,7 +186,7 @@ export default function RoundScreen() {
     if (!roundId) return;
 
     const { data, error } = await supabase.from("votes").select("submission_id").eq("round_id", roundId);
-    if (error) return showAlert("Error (votes)", error.message);
+    if (error) return showAlert(copy.errorTitle, error.message);
 
     const counts: Record<string, number> = {};
     for (const v of data ?? []) {
@@ -206,7 +206,7 @@ export default function RoundScreen() {
       .is("used_in_round_id", null)
       .order("created_at", { ascending: true });
 
-    if (error) return showAlert("Error (hand)", error.message);
+    if (error) return showAlert(copy.errorTitle, error.message);
     setAvailableImages(data ?? []);
   };
 
@@ -453,7 +453,7 @@ useEffect(() => {
 
   const submitFromHand = async (playerImageId: string, imagePath: string) => {
     if (!roomId || !playerId || !roundId) return;
-    if (mySubmissionId) return showAlert("You've already submitted ✅");
+    if (mySubmissionId) return showAlert(copy.alreadySubmitted);
     if (submitting) return;
 
     setSubmitting(true);
@@ -464,7 +464,7 @@ useEffect(() => {
         .select("id")
         .single();
 
-      if (subErr) return showAlert("DB error", subErr.message);
+      if (subErr) return showAlert(copy.errorTitle, subErr.message);
 
       const { error: lockErr } = await supabase
         .from("player_images")
@@ -474,7 +474,7 @@ useEffect(() => {
         .eq("player_id", playerId)
         .is("used_in_round_id", null);
 
-      if (lockErr) return showAlert("Error (lock image)", lockErr.message);
+      if (lockErr) return showAlert(copy.errorTitle, lockErr.message);
 
       setMySubmissionId(sub.id);
       await loadAvailableImages();
@@ -487,17 +487,17 @@ useEffect(() => {
   const goVoting = async () => {
     if (!roundId) return;
     const { error } = await supabase.from("rounds").update({ status: "voting" }).eq("id", roundId);
-    if (error) showAlert("Error (voting)", error.message);
+    if (error) showAlert(copy.errorTitle, error.message);
   };
 
   const finishRound = async () => {
     if (!roundId) return;
 
     const { error: rpcErr } = await supabase.rpc("finalize_round", { p_round_id: roundId });
-    if (rpcErr) return showAlert("Error (points)", rpcErr.message);
+    if (rpcErr) return showAlert(copy.errorTitle, rpcErr.message);
 
     const { error } = await supabase.from("rounds").update({ status: "done" }).eq("id", roundId);
-    if (error) showAlert("Error (done)", error.message);
+    if (error) showAlert(copy.errorTitle, error.message);
   };
 
   const nextRound = async () => {
@@ -520,7 +520,7 @@ useEffect(() => {
 
         if (roundsErr) {
           console.error("Error fetching rounds:", roundsErr);
-          showAlert("Error calculating scores", roundsErr.message);
+          showAlert(copy.scoreError, roundsErr.message);
           return;
         }
 
@@ -588,7 +588,7 @@ useEffect(() => {
         }
 
         const { error: phaseErr } = await supabase.from("rooms").update({ phase: "finished" }).eq("id", roomId);
-        if (phaseErr) return showAlert("Error (finished)", phaseErr.message);
+        if (phaseErr) return showAlert(copy.errorTitle, phaseErr.message);
         navigateToResultsWithTransition();
         return;
       }
@@ -599,7 +599,7 @@ useEffect(() => {
         .eq("room_id", roomId);
 
       if (usedErr) {
-        showAlert("Error (rounds)", usedErr.message);
+        showAlert(copy.errorTitle, usedErr.message);
         return;
       }
 
@@ -627,7 +627,7 @@ useEffect(() => {
         if (msg.includes("duplicate") || msg.includes("unique") || msg.includes("rounds_room_roundnumber_unique")) {
           return; // någon annan skapade redan
         }
-        showAlert("Error (next round)", error.message);
+        showAlert(copy.errorTitle, error.message);
         return;
       }
 
@@ -657,12 +657,12 @@ useEffect(() => {
           .update({ submission_id: submissionId })
           .eq("round_id", roundId)
           .eq("voter_player_id", playerId);
-        if (updErr) return showAlert("Röstning", updErr.message);
+        if (updErr) return showAlert(copy.voteError, updErr.message);
       } else {
         const { error } = await supabase
           .from("votes")
           .insert({ round_id: roundId, voter_player_id: playerId, submission_id: submissionId });
-        if (error) return showAlert("Röstning", error.message);
+        if (error) return showAlert(copy.voteError, error.message);
       }
 
       setMyVoteSubmissionId(submissionId);
@@ -698,11 +698,11 @@ useEffect(() => {
           statusCollecting: "Väljer",
           statusVoting: "Röstar",
           statusDone: "Klar",
-          statementTitle: "Statement",
+          statementTitle: "Påstående",
           statementBody: "Välj bilden som passar bäst 👇",
-          categoryInnocent: "OSKYLDIGA",
+          categoryInnocent: "OSKYLDIGT",
           categoryAdult: "18+",
-          categoryGross: "GROV",
+          categoryGross: "GROVT",
           submitted: "Skickat in ✓",
           choosePicture: "Välj en bild ({count} kvar)",
           youVoted: "Du röstade ✓",
@@ -727,6 +727,10 @@ useEffect(() => {
           leaveTitle: "Lämna spelet?",
           leaveBody: "Du lämnar matchen. Dina vänner kan fortsätta spela.",
           stay: "Stanna",
+          errorTitle: "Något gick fel",
+          scoreError: "Kunde inte räkna ihop poängen",
+          voteError: "Kunde inte registrera din röst",
+          alreadySubmitted: "Du har redan skickat in en bild ✅",
         }
       : {
           roundWinner: "Round Winner",
@@ -766,6 +770,10 @@ useEffect(() => {
           leaveTitle: "Leave the game?",
           leaveBody: "You'll leave the match. Your friends can keep playing.",
           stay: "Stay",
+          errorTitle: "Something went wrong",
+          scoreError: "Could not calculate the scores",
+          voteError: "Could not register your vote",
+          alreadySubmitted: "You've already submitted ✅",
         };
 
   const { width: windowWidth } = useWindowDimensions();

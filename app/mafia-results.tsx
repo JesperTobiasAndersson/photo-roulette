@@ -25,7 +25,7 @@ function getRoleBadge(role: string | undefined, language: "en" | "sv") {
 }
 
 export default function MafiaResults() {
-  const { language } = useI18n();
+  const { language, translateServerMessage } = useI18n();
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
@@ -103,7 +103,7 @@ export default function MafiaResults() {
           {mafiaWon ? copy.mafiaWins : copy.villageWins}
         </Text>
         {room.public_message ? (
-          <Text style={[type.body, { color: colors.textSecondary, textAlign: "center" }]}>{room.public_message}</Text>
+          <Text style={[type.body, { color: colors.textSecondary, textAlign: "center" }]}>{translateServerMessage(room.public_message)}</Text>
         ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
           <Text style={[type.small, { color: colors.textMuted }]}>{copy.yourRole}:</Text>

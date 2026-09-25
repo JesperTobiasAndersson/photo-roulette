@@ -6,6 +6,8 @@ type QRCodeProps = {
   value: string;
   /** Outer size in px, including the white quiet zone. */
   size?: number;
+  /** Screen-reader label; pass a translated one. */
+  accessibilityLabel?: string;
 };
 
 const QUIET_ZONE = 2; // modules of white border scanners need around the code
@@ -15,7 +17,7 @@ const QUIET_ZONE = 2; // modules of white border scanners need around the code
  * without an SVG/canvas dependency. Each row is drawn as horizontal runs to keep
  * the number of views low.
  */
-export function QRCode({ value, size = 200 }: QRCodeProps) {
+export function QRCode({ value, size = 200, accessibilityLabel = "QR code" }: QRCodeProps) {
   const { count, runs } = useMemo(() => {
     const qr = qrcode(0, "M");
     qr.addData(value);
@@ -46,7 +48,7 @@ export function QRCode({ value, size = 200 }: QRCodeProps) {
   return (
     <View
       accessibilityRole="image"
-      accessibilityLabel="QR code"
+      accessibilityLabel={accessibilityLabel}
       style={{ width: outer, height: outer, backgroundColor: "#FFFFFF", padding: cell * QUIET_ZONE, borderRadius: 12 }}
     >
       <View style={{ width: inner, height: inner }}>

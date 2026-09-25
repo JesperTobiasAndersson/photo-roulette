@@ -22,11 +22,19 @@ const MEDAL = {
   bronze: "#D08B5B",
 };
 
+function ordinal(place: number, language: "en" | "sv") {
+  const lastTwo = place % 100;
+  const last = place % 10;
+  if (language === "sv") return `${place}:${(last === 1 || last === 2) && lastTwo !== 11 && lastTwo !== 12 ? "a" : "e"}`;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${place}th`;
+  return `${place}${last === 1 ? "st" : last === 2 ? "nd" : last === 3 ? "rd" : "th"}`;
+}
+
 function getMedal(place: number, language: "en" | "sv") {
   if (place === 1) return { emoji: "👑", color: MEDAL.gold, label: language === "sv" ? "1:a" : "1st" };
   if (place === 2) return { emoji: "🥈", color: MEDAL.silver, label: language === "sv" ? "2:a" : "2nd" };
-  if (place === 3) return { emoji: "🥉", color: MEDAL.bronze, label: language === "sv" ? "3:a" : "3rd" };
-  return { emoji: "•", color: colors.textMuted, label: language === "sv" ? `${place}:a` : `${place}th` };
+  if (place === 3) return { emoji: "🥉", color: MEDAL.bronze, label: language === "sv" ? "3:e" : "3rd" };
+  return { emoji: "•", color: colors.textMuted, label: ordinal(place, language) };
 }
 
 export default function ResultsScreen() {

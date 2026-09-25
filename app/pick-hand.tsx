@@ -58,7 +58,7 @@ export default function PickHandScreen() {
           progress: "Framsteg",
           pickHint: "Välj bilder från ditt bibliotek. De används bara i det här rummet.",
           uploading: "Laddar upp",
-          uploadTip: "Tips: välj screenshots eller memes, det blir roligare så.",
+          uploadTip: "Tips: välj skärmdumpar eller memes, det blir roligare så.",
           continue: "Fortsätt",
           pickImages: `Välj ${MAX_IMAGES} bilder`,
           pickMoreImages: "Välj fler bilder",

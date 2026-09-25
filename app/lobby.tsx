@@ -71,11 +71,11 @@ export default function Lobby() {
           waitHostRound: "Väntar på att värden startar rundan…",
           hostHintLobby: "Bjud in alla först – sen fortsätter ni till bilderna.",
           hostHintPicking: "Starta när alla har valt sina 5 bilder.",
-          categoryTitle: "Statement-kategori",
+          categoryTitle: "Kategori för påståenden",
           categoryBody: "Värden väljer en kategori för hela matchen innan spelet startar.",
-          categoryInnocent: "Oskyldiga",
+          categoryInnocent: "Oskyldigt",
           categoryAdult: "18+",
-          categoryGross: "Grov",
+          categoryGross: "Grovt",
           categorySavingError: "Fel (kategori)",
         }
       : {

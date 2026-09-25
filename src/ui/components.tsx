@@ -511,7 +511,7 @@ export function RoomCodeBadge({
       </Text>
       {inviteUrl ? (
         <View style={{ alignItems: "center", gap: space.sm, marginTop: space.sm }}>
-          <QRCode value={inviteUrl} size={196} />
+          <QRCode value={inviteUrl} size={196} accessibilityLabel={language === "sv" ? "QR-kod med inbjudningslänk" : "QR code with invite link"} />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Ionicons name="scan" size={16} color={colors.textMuted} />
             <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: "600" }}>

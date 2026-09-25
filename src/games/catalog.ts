@@ -291,4 +291,4 @@ export const GAMES: Record<GameId, GameInfo> = {
   },
 };
 
-export const GAME_ORDER: GameId[] = ["memematch", "mafia", "imposter", "chicago", "musicQuiz", "trivia"];
+export const GAME_ORDER: GameId[] = ["imposter", "memematch", "mafia", "chicago", "musicQuiz", "trivia"];

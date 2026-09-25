@@ -5,7 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { AnimatedEntrance } from "../src/components/AnimatedEntrance";
 import { ShareButton } from "../src/components/ShareButton";
 import { GAMES } from "../src/games/catalog";
-import { IMPOSTER_CATEGORIES } from "../src/games/imposter/data";
+import { IMPOSTER_CATEGORIES, imposterCategoryLabel, imposterWordLabel } from "../src/games/imposter/data";
+import { WordPicture } from "../src/games/imposter/WordPicture";
 import {
   finishImposterReveal,
   resolveImposterVoting,
@@ -202,6 +203,12 @@ const PUBLIC_MESSAGES_SV: Record<string, string> = {
   "Vote for the player you think is the imposter.": "Rösta på den du tror är impostern.",
   "The group voted out the wrong player. The game continues.": "Gruppen röstade ut fel spelare. Spelet fortsätter.",
   "Nobody was eliminated. Keep discussing.": "Ingen röstades ut. Fortsätt diskutera.",
+  "The group found the imposter.": "Gruppen hittade impostern.",
+  "Only two players remain. The imposter takes the win.": "Bara två spelare är kvar. Impostern vinner.",
+  "Nobody voted. The imposter slipped through.": "Ingen röstade. Impostern slank igenom.",
+  "The vote tied. The imposter survives the round.": "Röstningen blev oavgjord. Impostern överlever rundan.",
+  "The group voted out the wrong player. The imposter wins.": "Gruppen röstade ut fel spelare. Impostern vinner.",
+  "The round ended without an assigned imposter.": "Rundan slutade utan någon imposter.",
 };
 
 function localizeMessage(message: string | null, language: Language) {
@@ -217,6 +224,7 @@ function SecretCard({
   onToggle,
   copy,
   compact,
+  language,
 }: {
   isImposter: boolean;
   prompt: string | null;
@@ -224,6 +232,7 @@ function SecretCard({
   onToggle: () => void;
   copy: (typeof COPY)["en"];
   compact?: boolean;
+  language: "en" | "sv";
 }) {
   const tone = isImposter ? colors.danger : ACCENT;
   return (
@@ -251,6 +260,11 @@ function SecretCard({
           <Text style={[type.caption, { color: tone, textTransform: "uppercase" }]}>
             {isImposter ? copy.yourCard : copy.yourWord}
           </Text>
+          {isImposter ? (
+            <Text style={{ fontSize: compact ? 44 : 72, lineHeight: compact ? 52 : 84 }}>🕵️</Text>
+          ) : (
+            <WordPicture word={prompt} size={compact ? 96 : 168} language={language} />
+          )}
           <Text
             adjustsFontSizeToFit
             numberOfLines={2}
@@ -262,7 +276,7 @@ function SecretCard({
               textAlign: "center",
             }}
           >
-            {isImposter ? copy.youAreImposter.toUpperCase() : (prompt ?? copy.unknown).toUpperCase()}
+            {isImposter ? copy.youAreImposter.toUpperCase() : (imposterWordLabel(prompt, language) || copy.unknown).toUpperCase()}
           </Text>
           {!compact ? (
             <Text style={[type.small, { color: colors.textSecondary, textAlign: "center" }]}>
@@ -1087,14 +1101,11 @@ export default function ImposterLobbyScreen() {
                       opacity: !isHost && !active ? 0.55 : pressed || pending ? 0.85 : 1,
                     })}
                   >
-                    <Ionicons
-                      name={active ? "radio-button-on" : "radio-button-off"}
-                      size={20}
-                      color={active ? entry.accent : colors.textSubtle}
-                    />
+                    <Text style={{ fontSize: 24 }}>{entry.emoji}</Text>
                     <Text numberOfLines={2} style={{ flex: 1, color: active ? colors.text : colors.textSecondary, fontSize: 15, fontWeight: "800" }}>
-                      {entry.title}
+                      {imposterCategoryLabel(entry, language)}
                     </Text>
+                    {active ? <Ionicons name="checkmark-circle" size={20} color={entry.accent} /> : null}
                   </Pressable>
                 );
               })}
@@ -1126,9 +1137,9 @@ export default function ImposterLobbyScreen() {
             <Text style={[type.body, { color: colors.textSecondary }]}>{copy.revealHint}</Text>
           </View>
           {myRole ? (
-            <SecretCard isImposter={isImposter} prompt={myRole.prompt} revealed={cardRevealed} onToggle={toggleCard} copy={copy} />
+            <SecretCard isImposter={isImposter} prompt={myRole.prompt} revealed={cardRevealed} onToggle={toggleCard} copy={copy} language={language} />
           ) : null}
-          {category ? <Chip label={`${copy.category}: ${category.title}`} color={category.accent} icon="pricetag" /> : null}
+          {category ? <Chip label={`${copy.category}: ${category.emoji} ${imposterCategoryLabel(category, language)}`} color={category.accent} icon="pricetag" /> : null}
         </AnimatedEntrance>
       ) : null}
 
@@ -1148,7 +1159,7 @@ export default function ImposterLobbyScreen() {
             <Chip label={copy.readyToVoteCount(discussionReadyCount, alivePlayers.length)} color={colors.brand} icon="hand-right" />
           </Card>
           {myRole ? (
-            <SecretCard compact isImposter={isImposter} prompt={myRole.prompt} revealed={cardRevealed} onToggle={toggleCard} copy={copy} />
+            <SecretCard compact isImposter={isImposter} prompt={myRole.prompt} revealed={cardRevealed} onToggle={toggleCard} copy={copy} language={language} />
           ) : null}
           {isHost ? (
             <Button

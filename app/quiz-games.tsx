@@ -19,10 +19,10 @@ export default function QuizGamesPage() {
   const copy =
     language === "sv"
       ? {
-          seoTitle: "Quizspel för game nights, kontor och vänskapsgrupper",
+          seoTitle: "Quizspel för spelkvällar, kontoret och kompisgänget",
           description: "Spela quizspel med kategorier, musikfrågor, rumskoder och snabb poängsättning på Picklo. Gratis i mobilen, inget konto.",
           eyebrow: "Quizspel",
-          heading: "Quizspel för game nights, kontor och kompisgäng",
+          heading: "Quizspel för spelkvällar, kontoret och kompisgänget",
           intro:
             "Två sätt att tävla: klassisk Trivia med kategorier och muntliga svar, eller Music Quiz där ni gissar låtar. Alla är med från sin egen mobil och värden håller koll på poängen.",
           gamesTitle: "Quizspel på Picklo",

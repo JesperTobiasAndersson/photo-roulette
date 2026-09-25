@@ -6,6 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { AnimatedEntrance } from "../src/components/AnimatedEntrance";
 import { GAMES } from "../src/games/catalog";
 import { getCategoryById } from "../src/games/imposter/logic";
+import { imposterCategoryLabel, imposterWordLabel } from "../src/games/imposter/data";
+import { WordPicture } from "../src/games/imposter/WordPicture";
 import { useImposterRoom } from "../src/games/imposter/useImposterRoom";
 import { useI18n } from "../src/lib/i18n";
 import { Button, Card, Chip, GameIcon, Screen, SectionLabel, TopBar } from "../src/ui/components";
@@ -27,6 +29,7 @@ const PUBLIC_MESSAGES_SV: Record<string, string> = {
   "Nobody voted. The imposter slipped through.": "Ingen röstade. Impostern slank igenom.",
   "The vote tied. The imposter survives the round.": "Röstningen blev oavgjord. Impostern överlever rundan.",
   "The group voted out the wrong player. The imposter wins.": "Gruppen röstade ut fel spelare. Impostern vinner.",
+  "The round ended without an assigned imposter.": "Rundan slutade utan någon imposter.",
 };
 
 export default function ImposterResults() {
@@ -151,11 +154,12 @@ export default function ImposterResults() {
           <Card accent={ACCENT} style={{ flex: 1, gap: space.xs }}>
             <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{copy.word}</Text>
             <Text adjustsFontSizeToFit numberOfLines={2} style={[type.title, { color: colors.text }]}>
-              {room.secret_prompt?.toUpperCase() ?? copy.unknown}
+              {(imposterWordLabel(room.secret_prompt, language) || copy.unknown).toUpperCase()}
             </Text>
+            <WordPicture word={room.secret_prompt} size={96} language={language} />
             {category ? (
               <Text style={[type.small, { color: colors.textMuted }]}>
-                {copy.category}: {category.title}
+                {copy.category}: {category.emoji} {imposterCategoryLabel(category, language)}
               </Text>
             ) : null}
           </Card>
@@ -211,7 +215,7 @@ export default function ImposterResults() {
                     {eliminated ? ` · ${copy.out}` : ""}
                   </Text>
                 </View>
-                <Chip label={isImposter ? "IMPOSTER" : "CREW"} color={isImposter ? colors.danger : ACCENT} />
+                <Chip label={isImposter ? "IMPOSTER" : language === "sv" ? "LAGET" : "CREW"} color={isImposter ? colors.danger : ACCENT} />
               </View>
             </AnimatedEntrance>
           );

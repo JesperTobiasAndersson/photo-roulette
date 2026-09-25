@@ -94,6 +94,15 @@ function getSuitSymbol(suit: ChicagoSuit): string {
   }
 }
 
+const SUIT_NAMES: Record<"en" | "sv", Record<ChicagoSuit, string>> = {
+  en: { clubs: "of clubs", diamonds: "of diamonds", hearts: "of hearts", spades: "of spades" },
+  sv: { clubs: "klöver", diamonds: "ruter", hearts: "hjärter", spades: "spader" },
+};
+
+function suitName(suit: ChicagoSuit, language: string) {
+  return SUIT_NAMES[language === "sv" ? "sv" : "en"][suit] ?? suit;
+}
+
 function getSuitColor(suit: ChicagoSuit): string {
   return suit === "hearts" || suit === "diamonds" ? RED_SUIT : colors.text;
 }
@@ -119,6 +128,7 @@ function PlayingCard({
   dimmed?: boolean;
   onPress?: () => void;
 }) {
+  const { language } = useI18n();
   const suitColor = getSuitColor(card.suit);
   const suitSymbol = getSuitSymbol(card.suit);
   const mini = size === "mini";
@@ -132,7 +142,7 @@ function PlayingCard({
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityState={onPress ? { selected } : undefined}
-      accessibilityLabel={`${card.rank} ${card.suit}`}
+      accessibilityLabel={`${card.rank} ${suitName(card.suit, language)}`}
       style={({ pressed }) => ({
         ...(mini ? { width: 52, height: 72 } : { flex: 1, maxWidth: 84, aspectRatio: 5 / 7 }),
         borderRadius: mini ? radius.sm - 2 : radius.sm,
@@ -229,7 +239,7 @@ function ModalShell({ children, zIndex, dim = 0.72 }: { children: React.ReactNod
 }
 
 export default function ChicagoRoomScreen() {
-  const { t, language, translateChicagoPublicMessage, translatePokerName } = useI18n();
+  const { t, language, translateChicagoPublicMessage, translatePokerName, translateError } = useI18n();
   const copy = COPY[language === "sv" ? "sv" : "en"];
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
@@ -269,7 +279,7 @@ export default function ChicagoRoomScreen() {
     !players.some((player) => player.chicago_declared);
   const currentTurnPlayer = players.find((player) => player.id === room?.current_turn_player_id) ?? null;
   const trickWinnerMatch = room?.public_message?.match(/^Trick (\d+) resolved\. (.+) leads next\.$/);
-  const trickWinnerName = trickWinnerMatch?.[2] ?? null;
+  const trickWinnerName = trickWinnerMatch?.[2] === "A player" ? t("common.player") : trickWinnerMatch?.[2] ?? null;
   const translatedPublicMessage = translateChicagoPublicMessage(room?.public_message) ?? t("common.waiting_next_move");
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
@@ -280,7 +290,7 @@ export default function ChicagoRoomScreen() {
       setSelectedPlayCard(null);
       await refresh();
     } catch (error) {
-      showAlert(t("common.action_failed"), String((error as Error)?.message ?? error));
+      showAlert(t("common.action_failed"), translateError(error));
     } finally {
       setBusy(null);
     }
@@ -304,7 +314,7 @@ export default function ChicagoRoomScreen() {
       advanceChicagoPokerScore(roomId, playerId)
         .then(() => refresh())
         .catch((error) => {
-          showAlert(t("common.action_failed"), String((error as Error)?.message ?? error));
+          showAlert(t("common.action_failed"), translateError(error));
         })
         .finally(() => {
           scheduledPokerScoreKeyRef.current = null;

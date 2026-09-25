@@ -29,7 +29,7 @@ function asString(v: unknown): string {
 }
 
 /** Maps raw backend errors to something a player can act on. */
-function friendlyError(error: unknown, language: "en" | "sv", mode: "create" | "join") {
+function friendlyError(error: unknown, language: "en" | "sv", mode: "create" | "join", translate: (error: unknown) => string) {
   const raw = String((error as Error)?.message ?? error ?? "");
   const sv = language === "sv";
   if (/ROOM_NOT_FOUND|0 rows|no rows|multiple \(or no\)|PGRST116/i.test(raw)) {
@@ -55,12 +55,12 @@ function friendlyError(error: unknown, language: "en" | "sv", mode: "create" | "
     mode === "create"
       ? language === "sv" ? "Kunde inte skapa rummet." : "Couldn't create the room."
       : language === "sv" ? "Kunde inte gå med." : "Couldn't join the room.";
-  return raw ? `${prefix} (${raw})` : prefix;
+  return raw ? `${prefix} (${translate(error)})` : prefix;
 }
 
 export function GameEntryScreen({ gameId, createRoom, joinRoom, notice }: GameEntryScreenProps) {
   const game = GAMES[gameId];
-  const { language, t } = useI18n();
+  const { language, t, translateError } = useI18n();
   const params = useLocalSearchParams();
   const codeFromUrl = asString(params.code).trim().toUpperCase();
 
@@ -93,7 +93,7 @@ export function GameEntryScreen({ gameId, createRoom, joinRoom, notice }: GameEn
       router.push(target as any);
     } catch (err) {
       console.error(`${game.id} ${mode} failed`, err);
-      setError(friendlyError(err, language, mode));
+      setError(friendlyError(err, language, mode, translateError));
     } finally {
       setLoading(false);
     }

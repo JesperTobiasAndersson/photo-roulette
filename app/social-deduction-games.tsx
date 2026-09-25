@@ -19,13 +19,13 @@ export default function SocialDeductionGamesPage() {
   const copy =
     language === "sv"
       ? {
-          seoTitle: "Social deduction-spel online för vänner och grupper",
+          seoTitle: "Bluffspel med dolda roller online för vänner och grupper",
           description:
-            "Spela social deduction-spel med dolda roller och hemliga ord på Picklo. Gratis i mobilen med rumskoder, inget konto och ingen spelledare.",
+            "Spela bluffspel med dolda roller och hemliga ord på Picklo. Gratis i mobilen med rumskoder, inget konto och ingen spelledare.",
           eyebrow: "Bluffspel",
-          heading: "Social deduction-spel för vänner och grupper",
+          heading: "Bluffspel för vänner och grupper",
           intro:
-            "I social deduction-spel har någon i gruppen en hemlighet, och resten måste lista ut vem. Det handlar om att bluffa, läsa av varandra och övertyga gruppen. Picklo sköter roller och röstning i mobilen, så alla får spela och ingen behöver vara spelledare.",
+            "I bluffspel (på engelska social deduction) har någon i gruppen en hemlighet, och resten måste lista ut vem. Det handlar om att bluffa, läsa av varandra och övertyga gruppen. Picklo sköter roller och röstning i mobilen, så alla får spela och ingen behöver vara spelledare.",
           gamesTitle: "Bluffspel på Picklo",
           howEyebrow: "Så funkar det",
           howTitle: "Starta en runda",

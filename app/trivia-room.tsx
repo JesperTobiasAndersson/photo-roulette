@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ShareButton } from "../src/components/ShareButton";
 import { GAMES } from "../src/games/catalog";
-import { TRIVIA_CATEGORIES, type TriviaCategory } from "../src/games/trivia/data";
+import { TRIVIA_CATEGORIES, localizeTriviaTurn, triviaCategoryLabel, type TriviaCategory } from "../src/games/trivia/data";
 import { revealTriviaAnswer, resetTriviaToLobby, scoreTriviaTurn, startTriviaGame } from "../src/games/trivia/api";
 import { useTriviaRoom } from "../src/games/trivia/useTriviaRoom";
 import { useI18n } from "../src/lib/i18n";
@@ -311,6 +311,7 @@ export default function TriviaRoomScreen() {
 
   const activeName = activePlayer?.display_name ?? "-";
   const inTurn = gameInProgress && !!currentTurn;
+  const localizedTurn = currentTurn ? localizeTriviaTurn(currentTurn.question_text, currentTurn.answer_text, language) : null;
 
   // What this phone should do right now.
   const banner: { icon: IconName; title: string; body?: string | null } | null =
@@ -415,11 +416,11 @@ export default function TriviaRoomScreen() {
               <Text style={[type.small, { color: colors.textMuted }]}>{copy.categoryTurn}</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
                 {TRIVIA_CATEGORIES.map((category) => (
-                  <CategoryChip key={category} label={category} active={selectedCategories.includes(category)} onPress={() => toggleCategory(category)} />
+                  <CategoryChip key={category} label={triviaCategoryLabel(category, language)} active={selectedCategories.includes(category)} onPress={() => toggleCategory(category)} />
                 ))}
               </View>
               <Text style={[type.small, { color: colors.textSecondary }]}>
-                {copy.selectedCategories}: <Text style={{ color: ACCENT, fontWeight: "800" }}>{selectedCategories.join(", ")}</Text>
+                {copy.selectedCategories}: <Text style={{ color: ACCENT, fontWeight: "800" }}>{selectedCategories.map((category) => triviaCategoryLabel(category, language)).join(", ")}</Text>
               </Text>
             </Card>
           ) : null}
@@ -432,14 +433,14 @@ export default function TriviaRoomScreen() {
           <Animated.View style={{ opacity: questionOpacity, transform: [{ translateY: questionTranslateY }, { scale: questionScale }] }}>
             <Card accent={ACCENT} style={{ gap: space.md, padding: space.xl }}>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-                <Chip label={currentTurn.category.toUpperCase()} color={ACCENT} icon="pricetag" />
+                <Chip label={triviaCategoryLabel(currentTurn.category, language).toUpperCase()} color={ACCENT} icon="pricetag" />
                 <Chip
                   label={copy.roundCount.replace("{current}", String(currentTurn.turn_number)).replace("{total}", String(totalTurns))}
                   color={colors.textMuted}
                 />
               </View>
               <Text accessibilityRole="header" style={{ color: colors.text, fontWeight: "900", fontSize: 30, lineHeight: 38 }}>
-                {currentTurn.question_text}
+                {localizedTurn?.question ?? currentTurn.question_text}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
                 <Ionicons name={isActivePlayer ? "mic" : "person"} size={18} color={isActivePlayer ? ACCENT : colors.textMuted} />
@@ -468,7 +469,7 @@ export default function TriviaRoomScreen() {
                 }}
               >
                 <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{copy.answer}</Text>
-                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 28, lineHeight: 34 }}>{currentTurn.answer_text}</Text>
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 28, lineHeight: 34 }}>{localizedTurn?.answer ?? currentTurn.answer_text}</Text>
                 <Text style={[type.small, { color: colors.textSecondary }]}>{copy.revealBody}</Text>
               </View>
             </Animated.View>

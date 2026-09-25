@@ -416,7 +416,7 @@ function PickRow({
 }
 
 export default function MafiaRoomScreen() {
-  const { language: lang, t } = useI18n();
+  const { language: lang, t, translateServerMessage, translateError } = useI18n();
   const language: Lang = lang === "sv" ? "sv" : "en";
   const L = COPY[language];
   const params = useLocalSearchParams();
@@ -506,7 +506,7 @@ export default function MafiaRoomScreen() {
       await fn();
       await refresh();
     } catch (err) {
-      showAlert(t("common.action_failed"), String((err as Error)?.message ?? err));
+      showAlert(t("common.action_failed"), translateError(err));
     } finally {
       setBusy(null);
     }
@@ -1553,7 +1553,7 @@ export default function MafiaRoomScreen() {
       {room.state === "day_discussion" ? (
         <Card>
           <Text style={[type.heading, { color: colors.text }]}>{L.discuss}</Text>
-          {room.public_message ? <Text style={[type.body, { color: colors.textSecondary }]}>{room.public_message}</Text> : null}
+          {room.public_message ? <Text style={[type.body, { color: colors.textSecondary }]}>{translateServerMessage(room.public_message)}</Text> : null}
           <View style={{ alignItems: "center", paddingVertical: space.sm, gap: 2 }}>
             <Text style={[type.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>{L.timeLeft}</Text>
             <Text style={{ color: colors.warning, fontSize: 44, lineHeight: 50, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{phaseMinutesText}</Text>
@@ -1598,7 +1598,7 @@ export default function MafiaRoomScreen() {
       {/* ---------------- Vote result ---------------- */}
       {room.state === "vote_result" ? (
         <Card accent={latestEliminatedPlayer ? colors.danger : undefined}>
-          {room.public_message ? <Text style={[type.body, { color: colors.textSecondary }]}>{room.public_message}</Text> : null}
+          {room.public_message ? <Text style={[type.body, { color: colors.textSecondary }]}>{translateServerMessage(room.public_message)}</Text> : null}
           {latestEliminatedPlayer ? (
             <Text style={[type.heading, { color: colors.danger }]}>{L.wasEliminated(latestEliminatedPlayer.display_name)}</Text>
           ) : null}

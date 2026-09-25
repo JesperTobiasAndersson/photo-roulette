@@ -182,7 +182,7 @@ const translations: Record<Language, TranslationDict> = {
     "game.memematch.tagline": "Välj bilder. Matcha påståendet.",
     "game.memematch.description": "Alla laddar upp en hand med bilder, spelar den som passar bäst till påståendet och röstar fram den roligaste.",
     "game.memematch.cta": "Spela MemeMatch",
-    "game.mafia.tagline": "Dolda roller, bluff och social deduction.",
+    "game.mafia.tagline": "Dolda roller, bluff och jakten på den skyldige.",
     "game.mafia.description": "Hemliga roller, nattmord och dagröstningar. Ingen spelledare behövs: appen sköter spelet.",
     "game.mafia.cta": "Spela Mafia",
     "game.imposter.tagline": "Smält in, improvisera och avslöja bluffen.",
@@ -191,11 +191,11 @@ const translations: Record<Language, TranslationDict> = {
     "game.chicago.tagline": "Pokerpoäng, modiga utrop och ett sista stick som avgör.",
     "game.chicago.description": "Turordningsbaserat kortspel för flera spelare med byten, pokerpoäng, stickspel och kapplöpning till 52 poäng.",
     "game.chicago.cta": "Spela Chicago",
-    "game.music.tagline": "Spotify-länkar, omslagsreveal och snabb host-poäng.",
-    "game.music.description": "Hoststyrt musikquiz där spelarna svarar i appen och trycker på omslaget för att öppna exakt låt på Spotify.",
+    "game.music.tagline": "Spotify-länkar, omslag som avslöjar svaret och snabb poängsättning.",
+    "game.music.description": "Musikquiz som leds av värden där spelarna svarar i appen och trycker på omslaget för att öppna exakt rätt låt på Spotify.",
     "game.music.cta": "Spela Music Quiz",
-    "game.trivia.tagline": "Kategorier, muntliga svar och hoststyrd rättning.",
-    "game.trivia.description": "Lokalt party-trivia på en enhet där spelarna tar turer, visar facit och låter hosten markera rätt eller fel.",
+    "game.trivia.tagline": "Kategorier, muntliga svar och rättning av värden.",
+    "game.trivia.description": "Lokalt party-trivia på en enhet där spelarna tar turer, visar facit och låter värden markera rätt eller fel.",
     "game.trivia.cta": "Spela Trivia",
     "chicago.home.description": "Kortspel för flera spelare med bytesrundor, pokerpoäng, stickspel och Chicago-utrop.",
     "chicago.mode.create": "Skapa rum",
@@ -247,7 +247,7 @@ const translations: Record<Language, TranslationDict> = {
     "room.wait_host_start": "Väntar på att värden ska starta rundan.",
     "room.deal_round": "Dela ut runda",
     "room.your_hand": "Din hand",
-    "room.current_read": "Nuvarande läsning:",
+    "room.current_read": "Din hand just nu:",
     "room.draw_cards": "Byt kort",
     "room.draw_help": "Välj 0-5 kort att byta och skicka sedan in ditt drag. Alla byter samtidigt.",
     "room.buy_stop_active": "Köpstopp aktivt",
@@ -261,10 +261,10 @@ const translations: Record<Language, TranslationDict> = {
     "room.keep_current": "Behåll nuvarande hand",
     "room.exchange_cards": "Byt {count} {cards_upper}",
     "room.best_hand_scoring": "Bästa hand poängsätts",
-    "room.best_hand_body": "Bordet poängsätts automatiskt. En reveal visas så fort bästa handen är bekräftad.",
+    "room.best_hand_body": "Bordet poängsätts automatiskt. Bästa handen visas så fort den är bekräftad.",
     "room.best_hand_wait": "Ger alla en kort stund att landa innan vinnande hand visas.",
     "room.revealing_best_hand": "Visar bästa hand...",
-    "room.best_hand_hint": "Alla öppna spelarskärmar kan trigga detta automatiskt, så rundan ska kunna fortsätta även om någon klient missar timingen.",
+    "room.best_hand_hint": "Vilken öppen spelarskärm som helst kan starta detta automatiskt, så rundan fortsätter även om någon enhet missar tidpunkten.",
     "room.reveal_now": "Visa bästa hand nu",
     "room.trick_phase": "Stickfas",
     "room.trick_body": "Bara sista sticket räknas för vanlig poäng. CHICAGO måste ropas innan första kortet spelas. Den som ropar måste sedan vinna alla stick, annars blir det -15 poäng.",
@@ -303,8 +303,8 @@ const translations: Record<Language, TranslationDict> = {
     "modal.uh_oh": "Oj nej",
     "modal.buy_stop_activated": "Köpstopp aktiverat",
     "modal.no_swap_only_chaos": "Inga byten, bara kaos",
-    "modal.buy_stop_message": "{name} nådde {score}. Nu är det köpstopp, bara vibes och fem kort rakt ut.",
-    "modal.buy_stop_penalty": "{name} försökte byta trots köpstopp och tappade hela stacken. Poängen är tillbaka på 0.",
+    "modal.buy_stop_message": "{name} nådde {score}. Nu är det köpstopp: inga fler byten, bara fem kort rakt ut i spel.",
+    "modal.buy_stop_penalty": "{name} försökte byta trots köpstopp och förlorade alla poäng. Poängen är tillbaka på 0.",
     "room.room_code": "Rum {code} - Runda {round}",
     "room.chicago_declared_message": "{name} ropade CHICAGO och leder första sticket.",
     "room.poker.high_card": "Högt kort",
@@ -316,7 +316,7 @@ const translations: Record<Language, TranslationDict> = {
     "room.poker.full_house": "Kåk",
     "room.poker.four_of_a_kind": "Fyrtal",
     "room.poker.straight_flush": "Färgstege",
-    "room.poker.royal_straight_flush": "Royal Straight Flush",
+    "room.poker.royal_straight_flush": "Royal straight flush",
   },
 };
 
@@ -331,6 +331,98 @@ type I18nContextValue = {
   t: (key: string, vars?: Record<string, string | number>) => string;
   translateChicagoPublicMessage: (message: string | null | undefined) => string | null;
   translatePokerName: (name: string | null | undefined) => string;
+  /** Translates status messages the game backends store in English (Mafia, Music Quiz, Chicago). */
+  translateServerMessage: (message: string | null | undefined) => string | null;
+  /** Translates the English error messages thrown by the game APIs; unknown errors pass through. */
+  translateError: (error: unknown) => string;
+};
+
+/** Name fallback the APIs write when a player can't be found. */
+function svName(name: string) {
+  return name === "A player" ? "En spelare" : name;
+}
+
+/**
+ * Swedish versions of the fixed English strings the game APIs write to the database
+ * (public_message) or throw as errors. Keys must match the API text exactly.
+ */
+const SERVER_MESSAGES_SV: Record<string, string> = {
+  // Shared
+  "Only the host can do that": "Bara värden kan göra det",
+  "Enter a player name": "Skriv ett spelarnamn",
+
+  // Chicago errors
+  "Draw phase is not active": "Bytesfasen är inte aktiv",
+  "Another draw is still being processed. Try again.": "Ett annat byte behandlas fortfarande. Försök igen.",
+  "Chicago requires 2 to 6 active players": "Chicago kräver 2 till 6 aktiva spelare",
+  "No active round": "Ingen aktiv runda",
+  "Choose cards that are actually in your hand": "Välj kort som faktiskt finns i din hand",
+  "Not enough cards left in the deck": "Det finns inte tillräckligt med kort kvar i leken",
+  "No hands found": "Inga händer hittades",
+  "Could not determine poker winner": "Kunde inte avgöra vem som vann pokerhanden",
+  "Chicago can only be declared in the trick phase": "Chicago kan bara ropas i stickfasen",
+  "You already declared Chicago this round": "Du har redan ropat Chicago den här rundan",
+  "Chicago has already been claimed this round": "Chicago har redan ropats den här rundan",
+  "Chicago must be declared before the first card is played": "Chicago måste ropas innan första kortet spelas",
+  "Another player claimed CHICAGO first": "En annan spelare ropade CHICAGO först",
+  "Trick phase is not active": "Stickfasen är inte aktiv",
+  "It is not your turn": "Det är inte din tur",
+  "That card is not in your hand": "Det kortet finns inte i din hand",
+  "You must follow suit if possible": "Du måste följa färg om du kan",
+
+  // Mafia status messages
+  "Waiting for players.": "Väntar på spelare.",
+  "Roles assigned. Reveal your role privately.": "Rollerna är utdelade. Titta på din roll i hemlighet.",
+  "Night has started. Everyone has something to do.": "Natten har börjat. Alla har något att göra.",
+  "Someone was eliminated during the night.": "Någon blev utslagen under natten.",
+  "Nobody was eliminated during the night.": "Ingen blev utslagen under natten.",
+  "Discuss what happened and decide who to accuse.": "Diskutera vad som hände och bestäm vem ni ska anklaga.",
+  "Everyone is ready. Vote for the player you want to eliminate.": "Alla är redo. Rösta på spelaren ni vill rösta ut.",
+  "Vote for the player you want to eliminate.": "Rösta på spelaren ni vill rösta ut.",
+  "No votes were cast.": "Inga röster lades.",
+  "The vote tied. Nobody was eliminated.": "Det blev lika i röstningen. Ingen röstades ut.",
+  "The village eliminated a player.": "Byn röstade ut en spelare.",
+
+  // Mafia errors
+  "At least 4 players are required": "Minst 4 spelare behövs",
+  "Night actions are closed": "Nattens handlingar är stängda",
+  "Only living players can act": "Bara levande spelare kan agera",
+  "Player is not in this room": "Spelaren finns inte i det här rummet",
+  "Choose a target first": "Välj ett mål först",
+  "Choose a living player": "Välj en levande spelare",
+  "Night is not active": "Det är inte natt just nu",
+  "Only living players can continue": "Bara levande spelare kan fortsätta",
+  "Confirm your night action first": "Bekräfta din nattliga handling först",
+  "You can only continue after the night result": "Du kan bara fortsätta efter nattens resultat",
+  "Discussion is not active": "Diskussionen är inte igång",
+  "Only living players can mark ready": "Bara levande spelare kan markera redo",
+  "Discussion must finish before voting starts": "Diskussionen måste vara klar innan röstningen börjar",
+  "Voting is closed": "Röstningen är stängd",
+  "Only living players can vote": "Bara levande spelare kan rösta",
+  "You cannot vote for yourself": "Du kan inte rösta på dig själv",
+  "Voting is not active": "Röstningen är inte igång",
+  "You can only continue after the vote result": "Du kan bara fortsätta efter röstresultatet",
+
+  // Music Quiz status messages
+  "Waiting for the host to choose a category.": "Väntar på att värden väljer kategori.",
+  "Answer reveal is live. Tap the cover to open the exact Spotify track.":
+    "Facit visas nu. Tryck på omslaget för att öppna exakt rätt låt på Spotify.",
+  "Game complete. Final scoreboard is locked in.": "Matchen är klar. Slutställningen är låst.",
+
+  // Music Quiz errors
+  "Finish the current round first": "Avsluta den pågående rundan först",
+  "No songs available in that playlist": "Det finns inga låtar i den spellistan",
+  "There is no active question": "Det finns ingen aktiv fråga",
+  "Enter an answer first": "Skriv ett svar först",
+  "There is no active round": "Det finns ingen aktiv runda",
+  "There is no round to score": "Det finns ingen runda att rätta",
+  "Reveal the answer before awarding points": "Visa facit innan du delar ut poäng",
+  "Enter a Spotify track link": "Klistra in en Spotify-länk till en låt",
+  "Enter a valid Spotify track link": "Klistra in en giltig Spotify-länk till en låt",
+  "Paste a Spotify track link": "Klistra in en Spotify-länk till en låt",
+  "That link does not look like a Spotify track": "Länken ser inte ut som en låt på Spotify",
+  "Could not load that Spotify track": "Kunde inte ladda låten från Spotify",
+  "Could not read the song title from Spotify": "Kunde inte läsa låttiteln från Spotify",
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -376,15 +468,24 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     if (match) return t("room.chicago_declared_message", { name: match[1] });
 
     match = message.match(/^Trick (\d+) resolved\. (.+) leads next\.$/);
-    if (match) return `Stick ${match[1]} avgjort. ${match[2]} leder nästa.`;
+    if (match) return `Stick ${match[1]} avgjort. ${svName(match[2])} leder nästa.`;
 
     match = message.match(/^(.+) wins the first scoring with (.+) for (\d+) point(s?)\.$/);
-    if (match) return `${match[1]} vinner första poängsättningen med ${translatePokerName(normalizePokerKey(match[2]))} för ${match[3]} poäng.`;
+    if (match) return `${svName(match[1])} vinner första poängsättningen med ${translatePokerName(normalizePokerKey(match[2]))} för ${match[3]} poäng.`;
 
     match = message.match(/^(.+) wins the second scoring with (.+) for (\d+) point(s?)\.$/);
-    if (match) return `${match[1]} vinner andra poängsättningen med ${translatePokerName(normalizePokerKey(match[2]))} för ${match[3]} poäng.`;
+    if (match) return `${svName(match[1])} vinner andra poängsättningen med ${translatePokerName(normalizePokerKey(match[2]))} för ${match[3]} poäng.`;
+
+    match = message.match(/^(.+) had the best high card in the (first|second) scoring\. No points were awarded\.$/);
+    if (match) {
+      return `${svName(match[1])} hade högsta kortet i ${match[2] === "first" ? "första" : "andra"} poängsättningen. Inga poäng delades ut.`;
+    }
+
+    match = message.match(/^(.+) reached 52 points and wins Chicago\.$/);
+    if (match) return `${svName(match[1])} nådde 52 poäng och vinner Chicago.`;
 
     const direct: Record<string, string> = {
+      "Waiting for players to join Chicago.": "Väntar på att spelare ska gå med i Chicago.",
       "Round dealt. Choose cards to exchange.": "Rundan är utdelad. Välj kort att byta.",
       "All draws submitted. Score the first poker hand.": "Alla byten är inlämnade. Poängsätt den första pokerhanden.",
       "All draws submitted. Score the second poker hand.": "Alla byten är inlämnade. Poängsätt den andra pokerhanden.",
@@ -396,7 +497,29 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       "A player hit 52 points and wins Chicago.": "En spelare nådde 52 poäng och vinner Chicago.",
     };
 
-    return direct[message] ?? message;
+    return direct[message] ?? SERVER_MESSAGES_SV[message] ?? message;
+  };
+
+  const translateServerMessage = (message: string | null | undefined) => {
+    if (!message) return null;
+    if (language === "en") return message;
+
+    const direct = SERVER_MESSAGES_SV[message];
+    if (direct) return direct;
+
+    // Music Quiz: "Guess the song title. Round 3 is live."
+    const match = message.match(/^Guess the (song title|artist)\. Round (\d+) is live\.$/);
+    if (match) return `${match[1] === "artist" ? "Gissa artisten" : "Gissa låttiteln"}. Runda ${match[2]} är igång.`;
+
+    return translateChicagoPublicMessage(message);
+  };
+
+  const translateError = (error: unknown) => {
+    const raw = String((error as Error)?.message ?? error ?? "");
+    if (language === "en" || !raw) return raw;
+    if (SERVER_MESSAGES_SV[raw]) return SERVER_MESSAGES_SV[raw];
+    if (/network|failed to fetch/i.test(raw)) return "Ingen anslutning. Kolla internet och försök igen.";
+    return raw;
   };
 
   const value = useMemo<I18nContextValue>(
@@ -406,6 +529,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       t,
       translateChicagoPublicMessage,
       translatePokerName,
+      translateServerMessage,
+      translateError,
     }),
     [language]
   );
