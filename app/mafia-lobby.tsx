@@ -544,6 +544,17 @@ export default function MafiaRoomScreen() {
     run("auto-start-discussion", () => startDayDiscussion(roomId, playerId));
   }, [busy, isHost, phaseSecondsLeft, playerId, room, roomId]);
 
+  // The vote result has a countdown like the night result; move on to the next night when it ends.
+  useEffect(() => {
+    if (!room || !isHost) return;
+    if (room.state !== "vote_result") return;
+    if (!room.phase_ends_at) return;
+    if (phaseSecondsLeft > 0) return;
+    if (busy) return;
+
+    run("auto-next-night", () => startNextNight(roomId, playerId));
+  }, [busy, isHost, phaseSecondsLeft, playerId, room, roomId]);
+
   useEffect(() => {
     if (!room || !isHost) return;
     if (room.state !== "day_voting") return;
@@ -808,7 +819,10 @@ export default function MafiaRoomScreen() {
     }, 4400);
 
     return () => clearTimeout(timeoutId);
-  }, [hasNavigatedToResults, playerId, room, roomId, showEndgameRevealModal]);
+    // Depend on the state only: the room object is replaced on every refresh, which
+    // would restart this timer forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasNavigatedToResults, playerId, room?.state, roomId, showEndgameRevealModal]);
 
   useEffect(() => {
     if (!showNightResultModal) return;
@@ -917,7 +931,20 @@ export default function MafiaRoomScreen() {
           />
         );
       case "night": {
-        const nightReadyToResolve = allAlivePlayersLockedNightAction && nightContinueCount === alivePlayers.length;
+        // When the night timer runs out the host may resolve with the choices made so far,
+        // so one idle or disconnected phone can't block the game forever.
+        const nightTimeUp = !!room.phase_ends_at && phaseSecondsLeft <= 0;
+        const nightReadyToResolve = (allAlivePlayersLockedNightAction && nightContinueCount === alivePlayers.length) || nightTimeUp;
+        const timeUpResolve =
+          isHost && nightTimeUp ? (
+            <Button
+              label={L.resolveNight}
+              variant="secondary"
+              size="md"
+              loading={busy === "resolve-night"}
+              onPress={() => run("resolve-night", () => resolveNight(roomId, playerId))}
+            />
+          ) : null;
         if (allAlivePlayersLockedNightAction) {
           return (
             <>
@@ -946,34 +973,40 @@ export default function MafiaRoomScreen() {
             </>
           );
         }
-        if (!isAlive) return <WaitingNote text={L.continueHint} />;
+        if (!isAlive) return timeUpResolve ?? <WaitingNote text={L.continueHint} />;
         if (role === "villager") {
           return (
-            <Button
-              label={myNightAction?.confirmed ? L.ready : L.finishNotes}
-              icon={myNightAction?.confirmed ? "checkmark-circle" : "moon"}
-              accent={ACCENT}
-              loading={busy === "villager-ready"}
-              disabled={!!myNightAction?.confirmed}
-              onPress={() => run("villager-ready", () => submitNightAction(roomId, playerId, null, true))}
-            />
+            <>
+              <Button
+                label={myNightAction?.confirmed ? L.ready : L.finishNotes}
+                icon={myNightAction?.confirmed ? "checkmark-circle" : "moon"}
+                accent={ACCENT}
+                loading={busy === "villager-ready"}
+                disabled={!!myNightAction?.confirmed}
+                onPress={() => run("villager-ready", () => submitNightAction(roomId, playerId, null, true))}
+              />
+              {timeUpResolve}
+            </>
           );
         }
         return (
-          <Button
-            label={
-              myNightAction?.confirmed
-                ? `${L.confirmed}: ${playerName(selectedTargetId)}`
-                : selectedTargetId
-                  ? `${L.confirmChoice}: ${playerName(selectedTargetId)}`
-                  : nightPrompt
-            }
-            icon={myNightAction?.confirmed ? "lock-closed" : "checkmark"}
-            accent={ACCENT}
-            loading={busy === "confirm-night"}
-            disabled={!selectedTargetId || !!myNightAction?.confirmed}
-            onPress={() => run("confirm-night", () => submitNightAction(roomId, playerId, selectedTargetId, true))}
-          />
+          <>
+            <Button
+              label={
+                myNightAction?.confirmed
+                  ? `${L.confirmed}: ${playerName(selectedTargetId)}`
+                  : selectedTargetId
+                    ? `${L.confirmChoice}: ${playerName(selectedTargetId)}`
+                    : nightPrompt
+              }
+              icon={myNightAction?.confirmed ? "lock-closed" : "checkmark"}
+              accent={ACCENT}
+              loading={busy === "confirm-night"}
+              disabled={!selectedTargetId || !!myNightAction?.confirmed}
+              onPress={() => run("confirm-night", () => submitNightAction(roomId, playerId, selectedTargetId, true))}
+            />
+            {timeUpResolve}
+          </>
         );
       }
       case "night_result":

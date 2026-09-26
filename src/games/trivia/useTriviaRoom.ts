@@ -2,11 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import type { TriviaPlayerDto, TriviaRoomDto, TriviaRoomState, TriviaTurnDto } from "./types";
 
+// supabase.channel() returns an EXISTING channel with the same name. When one screen replaces
+// another (e.g. round -> next round, results -> lobby), the old screen's cleanup would remove the
+// channel the new screen is using, so every subscription gets its own unique name.
+const uniqueChannelSuffix = () => Math.random().toString(36).slice(2, 10);
+
 export function useTriviaRoom(roomId: string, playerId: string): TriviaRoomState {
   const [room, setRoom] = useState<TriviaRoomDto | null>(null);
   const [players, setPlayers] = useState<TriviaPlayerDto[]>([]);
   const [myPlayer, setMyPlayer] = useState<TriviaPlayerDto | null>(null);
   const [currentTurn, setCurrentTurn] = useState<TriviaTurnDto | null>(null);
+  const [totalTurns, setTotalTurns] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
@@ -26,8 +32,14 @@ export function useTriviaRoom(roomId: string, playerId: string): TriviaRoomState
     setMyPlayer((myPlayerData as TriviaPlayerDto) ?? null);
 
     if (nextRoom?.current_turn_id) {
-      const { data: turnData } = await supabase.from("trivia_turns").select("*").eq("id", nextRoom.current_turn_id).maybeSingle();
+      // The game's length is fixed when it starts (one turn row per question), so count the
+      // turns instead of multiplying by the current player list.
+      const [{ data: turnData }, { count }] = await Promise.all([
+        supabase.from("trivia_turns").select("*").eq("id", nextRoom.current_turn_id).maybeSingle(),
+        supabase.from("trivia_turns").select("id", { count: "exact", head: true }).eq("room_id", roomId),
+      ]);
       setCurrentTurn((turnData as TriviaTurnDto) ?? null);
+      if (typeof count === "number") setTotalTurns(count);
     } else {
       setCurrentTurn(null);
     }
@@ -44,15 +56,15 @@ export function useTriviaRoom(roomId: string, playerId: string): TriviaRoomState
     if (!roomId) return;
 
     const roomChannel = supabase
-      .channel(`trivia-room-${roomId}`)
+      .channel(`trivia-room-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "trivia_rooms", filter: `id=eq.${roomId}` }, refresh)
       .subscribe();
     const playersChannel = supabase
-      .channel(`trivia-players-${roomId}`)
+      .channel(`trivia-players-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "trivia_players", filter: `room_id=eq.${roomId}` }, refresh)
       .subscribe();
     const turnsChannel = supabase
-      .channel(`trivia-turns-${roomId}`)
+      .channel(`trivia-turns-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "trivia_turns", filter: `room_id=eq.${roomId}` }, refresh)
       .subscribe();
 
@@ -71,5 +83,5 @@ export function useTriviaRoom(roomId: string, playerId: string): TriviaRoomState
     return () => clearInterval(intervalId);
   }, [refresh, roomId]);
 
-  return { room, players, myPlayer, currentTurn, loading, refresh };
+  return { room, players, myPlayer, currentTurn, totalTurns, loading, refresh };
 }

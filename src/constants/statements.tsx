@@ -261,7 +261,7 @@ export const STATEMENTS: StatementEntry[] = [
   { id: "adult_shower_save_water", category: "adult", en: "When you shower together 'to save water'", sv: "När ni duschar ihop 'för att spara vatten'" },
   { id: "adult_parents_home_early", category: "adult", en: "When your parents come home earlier than expected", sv: "När dina föräldrar kommer hem tidigare än väntat" },
   { id: "adult_sober_month_day_three", category: "adult", en: "Day three of a sober month", sv: "Dag tre av en nykter månad" },
-  { id: "adult_festival_day_three", category: "adult", en: "You on day three of the festival", sv: "Du dag tre på festivalen" },
+  { id: "adult_festival_day_three", category: "adult", en: "You on day three of the festival", sv: "Du på festivalens tredje dag" },
   { id: "adult_student_dinner_party", category: "adult", en: "A student dinner party in one picture", sv: "Sittningen i en bild" },
   { id: "adult_first_kiss_teeth", category: "adult", en: "When your teeth clash during the first kiss", sv: "När era tänder krockar under första kyssen" },
   { id: "adult_date_suggests_your_place", category: "adult", en: "Your face when your date says 'your place or mine?'", sv: "Din min när dejten frågar 'hos dig eller mig?'" },

@@ -26,11 +26,11 @@ function asString(value: unknown): string {
 }
 
 export default function TriviaRoomScreen() {
-  const { language, t } = useI18n();
+  const { language, t, translateError } = useI18n();
   const params = useLocalSearchParams();
   const roomId = asString(params.roomId);
   const playerId = asString(params.playerId);
-  const { room, players, myPlayer, currentTurn, loading, refresh } = useTriviaRoom(roomId, playerId);
+  const { room, players, myPlayer, currentTurn, totalTurns: turnCount, loading, refresh } = useTriviaRoom(roomId, playerId);
   const [busy, setBusy] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<TriviaCategory[]>(["Mat"]);
   const baseUrl = SITE_URL;
@@ -168,7 +168,8 @@ export default function TriviaRoomScreen() {
   const isActivePlayer = !!myPlayer && !!currentTurn && myPlayer.id === currentTurn.player_id;
   const canReveal = !!room && room.state === "question" && isHost;
   const inviteUrl = room?.code ? `${baseUrl}/trivia?code=${room.code}` : "";
-  const totalTurns = (room?.questions_per_player ?? QUESTIONS_PER_PLAYER) * players.length;
+  // Fixed when the game starts; the player list can change afterwards.
+  const totalTurns = turnCount || (room?.questions_per_player ?? QUESTIONS_PER_PLAYER) * players.length;
   const gameInProgress = room?.state === "question" || room?.state === "reveal";
   const sortedPlayers = useMemo(
     () => players.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || a.seat_order - b.seat_order),
@@ -176,6 +177,8 @@ export default function TriviaRoomScreen() {
   );
   const activePlayer = currentTurn ? players.find((player) => player.id === currentTurn.player_id) ?? null : null;
   const winner = sortedPlayers[0] ?? null;
+  // Everyone sharing the top score wins (a tie shows all of them).
+  const winners = winner ? sortedPlayers.filter((player) => (player.score ?? 0) === (winner.score ?? 0)) : [];
 
   useEffect(() => {
     if (!currentTurn?.id) {
@@ -270,7 +273,7 @@ export default function TriviaRoomScreen() {
       await fn();
       await refresh();
     } catch (error) {
-      showAlert(copy.actionFailed, String((error as Error)?.message ?? error));
+      showAlert(copy.actionFailed, translateError(error));
     } finally {
       setBusy(null);
     }
@@ -319,7 +322,7 @@ export default function TriviaRoomScreen() {
     room.state === "lobby"
       ? isHost
         ? { icon: "options", title: copy.hostLobbyTitle, body: copy.setupBody }
-        : { icon: "hourglass", title: copy.playerLobbyTitle, body: room.public_message ?? copy.waitingHost }
+        : { icon: "hourglass", title: copy.playerLobbyTitle, body: copy.waitingHost }
       : inTurn
         ? room.state === "question"
           ? isHost
@@ -336,7 +339,7 @@ export default function TriviaRoomScreen() {
             : { icon: "hourglass", title: copy.playerRevealTitle, body: isActivePlayer ? null : copy.waitingForTurn }
         : room.state === "completed"
           ? isHost ? null : { icon: "trophy", title: copy.finalTitle, body: copy.playerDoneBody }
-          : { icon: "hourglass", title: room.public_message ?? copy.waitingHost };
+          : { icon: "hourglass", title: copy.waitingHost };
 
   // ---------------------------------------------------------------------------
   // Footer: host controls in thumb reach.
@@ -494,7 +497,7 @@ export default function TriviaRoomScreen() {
           >
             <Ionicons name="trophy" size={40} color={colors.warning} />
             <Text style={[type.caption, { color: ACCENT, textTransform: "uppercase" }]}>{copy.finalTitle}</Text>
-            <Text style={[type.display, { color: colors.text, fontSize: 36, lineHeight: 42, textAlign: "center" }]}>{winner?.display_name ?? "-"}</Text>
+            <Text style={[type.display, { color: colors.text, fontSize: 36, lineHeight: 42, textAlign: "center" }]}>{winners.length > 0 ? winners.map((player) => player.display_name).join(" & ") : "-"}</Text>
             <Chip
               label={winner ? `${winner.score}p · ${copy.answered.replace("{count}", String(winner.correct_answers ?? 0))}` : ""}
               color={ACCENT}
@@ -511,7 +514,7 @@ export default function TriviaRoomScreen() {
                 name={player.display_name}
                 detail={copy.answered.replace("{count}", String(player.correct_answers ?? 0))}
                 score={player.score}
-                leader={index === 0}
+                leader={winners.some((entry) => entry.id === player.id)}
                 isMe={player.id === myPlayer?.id}
                 youLabel={copy.you}
               />

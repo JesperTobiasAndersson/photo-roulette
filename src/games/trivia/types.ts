@@ -47,6 +47,8 @@ export type TriviaRoomState = {
   players: TriviaPlayerDto[];
   myPlayer: TriviaPlayerDto | null;
   currentTurn: TriviaTurnDto | null;
+  /** Number of turns in the running game (0 when no game is running). */
+  totalTurns: number;
   loading: boolean;
   refresh: () => Promise<void>;
 };

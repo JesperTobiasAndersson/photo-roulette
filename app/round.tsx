@@ -11,6 +11,11 @@ import { GAMES } from "../src/games/catalog";
 import { Card, Chip, Screen, TopBar, onAccent, type IconName } from "../src/ui/components";
 import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
 
+// supabase.channel() returns an EXISTING channel with the same name. When one screen replaces
+// another (e.g. round -> next round, results -> lobby), the old screen's cleanup would remove the
+// channel the new screen is using, so every subscription gets its own unique name.
+const uniqueChannelSuffix = () => Math.random().toString(36).slice(2, 10);
+
 const GAME = GAMES.memematch;
 const ACCENT = GAME.accent;
 
@@ -38,6 +43,7 @@ export default function RoundScreen() {
   const finalOverlayAnim = useRef(new Animated.Value(0)).current;
 
   const [playerCount, setPlayerCount] = useState<number>(0);
+  const [expectedPlayers, setExpectedPlayers] = useState<number | null>(null);
   const autoAdvanceRef = useRef(false);
 
   const lastAutoNextRoundFromRoundIdRef = useRef<string | null>(null);
@@ -56,6 +62,8 @@ export default function RoundScreen() {
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
 
   const [availableImages, setAvailableImages] = useState<PlayerImage[]>([]);
+  const [handLoaded, setHandLoaded] = useState(false);
+  const [endsAt, setEndsAt] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
   const [showFinalOverlay, setShowFinalOverlay] = useState(false);
@@ -134,6 +142,7 @@ export default function RoundScreen() {
       .single();
     if (!error) {
       setHostId(data.host_player_id ?? "");
+      setExpectedPlayers(typeof data.expected_players === "number" ? data.expected_players : null);
       setStatementCategory((data.statement_category as StatementCategory | null) ?? "innocent");
     }
   };
@@ -142,7 +151,7 @@ export default function RoundScreen() {
     if (!roundId) return;
     const { data, error } = await supabase
       .from("rounds")
-      .select("statement,status,round_number")
+      .select("statement,status,round_number,ends_at")
       .eq("id", roundId)
       .single();
 
@@ -151,6 +160,7 @@ export default function RoundScreen() {
     setStatement(data.statement ?? "");
     setStatus(data.status);
     setRoundNumber(data.round_number ?? 0);
+    setEndsAt(data.ends_at ?? null);
   };
 
   const loadSubmissions = async () => {
@@ -208,6 +218,7 @@ export default function RoundScreen() {
 
     if (error) return showAlert(copy.errorTitle, error.message);
     setAvailableImages(data ?? []);
+    setHandLoaded(true);
   };
 
   // ✅ POP-animation when statement changes
@@ -263,7 +274,11 @@ useEffect(() => {
     setShowWinnerOverlay(true);
 
     if (roundNumber >= TOTAL_ROUNDS) {
-      setTimeout(navigateToResultsWithTransition, 3500);
+      setTimeout(async () => {
+        // Mark the match as finished so late joiners / re-joins land on the results.
+        await supabase.from("rooms").update({ phase: "finished" }).eq("id", roomId).neq("phase", "finished");
+        navigateToResultsWithTransition();
+      }, 3500);
       return;
     }
 
@@ -288,6 +303,17 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [status, roundId, roundNumber, roomId, playerId]);
 
+  // The server only moves a round on when someone calls advance_round_if_ready. If a
+  // player never plays a photo or never votes, nothing else happens, so re-check once the
+  // round's deadline runs out (photo picking: 60 s, voting: 45 s, both set by the server).
+  useEffect(() => {
+    if ((status !== "collecting" && status !== "voting") || !endsAt) return;
+    const ms = Math.max(0, new Date(endsAt).getTime() - Date.now()) + 1500;
+    const timer = setTimeout(() => tryAutoAdvance(), ms);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, endsAt, roundId]);
+
   // Init + realtime: round/submissions/votes/hand
   useEffect(() => {
     if (!roomId || !playerId || !roundId) return;
@@ -307,7 +333,7 @@ useEffect(() => {
     })();
 
     const roundChannel = supabase
-      .channel(`round-${roundId}`)
+      .channel(`round-${roundId}-${uniqueChannelSuffix()}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "rounds", filter: `id=eq.${roundId}` },
@@ -320,7 +346,7 @@ useEffect(() => {
       .subscribe();
 
     const subsChannel = supabase
-      .channel(`subs-${roundId}`)
+      .channel(`subs-${roundId}-${uniqueChannelSuffix()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "submissions", filter: `round_id=eq.${roundId}` },
@@ -333,7 +359,7 @@ useEffect(() => {
       .subscribe();
 
     const votesChannel = supabase
-      .channel(`votes-${roundId}`)
+      .channel(`votes-${roundId}-${uniqueChannelSuffix()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "votes", filter: `round_id=eq.${roundId}` },
@@ -347,7 +373,7 @@ useEffect(() => {
       .subscribe();
 
     const handChannel = supabase
-      .channel(`hand-${roomId}-${playerId}`)
+      .channel(`hand-${roomId}-${playerId}-${uniqueChannelSuffix()}`)
       .on(
         "postgres_changes",
         {
@@ -364,7 +390,7 @@ useEffect(() => {
       .subscribe();
 
     const playersChannel = supabase
-      .channel(`players-${roomId}`)
+      .channel(`players-${roomId}-${uniqueChannelSuffix()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "players", filter: `room_id=eq.${roomId}` },
@@ -376,8 +402,39 @@ useEffect(() => {
       )
       .subscribe();
 
+    // Safety net for phones whose realtime socket dropped (screen locked, flaky network):
+    // re-check this round, and follow a newer round / the results if we missed the event.
+    const resync = async () => {
+      if (!isMounted) return;
+      await loadRound();
+      await loadSubmissions();
+      await loadMyVote();
+      await loadVoteCounts();
+      tryAutoAdvance();
+
+      const [{ data: latest }, { data: roomRow }] = await Promise.all([
+        supabase.from("rounds").select("id,round_number").eq("room_id", roomId).order("round_number", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("rooms").select("phase").eq("id", roomId).maybeSingle(),
+      ]);
+      if (!isMounted) return;
+      if (roomRow?.phase === "finished") {
+        navigateToResultsWithTransition();
+      } else if (roomRow?.phase === "picking") {
+        router.replace({ pathname: "/pick-hand", params: { roomId, playerId } });
+      } else if (latest && latest.id !== roundId && skipNextInsertNavRef.current !== latest.id) {
+        router.replace({ pathname: "/round", params: { roomId, playerId, roundId: latest.id } });
+      }
+    };
+    const resyncTimer = setInterval(resync, 4000);
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") resync();
+    };
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       isMounted = false;
+      clearInterval(resyncTimer);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(roundChannel);
       supabase.removeChannel(subsChannel);
       supabase.removeChannel(votesChannel);
@@ -392,7 +449,7 @@ useEffect(() => {
     if (!roomId || !playerId) return;
 
     const roundsRoomChannel = supabase
-      .channel(`rounds-room-nav-${roomId}`)
+      .channel(`rounds-room-nav-${roomId}-${uniqueChannelSuffix()}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "rounds", filter: `room_id=eq.${roomId}` },
@@ -433,7 +490,7 @@ useEffect(() => {
     if (!roomId) return;
 
     const roomPhaseChannel = supabase
-      .channel(`room-phase-${roomId}`)
+      .channel(`room-phase-${roomId}-${uniqueChannelSuffix()}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
@@ -715,6 +772,9 @@ useEffect(() => {
           cardWinner: "Vinnare",
           loading: "Laddar...",
           noImagesLeft: "Inga bilder kvar i handen.",
+          spectatingTitle: "Du tittar på den här rundan",
+          spectatingBody: "Du kom in mitt i matchen. Du ser rundorna och är med och spelar i nästa match.",
+          missedRoundBody: "Du hann inte spela en bild, så du röstar inte den här rundan.",
           waitingForOthers: "Väntar på andra…",
           waitingForOthersBody: "När alla har skickat in går spelet vidare automatiskt.",
           finalResultsTitle: "Slutresultatet kommer",
@@ -758,6 +818,9 @@ useEffect(() => {
           cardWinner: "Winner",
           loading: "Loading...",
           noImagesLeft: "No images left in hand.",
+          spectatingTitle: "You're watching this round",
+          spectatingBody: "You joined mid-match. You can follow the rounds and play in the next match.",
+          missedRoundBody: "You didn't play a photo in time, so you don't vote this round.",
           waitingForOthers: "Waiting for others…",
           waitingForOthersBody: "When everyone has submitted the game moves on automatically.",
           finalResultsTitle: "Final results incoming",
@@ -790,9 +853,17 @@ useEffect(() => {
     statementCategory === "adult" ? "#EC4899" : statementCategory === "gross" ? "#F97316" : colors.success;
 
   const isFinalRound = roundNumber >= TOTAL_ROUNDS;
-  const remainingSubmissions = Math.max(0, playerCount - submissions.length);
+  // Same rules as advance_round_if_ready: players who joined mid-match don't hold the round up,
+  // and a round is decided once there are as many votes as photos.
+  const playingCount = expectedPlayers ? Math.min(expectedPlayers, playerCount) : playerCount;
+  const remainingSubmissions = Math.max(0, playingCount - submissions.length);
   const totalVotes = Object.values(voteCounts).reduce((sum, n) => sum + n, 0);
-  const remainingVotes = Math.max(0, playerCount - totalVotes);
+  const remainingVotes = Math.max(0, submissions.length - totalVotes);
+  // Joined after the match started (no photos) or didn't play a photo this round: watch, don't vote.
+  const spectating =
+    status === "collecting"
+      ? handLoaded && !mySubmissionId && availableImages.length === 0
+      : status === "voting" && !mySubmissionId && submissions.length > 0;
   const waitingLine = (n: number) =>
     n > 0 ? (n === 1 ? copy.waitingOne : copy.waitingMany.replace("{count}", String(n))) : copy.waitingForOthers;
   const votesText = (n: number) => `${n} ${n === 1 ? copy.voteSingle : copy.votePlural}`;
@@ -818,7 +889,14 @@ useEffect(() => {
 
   // Status line pinned in the footer so it's always visible while scrolling the photos.
   const statusLine: { icon: IconName; color: string; title: string; body?: string; spinner?: boolean } =
-    status === "collecting"
+    spectating
+      ? {
+          icon: "eye-outline",
+          color: ACCENT,
+          title: copy.spectatingTitle,
+          body: availableImages.length === 0 ? copy.spectatingBody : copy.missedRoundBody,
+        }
+      : status === "collecting"
       ? mySubmissionId
         ? { icon: "hourglass-outline", color: ACCENT, title: waitingLine(remainingSubmissions), body: copy.waitingForOthersBody, spinner: true }
         : {
@@ -977,7 +1055,9 @@ useEffect(() => {
                   })}
                 </View>
               ) : (
-                <Text style={[type.body, { color: colors.textMuted, textAlign: "center" }]}>{copy.noImagesLeft}</Text>
+                <Text style={[type.body, { color: colors.textMuted, textAlign: "center" }]}>
+                  {spectating ? copy.spectatingBody : copy.noImagesLeft}
+                </Text>
               )
             ) : (
               <Card style={{ alignItems: "center", paddingVertical: space.xxl }}>
@@ -997,7 +1077,7 @@ useEffect(() => {
                 const isMine = item.id === mySubmissionId;
                 const isVoted = item.id === myVoteSubmissionId;
                 const isWinner = status === "done" && winner.submissionId === item.id;
-                const canVote = status === "voting" && !isMine && !isVoted;
+                const canVote = status === "voting" && !isMine && !isVoted && !spectating;
 
                 const stateColor = isWinner ? colors.warning : isVoted ? colors.success : isMine ? colors.textMuted : null;
                 const stateLabel = isWinner
@@ -1013,7 +1093,7 @@ useEffect(() => {
                   <View key={item.id} style={tileStyle}>
                     <Pressable
                       onPress={() => {
-                        if (status === "voting" && item.id !== myVoteSubmissionId) {
+                        if (canVote) {
                           castVote(item.id);
                         }
                       }}

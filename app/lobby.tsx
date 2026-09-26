@@ -11,6 +11,11 @@ import { Button, Card, Chip, RoomCodeBadge, Screen, SectionLabel, SegmentedContr
 import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
 import { SITE_URL } from "../src/lib/site";
 
+// supabase.channel() returns an EXISTING channel with the same name. When one screen replaces
+// another (e.g. round -> next round, results -> lobby), the old screen's cleanup would remove the
+// channel the new screen is using, so every subscription gets its own unique name.
+const uniqueChannelSuffix = () => Math.random().toString(36).slice(2, 10);
+
 const GAME = GAMES.memematch;
 const ACCENT = GAME.accent;
 
@@ -275,17 +280,17 @@ export default function Lobby() {
     if (!roomId) return;
 
     const roomChannel = supabase
-      .channel(`room-${roomId}`)
+      .channel(`room-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, () => load())
       .subscribe();
 
     const playersChannel = supabase
-      .channel(`players-room-${roomId}`)
+      .channel(`players-room-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `room_id=eq.${roomId}` }, () => load())
       .subscribe();
 
     const roundsChannel = supabase
-      .channel(`rounds-room-${roomId}`)
+      .channel(`rounds-room-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "rounds", filter: `room_id=eq.${roomId}` }, (payload) => {
         if (!isActiveRef.current) return;
 
@@ -318,6 +323,26 @@ export default function Lobby() {
 
         if (c < 5) {
           router.replace({ pathname: "/pick-hand", params: { roomId, playerId } });
+        }
+      }
+
+      if (phase === "playing") {
+        // Joined late or came back via the invite link while a game is running:
+        // go straight to the current round instead of waiting in the lobby.
+        const { data: current } = await supabase
+          .from("rounds")
+          .select("id,round_number,status")
+          .eq("room_id", roomId)
+          .order("round_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (current && current.round_number >= 5 && current.status === "done") {
+          router.replace({ pathname: "/results", params: { roomId, playerId } });
+          return;
+        }
+        if (current?.id && isActiveRef.current && lastNavigatedRoundIdRef.current !== current.id) {
+          lastNavigatedRoundIdRef.current = current.id;
+          router.replace({ pathname: "/round", params: { roomId, playerId, roundId: current.id } });
         }
       }
 

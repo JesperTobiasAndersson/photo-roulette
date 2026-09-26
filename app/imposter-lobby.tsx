@@ -179,14 +179,14 @@ const COPY = {
     aPlayer: "En spelare",
     wasImposter: "avslöjades som impostern",
     wasVotedOut: "röstades ut av gruppen",
-    rightCall: "Crewet gjorde rätt val. Rundans utfall visas nu.",
+    rightCall: "Laget gjorde rätt val. Rundans utfall visas nu.",
     endedByVote: "Den rösten avslutade spelet. Slutresultatet visas strax.",
-    lostCrew: "Gruppen förlorade en crewmedlem. Nästa diskussion börjar nu.",
+    lostCrew: "Gruppen förlorade en lagmedlem. Nästa diskussion börjar nu.",
     finalVerdict: "Slutgiltigt utslag",
     imposterWins: "IMPOSTERN VINNER",
-    crewWins: "CREW VINNER",
+    crewWins: "LAGET VINNER",
     imposterWinsSub: "Impostern klarade anklagelserna och tog kontroll över rundan.",
-    crewWinsSub: "Crewet läste av rummet rätt och avslöjade impostern.",
+    crewWinsSub: "Laget läste av rummet rätt och avslöjade impostern.",
     leaveTitle: "Lämna spelet?",
     leaveMsg: "Rundan fortsätter utan dig.",
     leave: "Lämna",
@@ -475,6 +475,7 @@ export default function ImposterLobbyScreen() {
     return () => clearInterval(intervalId);
   }, [room?.phase_ends_at, room?.state]);
 
+  const autoResolvedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!room || !isHost) return;
     if (room.state !== "voting") return;
@@ -482,9 +483,35 @@ export default function ImposterLobbyScreen() {
 
     const uniqueVoters = new Set(currentVotes.map((vote) => vote.voter_player_id));
     if (alivePlayers.length > 0 && uniqueVoters.size === alivePlayers.length) {
-      run("auto-resolve-voting", () => resolveImposterVoting(roomId, playerId));
+      // Once per voting round; the screen may still show the old round for a moment afterwards.
+      const key = `${room.id}-${room.phase_number}`;
+      if (autoResolvedKeyRef.current === key) return;
+      autoResolvedKeyRef.current = key;
+      run("auto-resolve-voting", () =>
+        resolveImposterVoting(roomId, playerId).catch((error) => {
+          // Already resolved (e.g. the host also tapped "Resolve vote"): nothing to do.
+          if (!/Voting is not active/.test(String((error as Error)?.message ?? error))) throw error;
+        })
+      );
     }
   }, [alivePlayers.length, busy, currentVotes, isHost, playerId, room, roomId]);
+
+  // When the discussion clock runs out, the host's phone opens the voting (once per discussion).
+  const timerAdvancedKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!room || !isHost || busy) return;
+    if (room.state !== "discussion" || !room.phase_ends_at) return;
+    if (new Date(room.phase_ends_at).getTime() > now) return;
+    const key = `${room.id}-${room.phase_number}`;
+    if (timerAdvancedKeyRef.current === key) return;
+    timerAdvancedKeyRef.current = key;
+    run("start-voting", () =>
+      startImposterVoting(roomId, playerId).catch((error) => {
+        // Everyone pressed "ready" at the same moment and the voting already opened: nothing to do.
+        if (!/Discussion must finish/.test(String((error as Error)?.message ?? error))) throw error;
+      })
+    );
+  }, [busy, isHost, now, playerId, room, roomId]);
 
   useEffect(() => {
     if (!room) return;
@@ -722,15 +749,17 @@ export default function ImposterLobbyScreen() {
 
   useEffect(() => {
     if (!showEndgameRevealModal) return;
-    if (!room || room.state !== "ended") return;
+    if (room?.state !== "ended") return;
     if (hasNavigatedToResults) return;
 
+    // Depends on the state only: the room object is replaced on every 2.5 s poll,
+    // which would otherwise restart this timer forever.
     const timeoutId = setTimeout(() => {
       navigateToResults();
     }, 4400);
 
     return () => clearTimeout(timeoutId);
-  }, [hasNavigatedToResults, room, showEndgameRevealModal]);
+  }, [hasNavigatedToResults, room?.state, showEndgameRevealModal]);
 
   const leaveGame = async () => {
     if (room && room.state !== "lobby" && room.state !== "ended") {
@@ -1303,7 +1332,7 @@ export default function ImposterLobbyScreen() {
                   {room.state === "role_reveal" && player.role_reveal_ready ? <Chip label={copy.ready} color={colors.success} icon="checkmark" /> : null}
                   {room.state === "discussion" && player.discussion_ready ? <Chip label={copy.voteReady} color={colors.brand} icon="hand-right" /> : null}
                   {room.state === "ended" && role ? (
-                    <Chip label={role.toUpperCase()} color={role === "imposter" ? colors.danger : ACCENT} />
+                    <Chip label={role === "imposter" ? "IMPOSTER" : language === "sv" ? "LAGET" : "CREW"} color={role === "imposter" ? colors.danger : ACCENT} />
                   ) : null}
                 </PlayerRow>
               </AnimatedEntrance>

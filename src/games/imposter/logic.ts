@@ -29,12 +29,13 @@ export function assignImposterRoles(playerIds: string[], prompt: string) {
   return { roles, imposterPlayerId };
 }
 
-export function pickPromptForCategory(categoryId: string) {
+export function pickPromptForCategory(categoryId: string, avoidPrompt: string | null = null) {
   const category = getCategoryById(categoryId);
   if (!category || category.prompts.length === 0) {
     throw new Error("Choose a valid category");
   }
-  return category.prompts[Math.floor(Math.random() * category.prompts.length)];
+  const options = category.prompts.length > 1 ? category.prompts.filter((prompt) => prompt !== avoidPrompt) : category.prompts;
+  return options[Math.floor(Math.random() * options.length)];
 }
 
 export function getRoleDescription(role: ImposterRole) {

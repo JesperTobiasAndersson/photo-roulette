@@ -64,6 +64,8 @@ export default function MusicQuizRoomScreen() {
     [players]
   );
   const winner = sortedPlayers[0] ?? null;
+  // Everyone sharing the top score wins (a tie shows all of them).
+  const winners = winner ? sortedPlayers.filter((player) => (player.score ?? 0) === (winner.score ?? 0)) : [];
 
   useEffect(() => { setAnswerText(myAnswer?.answer_text ?? ""); }, [myAnswer?.answer_text, currentRound?.id]);
   useEffect(() => { if (room?.selected_pool) setSongPool(room.selected_pool); }, [room?.selected_pool]);
@@ -519,7 +521,7 @@ export default function MusicQuizRoomScreen() {
             >
               <Ionicons name="trophy" size={40} color={colors.warning} />
               <Text style={[type.caption, { color: colors.warning, textTransform: "uppercase" }]}>{copy.winnerReveal}</Text>
-              <Text style={[type.display, { color: colors.text, fontSize: 36, lineHeight: 42, textAlign: "center" }]}>{winner?.display_name ?? "-"}</Text>
+              <Text style={[type.display, { color: colors.text, fontSize: 36, lineHeight: 42, textAlign: "center" }]}>{winners.length > 0 ? winners.map((player) => player.display_name).join(" & ") : "-"}</Text>
               <Text style={[type.bodyStrong, { color: colors.textSecondary }]}>{copy.champion}</Text>
               <Text style={{ color: colors.warning, fontWeight: "900", fontSize: 28 }}>{winner ? `${winner.score}p` : ""}</Text>
             </View>
@@ -534,7 +536,7 @@ export default function MusicQuizRoomScreen() {
                 rank={index + 1}
                 name={player.display_name}
                 score={player.score}
-                leader={index === 0}
+                leader={winners.some((entry) => entry.id === player.id)}
                 isMe={player.id === myPlayer?.id}
                 youLabel={copy.you}
                 leaderColor={colors.warning}

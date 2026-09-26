@@ -77,7 +77,6 @@ export async function returnImposterToLobby(roomId: string, playerId: string) {
     .from("imposter_rooms")
     .update({
       state: "lobby",
-      secret_prompt: null,
       winner: null,
       phase_ends_at: null,
       phase_number: room.phase_number + 1,
@@ -90,6 +89,12 @@ export async function returnImposterToLobby(roomId: string, playerId: string) {
     .update({ status: "alive", role_reveal_ready: false, discussion_ready: false })
     .eq("room_id", roomId);
   if (playersError) throw playersError;
+  // The previous game's cards and votes go now, so no phone can show an old card in the next game.
+  // (secret_prompt stays on the room until the next start, which uses it to deal a different word.)
+  const { error: clearRolesError } = await supabase.from("imposter_player_roles").delete().eq("room_id", roomId);
+  if (clearRolesError) throw clearRolesError;
+  const { error: clearVotesError } = await supabase.from("imposter_votes").delete().eq("room_id", roomId);
+  if (clearVotesError) throw clearVotesError;
 }
 
 export async function startImposterGame(roomId: string, playerId: string) {
@@ -98,7 +103,8 @@ export async function startImposterGame(roomId: string, playerId: string) {
   if (players.length < 3) throw new Error("At least 3 players are required");
   if (!room.category_id) throw new Error("Choose a category first");
 
-  const prompt = pickPromptForCategory(room.category_id);
+  // Don't deal the same word twice in a row (the room still holds the previous game's word).
+  const prompt = pickPromptForCategory(room.category_id, room.secret_prompt);
   const { roles } = assignImposterRoles(
     players.map((player) => player.id),
     prompt
@@ -166,7 +172,8 @@ export async function finishImposterReveal(roomId: string, playerId: string) {
 
 export async function submitImposterDiscussionReady(roomId: string, playerId: string) {
   const room = await getRoom(roomId);
-  if (room.state !== "discussion") throw new Error("Discussion is not active");
+  // Tapped just as the clock ran out and the voting opened: nothing left to do.
+  if (room.state !== "discussion") return;
 
   const { error } = await supabase
     .from("imposter_room_players")
@@ -175,8 +182,9 @@ export async function submitImposterDiscussionReady(roomId: string, playerId: st
     .eq("room_id", roomId);
   if (error) throw error;
 
-  const players = await getRoomPlayers(roomId);
-  if (players.length > 0 && players.every((player) => player.discussion_ready)) {
+  // Eliminated players can't press "ready", so only the players still in the game count.
+  const alivePlayers = (await getRoomPlayers(roomId)).filter((player) => player.status === "alive");
+  if (alivePlayers.length > 0 && alivePlayers.every((player) => player.discussion_ready)) {
     const { error: roomError } = await supabase
       .from("imposter_rooms")
       .update({

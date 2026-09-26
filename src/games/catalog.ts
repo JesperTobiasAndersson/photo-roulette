@@ -258,12 +258,12 @@ export const GAMES: Record<GameId, GameInfo> = {
     },
     howTo: {
       en: [
-        "Take turns picking a category and reading the question.",
+        "The host picks a category; players take turns answering.",
         "Answer out loud, then reveal the correct answer.",
         "The host marks right or wrong. Most points wins.",
       ],
       sv: [
-        "Turas om att välja kategori och läsa frågan.",
+        "Värden väljer kategori; ni turas om att svara.",
         "Svara högt och visa sedan rätt svar.",
         "Värden markerar rätt eller fel. Flest poäng vinner.",
       ],

@@ -28,8 +28,11 @@ function makeRoomCode(length = 4) {
 }
 
 const DRAW_LOCK_STALE_MS = 15000;
-const DRAW_LOCK_RETRY_MS = 120;
-const DRAW_LOCK_MAX_ATTEMPTS = 8;
+const DRAW_LOCK_RETRY_MS = 150;
+// Everyone exchanges at the same time and each exchange holds the lock for a few round trips,
+// so a phone may have to queue behind the whole table. Keep trying (a bit longer than a stale
+// lock lives) instead of failing with "Another draw is still being processed".
+const DRAW_LOCK_MAX_WAIT_MS = DRAW_LOCK_STALE_MS + 5000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -95,7 +98,9 @@ async function requireHost(roomId: string, playerId: string) {
 }
 
 async function claimChicagoPhaseLock(roomId: string, expectedState: ChicagoPhase) {
-  for (let attempt = 0; attempt < DRAW_LOCK_MAX_ATTEMPTS; attempt += 1) {
+  const startedAt = Date.now();
+  let attempt = 0;
+  while (Date.now() - startedAt < DRAW_LOCK_MAX_WAIT_MS) {
     const room = await getRoom(roomId);
     if (room.state !== expectedState) throw new Error("Draw phase is not active");
 
@@ -127,7 +132,10 @@ async function claimChicagoPhaseLock(roomId: string, expectedState: ChicagoPhase
       };
     }
 
-    await sleep(DRAW_LOCK_RETRY_MS);
+    // Back off 150 -> 600 ms, with jitter so queued phones do not retry in lockstep.
+    const backoff = Math.min(600, DRAW_LOCK_RETRY_MS * 2 ** attempt);
+    attempt += 1;
+    await sleep(backoff / 2 + Math.floor(Math.random() * backoff));
   }
 
   throw new Error("Another draw is still being processed. Try again.");
@@ -144,7 +152,8 @@ async function addScore(playerId: string, amount: number) {
 
 async function maybeFinishGame(roomId: string) {
   const players = await getPlayers(roomId);
-  const winner = players.find((player) => player.score >= 52) ?? null;
+  // Several players can pass 52 in the same round (last trick + final poker): the highest score wins.
+  const winner = [...players].sort((a, b) => b.score - a.score).find((player) => player.score >= 52) ?? null;
   if (!winner) return null;
 
   const { error } = await supabase
@@ -325,7 +334,25 @@ export async function submitChicagoDraw(roomId: string, playerId: string, discar
       throw new Error("Choose cards that are actually in your hand");
     }
 
-    const deck = [...round.deck];
+    let deck = [...round.deck];
+    if (deck.length < drawCount) {
+      // The stock ran out (many players exchanging many cards): shuffle the cards thrown earlier
+      // this round back in, except any that are in a hand again (including the ones thrown now).
+      const [{ data: draws, error: drawsError }, { data: allHands, error: allHandsError }] = await Promise.all([
+        supabase.from("chicago_draw_actions").select("discarded_cards").eq("round_id", round.id),
+        supabase.from("chicago_player_hands").select("cards").eq("room_id", roomId),
+      ]);
+      if (drawsError) throw drawsError;
+      if (allHandsError) throw allHandsError;
+      const inUse = new Set([...deck, ...(allHands ?? []).flatMap((entry) => entry.cards as ChicagoCard[])].map(cardId));
+      const pile = new Map<string, ChicagoCard>();
+      (draws ?? []).forEach((entry) =>
+        (entry.discarded_cards as ChicagoCard[]).forEach((card) => {
+          if (!inUse.has(cardId(card))) pile.set(cardId(card), card);
+        })
+      );
+      deck = [...deck, ...shuffleDeck([...pile.values()])];
+    }
     const newCards = deck.splice(0, drawCount);
     if (newCards.length !== drawCount) {
       throw new Error("Not enough cards left in the deck");
@@ -540,12 +567,29 @@ export async function declareChicago(roomId: string, playerId: string) {
   return { ok: true };
 }
 
+async function hasAlreadyPlayedCard(roundId: string, playerId: string, card: ChicagoCard | null | undefined) {
+  if (!card) return false;
+  const { data: tricks } = await supabase.from("chicago_tricks").select("id").eq("round_id", roundId);
+  const trickIds = (tricks ?? []).map((t: { id: string }) => t.id);
+  if (trickIds.length === 0) return false;
+  const { data: played } = await supabase
+    .from("chicago_cards_played")
+    .select("card")
+    .eq("player_id", playerId)
+    .in("trick_id", trickIds);
+  return (played ?? []).some((row: { card: ChicagoCard | null }) => !!row.card && cardId(row.card) === cardId(card));
+}
+
 export async function playChicagoCard(roomId: string, playerId: string, card: ChicagoCard) {
   const room = await getRoom(roomId);
   const round = await getCurrentRound(roomId);
   if (!round) throw new Error("No active round");
   if (room.state !== "trick_phase") throw new Error("Trick phase is not active");
-  if (room.current_turn_player_id !== playerId) throw new Error("It is not your turn");
+  if (room.current_turn_player_id !== playerId) {
+    // A double tap: the first tap already played this card and passed the turn on.
+    if (await hasAlreadyPlayedCard(round.id, playerId, card)) return { ok: true, alreadyPlayed: true };
+    throw new Error("It is not your turn");
+  }
 
   const hand = await getHand(playerId);
   if (!hand.cards.some((entry) => cardId(entry) === cardId(card))) throw new Error("That card is not in your hand");
@@ -573,6 +617,11 @@ export async function playChicagoCard(roomId: string, playerId: string, card: Ch
   const playedCards = (playedRows as ChicagoPlayedCardDto[]) ?? [];
 
   if (!canFollowSuit(hand.cards, trick.lead_suit, card)) throw new Error("You must follow suit if possible");
+  // declareChicago stores the call a moment before it hands the lead to the caller: nobody else
+  // may open the first trick in between.
+  if (round.chicago_declared_by && round.chicago_declared_by !== playerId && round.trick_number <= 1 && playedCards.length === 0) {
+    throw new Error("It is not your turn");
+  }
 
   const { error: playError } = await supabase.from("chicago_cards_played").insert({
     trick_id: trick.id,
@@ -580,6 +629,9 @@ export async function playChicagoCard(roomId: string, playerId: string, card: Ch
     card,
     play_order: playedCards.length + 1,
   });
+  // A double tap sends the same play twice; the second one hits the one-card-per-trick constraint.
+  // The card is already on the table, so there is nothing to report.
+  if (playError?.code === "23505") return { ok: true, alreadyPlayed: true };
   if (playError) throw playError;
 
   const updatedHand = removeCardsFromHand(hand.cards, [card]);
@@ -642,15 +694,13 @@ export async function playChicagoCard(roomId: string, playerId: string, card: Ch
       byPlayer.set(entry.player_id, [...(byPlayer.get(entry.player_id) ?? []), entry.card]);
     });
 
-    let finalWinner: { playerId: string; evaluation: ReturnType<typeof evaluatePokerHand> } | null = null;
-    for (const [currentPlayerId, cards] of byPlayer.entries()) {
-      const evaluation = evaluatePokerHand(cards);
-      if (!finalWinner || comparePokerEvaluations(evaluation, finalWinner.evaluation) > 0) {
-        finalWinner = { playerId: currentPlayerId, evaluation };
-      }
-    }
+    // Final poker scoring on the five cards everyone played; a tie scores nothing, like the
+    // scorings during the exchanges (it used to go to whoever's rows came back first).
+    const { winner: finalWinner, tied: finalTied } = getPokerWinnerWithTie(
+      [...byPlayer.entries()].map(([currentPlayerId, cards]) => ({ playerId: currentPlayerId, cards }))
+    );
 
-    if (finalWinner && finalWinner.evaluation.points > 0) {
+    if (finalWinner && !finalTied && finalWinner.evaluation.points > 0) {
       await addScore(finalWinner.playerId, finalWinner.evaluation.points);
     }
 

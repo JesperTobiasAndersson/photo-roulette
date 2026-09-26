@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import type { MusicQuizAnswerDto, MusicQuizPlayerDto, MusicQuizRoomDto, MusicQuizRoomState, MusicQuizRoundDto } from "./types";
 
+// supabase.channel() returns an EXISTING channel with the same name. When one screen replaces
+// another (e.g. round -> next round, results -> lobby), the old screen's cleanup would remove the
+// channel the new screen is using, so every subscription gets its own unique name.
+const uniqueChannelSuffix = () => Math.random().toString(36).slice(2, 10);
+
 export function useMusicQuizRoom(roomId: string, playerId: string): MusicQuizRoomState {
   const [room, setRoom] = useState<MusicQuizRoomDto | null>(null);
   const [players, setPlayers] = useState<MusicQuizPlayerDto[]>([]);
@@ -67,19 +72,19 @@ export function useMusicQuizRoom(roomId: string, playerId: string): MusicQuizRoo
     };
 
     const roomChannel = supabase
-      .channel(`music-quiz-room-${roomId}`)
+      .channel(`music-quiz-room-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "music_quiz_rooms", filter: `id=eq.${roomId}` }, () => refresh())
       .subscribe();
     const playersChannel = supabase
-      .channel(`music-quiz-players-${roomId}`)
+      .channel(`music-quiz-players-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "music_quiz_players", filter: `room_id=eq.${roomId}` }, () => refresh())
       .subscribe();
     const roundsChannel = supabase
-      .channel(`music-quiz-rounds-${roomId}`)
+      .channel(`music-quiz-rounds-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "music_quiz_rounds", filter: `room_id=eq.${roomId}` }, () => refresh())
       .subscribe();
     const answersChannel = supabase
-      .channel(`music-quiz-answers-${roomId}`)
+      .channel(`music-quiz-answers-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "music_quiz_answers" }, handleAnswerChange)
       .subscribe();
 

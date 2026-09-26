@@ -269,6 +269,7 @@ export default function ChicagoRoomScreen() {
   const buyStopScale = useRef(new Animated.Value(0.88)).current;
   const buyStopRotate = useRef(new Animated.Value(-0.06)).current;
 
+  const roomState = room?.state ?? null;
   const isHost = !!room && !!myPlayer && room.host_player_id === myPlayer.id;
   const isMyTurn = room?.current_turn_player_id === playerId;
   const isBuyStopped = (myPlayer?.score ?? 0) >= BUY_STOP_SCORE;
@@ -469,10 +470,13 @@ export default function ChicagoRoomScreen() {
 
     const previousScores = previousScoresRef.current;
     let nextEvent: { title: string; message: string; tone: "warning" | "penalty" } | null = null;
+    // "Play again" puts every score back to 0 in the lobby, and a jump straight to 52 ends the
+    // game: neither is a buy-stop moment.
+    const inLobby = roomState === "lobby";
 
     for (const player of players) {
-      const previousScore = previousScores[player.id];
-      if (typeof previousScore === "number" && previousScore < BUY_STOP_SCORE && player.score >= BUY_STOP_SCORE) {
+      const previousScore = inLobby ? undefined : previousScores[player.id];
+      if (typeof previousScore === "number" && previousScore < BUY_STOP_SCORE && player.score >= BUY_STOP_SCORE && player.score < WIN_SCORE) {
         nextEvent = {
           title: t("modal.buy_stop"),
           message: t("modal.buy_stop_message", { name: player.display_name, score: BUY_STOP_SCORE }),
@@ -531,7 +535,7 @@ export default function ChicagoRoomScreen() {
         }),
       ]),
     ]).start();
-  }, [buyStopOpacity, buyStopRotate, buyStopScale, players, t]);
+  }, [buyStopOpacity, buyStopRotate, buyStopScale, players, roomState, t]);
 
   useEffect(() => {
     if (!buyStopEvent) return;
@@ -849,7 +853,7 @@ export default function ChicagoRoomScreen() {
         ) : null}
 
         {/* Draw / poker phases: the hand comes first */}
-        {myHand && room.state !== "trick_phase" && room.state !== "result" && room.state !== "lobby" ? (
+        {myHand && room.state !== "trick_phase" && room.state !== "result" && room.state !== "lobby" && room.state !== "game_over" ? (
           <AnimatedEntrance enterKey={`hand-${room.phase_number}`} delay={40}>
             <View style={{ gap: space.xs }}>
               {handTitle(

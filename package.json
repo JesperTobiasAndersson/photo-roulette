@@ -7,7 +7,11 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit -p .",
+    "test:db": "node tests/db/schema.test.mjs",
+    "test:stress": "node tests/stress/run-all.mjs",
+    "test:e2e": "node tests/run-e2e.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/roboto-slab": "^0.4.2",
@@ -35,7 +39,11 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/react": "~19.1.0",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0",
+    "puppeteer-core": "^23.11.1",
     "typescript": "~5.9.2"
   },
   "private": true

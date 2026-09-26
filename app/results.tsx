@@ -13,6 +13,11 @@ import { Button, Card, Chip, Screen, SectionLabel, TopBar } from "../src/ui/comp
 import { colors, radius, space, type, withAlpha } from "../src/ui/theme";
 import { siteUrl } from "../src/lib/site";
 
+// supabase.channel() returns an EXISTING channel with the same name. When one screen replaces
+// another (e.g. round -> next round, results -> lobby), the old screen's cleanup would remove the
+// channel the new screen is using, so every subscription gets its own unique name.
+const uniqueChannelSuffix = () => Math.random().toString(36).slice(2, 10);
+
 const GAME = GAMES.memematch;
 const ACCENT = GAME.accent;
 
@@ -56,7 +61,7 @@ export default function ResultsScreen() {
       .then(({ data }) => setHostPlayerId((data?.host_player_id as string | null) ?? null));
 
     const channel = supabase
-      .channel(`results-room-${roomId}`)
+      .channel(`results-room-${roomId}-${uniqueChannelSuffix()}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, (payload) => {
         if ((payload.new as { phase?: string })?.phase === "picking" && playerId) {
           router.replace({ pathname: "/pick-hand", params: { roomId, playerId } });
