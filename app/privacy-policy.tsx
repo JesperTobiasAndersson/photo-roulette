@@ -30,7 +30,7 @@ export default function PrivacyPolicyScreen() {
               [
                 "Vi använder information för att driva spelrum, synka live-spel, lagra resultat, hantera uppladdat innehåll, svara på supportärenden, förbättra tillförlitlighet och hålla plattformen säker.",
                 "På webben kan vi också använda cookies, lokal lagring eller liknande teknik för att komma ihåg inställningar, hålla sessioner igång och stödja webbplatsens funktioner.",
-                "Picklo visar ingen reklam och använder inga spårnings- eller annonscookies. Lokal lagring används bara för inställningar som språk och ditt senaste spelarnamn, samt för att hålla din anonyma spelsession igång.",
+                "Picklo visar ingen reklam och använder inga spårnings- eller annonscookies. Lokal lagring används bara för inställningar som språk och ditt senaste spelarnamn, samt för att hålla din anonyma spelsession igång. Vi mäter besök anonymt med Vercel Web Analytics, utan cookies och utan att spara personuppgifter.",
               ],
             ],
             [
@@ -79,7 +79,7 @@ export default function PrivacyPolicyScreen() {
               [
                 "We use information to operate game rooms, sync live gameplay, store results, process uploaded content, respond to support requests, improve reliability, and keep the platform safe.",
                 "On the web, we may also use cookies, local storage, or similar technologies to remember preferences, maintain sessions, and support site functionality.",
-                "Picklo shows no ads and uses no tracking or advertising cookies. Local storage is only used for settings such as language and your last player name, and to keep your anonymous game session signed in.",
+                "Picklo shows no ads and uses no tracking or advertising cookies. Local storage is only used for settings such as language and your last player name, and to keep your anonymous game session signed in. We count visits anonymously with Vercel Web Analytics, without cookies and without storing personal data.",
               ],
             ],
             [
