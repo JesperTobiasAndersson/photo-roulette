@@ -5,8 +5,9 @@ import { PWAInstall } from "../lib/pwa-install";
 import { LanguageProvider } from "../lib/i18n";
 import { inject } from "@vercel/analytics";
 
-// Anonymous visitor statistics (Vercel Web Analytics): no cookies, no personal data, so no
-// consent banner is needed. Room and player ids are stripped from the tracked addresses.
+// Anonymous visitor statistics (Vercel Web Analytics): no cookies, no personal data, so it needs
+// no consent. Room and player ids are stripped from the tracked addresses. (Ad consent for
+// AdSense is handled by Google's own consent message, loaded with the script in index.html.)
 if (Platform.OS === "web" && typeof window !== "undefined") {
   inject({
     beforeSend: (event) => ({ ...event, url: event.url.split("?")[0] }),

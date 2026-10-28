@@ -16,7 +16,7 @@ export default function PrivacyPolicyScreen() {
       ? {
           title: "Integritetspolicy",
           intro:
-            "Gäller från 20 mars 2026. Den här integritetspolicyn förklarar hur Picklo samlar in, använder, lagrar och delar information när du använder appen, webbplatsen och våra multiplayer-spel.",
+            "Gäller från 28 oktober 2026. Den här integritetspolicyn förklarar hur Picklo samlar in, använder, lagrar och delar information när du använder appen, webbplatsen och våra multiplayer-spel.",
           sections: [
             [
               "Information vi samlar in",
@@ -30,13 +30,22 @@ export default function PrivacyPolicyScreen() {
               [
                 "Vi använder information för att driva spelrum, synka live-spel, lagra resultat, hantera uppladdat innehåll, svara på supportärenden, förbättra tillförlitlighet och hålla plattformen säker.",
                 "På webben kan vi också använda cookies, lokal lagring eller liknande teknik för att komma ihåg inställningar, hålla sessioner igång och stödja webbplatsens funktioner.",
-                "Picklo visar ingen reklam och använder inga spårnings- eller annonscookies. Lokal lagring används bara för inställningar som språk och ditt senaste spelarnamn, samt för att hålla din anonyma spelsession igång. Vi mäter besök anonymt med Vercel Web Analytics, utan cookies och utan att spara personuppgifter.",
+                "Lokal lagring används för inställningar som språk och ditt senaste spelarnamn, samt för att hålla din anonyma spelsession igång. Vi mäter besök anonymt med Vercel Web Analytics, utan cookies och utan att spara personuppgifter.",
+              ],
+            ],
+            [
+              "Annonser och cookies",
+              [
+                "Picklo visar annonser via Google AdSense. Tredjepartsleverantörer, inklusive Google, använder cookies för att visa annonser baserat på dina tidigare besök på den här och andra webbplatser.",
+                "Googles användning av annonscookies gör det möjligt för Google och dess partner att visa annonser baserat på dina besök på Picklo och/eller andra webbplatser på internet. Läs mer om hur Google använder data på policies.google.com/technologies/partner-sites.",
+                "Du kan välja bort anpassade annonser i Googles annonsinställningar på adssettings.google.com, eller välja bort andra leverantörers cookies för anpassade annonser på www.aboutads.info/choices och www.youronlinechoices.eu.",
+                "Besökare i EES, Storbritannien och Schweiz får frågan om samtycke innan cookies för anpassade annonser används, och kan ändra sitt val när som helst.",
               ],
             ],
             [
               "Hur information delas",
               [
-                "Vi kan dela information med tjänsteleverantörer som hjälper oss att hosta appen, lagra innehåll, och tillhandahålla infrastruktur. Vi säljer inte personuppgifter för pengar.",
+                "Vi kan dela information med tjänsteleverantörer som hjälper oss att hosta appen, lagra innehåll, tillhandahålla infrastruktur och visa annonser (Google). Vi säljer inte personuppgifter för pengar.",
                 "Vi kan också lämna ut information när lagen kräver det, för att upprätthålla våra villkor eller för att skydda användare, appen eller allmänheten.",
               ],
             ],
@@ -65,7 +74,7 @@ export default function PrivacyPolicyScreen() {
       : {
           title: "Privacy Policy",
           intro:
-            "Effective date: March 20, 2026. This Privacy Policy explains how Picklo collects, uses, stores, and shares information when you use the app, website, and multiplayer party games.",
+            "Effective date: October 28, 2026. This Privacy Policy explains how Picklo collects, uses, stores, and shares information when you use the app, website, and multiplayer party games.",
           sections: [
             [
               "Information we collect",
@@ -79,13 +88,22 @@ export default function PrivacyPolicyScreen() {
               [
                 "We use information to operate game rooms, sync live gameplay, store results, process uploaded content, respond to support requests, improve reliability, and keep the platform safe.",
                 "On the web, we may also use cookies, local storage, or similar technologies to remember preferences, maintain sessions, and support site functionality.",
-                "Picklo shows no ads and uses no tracking or advertising cookies. Local storage is only used for settings such as language and your last player name, and to keep your anonymous game session signed in. We count visits anonymously with Vercel Web Analytics, without cookies and without storing personal data.",
+                "Local storage is used for settings such as language and your last player name, and to keep your anonymous game session signed in. We count visits anonymously with Vercel Web Analytics, without cookies and without storing personal data.",
+              ],
+            ],
+            [
+              "Advertising and cookies",
+              [
+                "Picklo shows ads through Google AdSense. Third-party vendors, including Google, use cookies to serve ads based on your prior visits to this website and other websites.",
+                "Google's use of advertising cookies enables it and its partners to serve ads based on your visits to Picklo and/or other sites on the internet. Learn more about how Google uses data at policies.google.com/technologies/partner-sites.",
+                "You can opt out of personalised advertising in Google's Ads Settings at adssettings.google.com, or opt out of other vendors' cookies for personalised advertising at www.aboutads.info/choices and www.youronlinechoices.eu.",
+                "Visitors in the EEA, the UK and Switzerland are asked for consent before cookies for personalised ads are used, and can change their choice at any time.",
               ],
             ],
             [
               "How information is shared",
               [
-                "We may share information with service providers that help us host the app, store content, and provide infrastructure. We do not sell personal information for money.",
+                "We may share information with service providers that help us host the app, store content, provide infrastructure, and show ads (Google). We do not sell personal information for money.",
                 "We may also disclose information when required by law, to enforce our terms, or to protect users, the app, or the public.",
               ],
             ],
