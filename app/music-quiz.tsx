@@ -12,6 +12,7 @@ export default function MusicQuizHome() {
       gameId="musicQuiz"
       createRoom={async (name) => toRoom(await createMusicQuizRoom(name))}
       joinRoom={async (code, name) => toRoom(await joinMusicQuizRoom(code, name))}
+      localHref="/music-quiz-local"
     />
   );
 }

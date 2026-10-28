@@ -164,7 +164,7 @@ type MusicQuizLibraryRow = {
 
 // The song library lives in the music_quiz_library table. The small bundled list is only
 // a fallback for when the table can't be read (offline, older database).
-async function loadMusicQuizLibrary(pool: MusicQuizSongPool): Promise<MusicQuizLibraryEntry[]> {
+export async function loadMusicQuizLibrary(pool: MusicQuizSongPool): Promise<MusicQuizLibraryEntry[]> {
   const bundled = MUSIC_QUIZ_LIBRARY.filter((entry) => pool === "mix" || entry.category === pool);
   let query = supabase
     .from("music_quiz_library")

@@ -12,6 +12,7 @@ export default function MafiaHome() {
       gameId="mafia"
       createRoom={async (name) => toRoom(await createMafiaRoom(name))}
       joinRoom={async (code, name) => toRoom(await joinMafiaRoom(code, name))}
+      localHref="/mafia-local"
     />
   );
 }

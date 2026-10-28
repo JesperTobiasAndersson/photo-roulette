@@ -20,6 +20,8 @@ type GameEntryScreenProps = {
   joinRoom: (code: string, name: string) => Promise<RoomTarget>;
   /** Small print under the form (e.g. image-usage consent). */
   notice?: string;
+  /** Route of the one-phone ("pass the phone") version, for games that support it. */
+  localHref?: string;
 };
 
 function asString(v: unknown): string {
@@ -58,7 +60,7 @@ function friendlyError(error: unknown, language: "en" | "sv", mode: "create" | "
   return raw ? `${prefix} (${translate(error)})` : prefix;
 }
 
-export function GameEntryScreen({ gameId, createRoom, joinRoom, notice }: GameEntryScreenProps) {
+export function GameEntryScreen({ gameId, createRoom, joinRoom, notice, localHref }: GameEntryScreenProps) {
   const game = GAMES[gameId];
   const { language, t, translateError } = useI18n();
   const params = useLocalSearchParams();
@@ -207,6 +209,41 @@ export function GameEntryScreen({ gameId, createRoom, joinRoom, notice }: GameEn
 
         {notice ? <Text style={{ color: colors.textSubtle, fontSize: 13, lineHeight: 18, textAlign: "center" }}>{notice}</Text> : null}
       </Card>
+
+      {/* One phone for the whole group */}
+      {localHref ? (
+        <Card>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: radius.pill,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(accent, 0.16),
+              }}
+            >
+              <Ionicons name="phone-portrait-outline" size={22} color={accent} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={[type.bodyStrong, { color: colors.text }]}>{language === "sv" ? "Bara en telefon?" : "Only one phone?"}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+                {language === "sv"
+                  ? "Spela på en telefon som ni skickar runt. Ingen rumskod och ingen inloggning."
+                  : "Play on one phone that you pass around. No room code, no sign-in."}
+              </Text>
+            </View>
+          </View>
+          <Button
+            label={language === "sv" ? "Spela på en telefon" : "Play on one phone"}
+            icon="people"
+            variant="secondary"
+            size="md"
+            onPress={() => router.push(localHref as any)}
+          />
+        </Card>
+      ) : null}
 
       {/* How to play */}
       <View style={{ gap: space.md }}>

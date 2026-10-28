@@ -12,6 +12,7 @@ export default function TriviaHome() {
       gameId="trivia"
       createRoom={async (name) => toRoom(await createTriviaRoom(name))}
       joinRoom={async (code, name) => toRoom(await joinTriviaRoom(code, name))}
+      localHref="/trivia-local"
     />
   );
 }

@@ -12,6 +12,7 @@ export default function ImposterHome() {
       gameId="imposter"
       createRoom={async (name) => toRoom(await createImposterRoom(name))}
       joinRoom={async (code, name) => toRoom(await joinImposterRoom(code, name))}
+      localHref="/imposter-local"
     />
   );
 }

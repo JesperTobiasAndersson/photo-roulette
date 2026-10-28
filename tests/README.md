@@ -8,6 +8,8 @@
 | `npm run test:e2e` | Plays every game end to end in headless Chrome, several "phones" per game, through to the winner and "play again". Needs `npm run web` running (or `BASE=https://picklo.app`). `QUICK=1` for shorter Chicago/Mafia; `node tests/run-e2e.mjs imposter` for one game. | ~25 min (QUICK ~12) |
 
 Requirements: Google Chrome installed (or `CHROME_PATH`), and `.env` with the Supabase URL/key.
+`tests/e2e/one-phone.mjs` (the pass-the-phone versions of Imposter, Trivia, Music Quiz and Mafia) never
+touches the database, so it also runs against a dev server started without a real `.env`.
 Stress and e2e tests create rooms in the live database; the daily cleanup removes them after 24 h
 of inactivity. Screenshots from e2e runs land in `tests/artifacts/` (git-ignored).
 
