@@ -163,13 +163,15 @@ async function snap(G) {
     if (error) throw new Error(error.message);
     return data;
   };
-  // Each phone may only read its own hand, so the full picture combines every phone's view.
-  const [room, players, round, hands] = await Promise.all([
+  const [room, players, round] = await Promise.all([
     q(db.from("chicago_rooms").select("*").eq("id", G.roomId).single()),
     q(db.from("chicago_room_players").select("*").eq("room_id", G.roomId).order("seat_order")),
     q(db.from("chicago_rounds").select("*").eq("room_id", G.roomId).order("round_number", { ascending: false }).limit(1).maybeSingle()),
-    Promise.all(G.phones.map(async (p) => q((await phoneDb(p)).from("chicago_player_hands").select("*").eq("room_id", G.roomId)))).then((all) => all.flat()),
   ]);
+  // Each phone may only read its own hand, so the full picture combines every phone's view. Read
+  // after the room: the server moves the phase in the same step as the last exchange, so hands read
+  // in parallel could be a moment older than the phase.
+  const hands = (await Promise.all(G.phones.map(async (p) => q((await phoneDb(p)).from("chicago_player_hands").select("*").eq("room_id", G.roomId).eq("player_id", p.pid))))).flat();
   let trick = null;
   let played = [];
   let allTricks = [];
@@ -360,8 +362,9 @@ async function drawPhase(G, k, plan) {
     return true;
   }, 20000);
   // Deck + hands never contain a card twice.
-  const all = [...s.round.deck, ...s.hands.flatMap((h) => h.cards)];
-  if (new Set(all.map(cid)).size !== all.length) ok(false, `${G.n}p draw ${k}: no duplicate cards in deck + hands`);
+  // The deck is private to the server now; the hands must still never share a card.
+  const all = s.hands.flatMap((h) => h.cards);
+  if (new Set(all.map(cid)).size !== all.length) ok(false, `${G.n}p draw ${k}: no duplicate cards across the hands`);
 
   const decisions = [];
   for (const p of G.phones) {
@@ -401,11 +404,6 @@ async function drawPhase(G, k, plan) {
     }
   };
 
-  const wanted = decisions.reduce((n, d) => n + d.discards.length, 0);
-  if (wanted > s.round.deck.length) {
-    G.stats.reshuffles = (G.stats.reshuffles || 0) + 1;
-    log(`${G.n}p draw ${k}: ${wanted} cards wanted, ${s.round.deck.length} left in the stock -> discards must be reshuffled`);
-  }
   const simultaneous =(s.round.round_number + k) % 2 === 0 || G.n === 4;
   if (simultaneous) await Promise.all(decisions.map(act));
   else for (const d of decisions) {

@@ -154,8 +154,8 @@ async function playGame(group, tag, rounds, { previousPrompt = null, reloadDurin
   );
   await tap(host, "Starta spelet");
   const room1 = await waitForRoom(host, (r) => r.state === "role_reveal", "role_reveal");
-  R.ok(category.prompts.includes(room1.secret_prompt), `${tag}: secret word "${room1.secret_prompt}" comes from ${category.id}`);
-  if (previousPrompt) R.ok(room1.secret_prompt !== previousPrompt, `${tag}: second game deals a new word`, `${previousPrompt} -> ${room1.secret_prompt}`);
+  // The server keeps the word private until the game ends; phones only see their own card.
+  R.ok(room1.secret_prompt === null, `${tag}: the word is not readable from the room during the game`, String(room1.secret_prompt));
 
   // --- Late joiner is refused once the game has started ---------------------------------------
   if (lateJoiner) {
@@ -183,7 +183,10 @@ async function playGame(group, tag, rounds, { previousPrompt = null, reloadDurin
   const imposters = phones.filter((p) => cards.get(p).imposter);
   const crew = phones.filter((p) => !cards.get(p).imposter);
   R.ok(imposters.length === 1, `${tag}: exactly one phone sees DU ÄR IMPOSTERN`, imposters.map((p) => p.name).join(","));
-  const want = expectedLabel(room1.secret_prompt);
+  const want = crew.length ? cards.get(crew[0]).word : "";
+  const dealt = category.prompts.find((prompt) => expectedLabel(prompt) === want) ?? null;
+  R.ok(!!dealt, `${tag}: secret word "${dealt}" comes from ${category.id}`, want);
+  if (previousPrompt) R.ok(dealt !== previousPrompt, `${tag}: second game deals a new word`, `${previousPrompt} -> ${dealt}`);
   R.ok(crew.every((p) => cards.get(p).word === want), `${tag}: all ${crew.length} crew phones see the same word "${want}"`, crew.map((p) => cards.get(p).word).join(" | "));
   R.ok(crew.every((p) => cards.get(p).pictureWidth > 0), `${tag}: word picture loads on every crew phone (${category.id})`, crew.map((p) => cards.get(p).pictureWidth).join(","));
   R.ok(!cards.get(imposters[0]).text.includes(want), `${tag}: the imposter's screen does not show the word`);
