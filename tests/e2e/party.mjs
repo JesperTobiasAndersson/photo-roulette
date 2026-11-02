@@ -55,7 +55,7 @@ try {
     await shot(A, "ml-question");
     for (let round = 1; round <= 5; round++) {
       await Promise.all(G.phones.map((p) => waitForText(p, new RegExp(`Runda ${round}/5`))));
-      R.ok(/Vem är mest trolig att/.test(await text(A)), `most likely r${round}: statement shown in Swedish`);
+      R.ok(/Vem är mest trolig att/i.test(await text(A)), `most likely r${round}: statement shown in Swedish`);
       if (round === 3) {
         // The host shows the result before Cid has voted.
         await tap(A, names[2]);
@@ -69,7 +69,7 @@ try {
           if (p !== C) await waitForText(p, /Svaret är skickat/);
         }
       }
-      await Promise.all(G.phones.map((p) => waitForText(p, /Gruppen valde|Ingen röstade/)));
+      await Promise.all(G.phones.map((p) => waitForText(p, /Gruppen valde|Ingen röstade/i)));
       if (round === 1) {
         R.ok(/Du fick \+1/.test(await text(A)) && /Du fick \+1/.test(await text(B)) && /Inga poäng/.test(await text(C)), "most likely: voting with the majority scores");
         await shot(B, "ml-reveal");
@@ -79,8 +79,9 @@ try {
     }
     await Promise.all(G.phones.map((p) => waitForText(p, /Spelet är slut/)));
     const end = await text(B);
-    R.ok(/Vinnare: E2E Ada, E2E Bea/.test(end), "most likely: Ada and Bea share the win", end.slice(0, 120));
-    R.ok(/Flest titlar[\s\S]*E2E Cid[\s\S]*4 titlar/.test(end), "most likely: Cid collected 4 titles");
+    // Round 3 was revealed with only Ada's vote (for Cid), so Ada scored once more than Bea.
+    R.ok(/Vinnare: E2E Ada(?!,)/.test(end), "most likely: Ada wins 5–4 (the early reveal counted only her vote)", end.slice(0, 120));
+    R.ok(/Flest titlar[\s\S]*E2E Cid[\s\S]*5 titlar/i.test(end), "most likely: Cid collected all 5 titles");
     await shot(A, "ml-ended");
     await tap(A, "Spela igen med samma gäng");
     await Promise.all(G.phones.map((p) => waitForText(p, /Rumskod/i)));
@@ -107,7 +108,7 @@ try {
         await typeVisible(p, String(guess).replace(".", ","));
         await tap(p, "Skicka svar");
       }
-      await Promise.all(G.phones.map((p) => waitForText(p, /Rätt svar/)));
+      await Promise.all(G.phones.map((p) => waitForText(p, /Rätt svar/i)));
       const reveal = await text(B);
       R.ok(/exakt rätt/.test(reveal) && /\+3/.test(reveal) && /\+2/.test(reveal) && /\+1/.test(reveal), `closest wins r${round}: 3/2/1 points for the closest guesses`);
       if (round === 1) await shot(B, "cw-reveal");
