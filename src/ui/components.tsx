@@ -468,8 +468,12 @@ export function SectionLabel({ children, right }: { children: string; right?: Re
   );
 }
 
+/** A game's tile artwork: an image, or an icon on the game's colour for games without artwork. */
+export type GameArtwork = number | { glyph: IconName };
+
 /** Game artwork tile used on the home list, entry screens and lobbies. */
-export function GameIcon({ source, size = 64, accent }: { source: any; size?: number; accent?: string }) {
+export function GameIcon({ source, size = 64, accent }: { source: GameArtwork; size?: number; accent?: string }) {
+  const glyph = typeof source === "object" ? source.glyph : null;
   return (
     <View
       style={{
@@ -479,10 +483,16 @@ export function GameIcon({ source, size = 64, accent }: { source: any; size?: nu
         overflow: "hidden",
         borderWidth: 1,
         borderColor: accent ? withAlpha(accent, 0.6) : colors.border,
-        backgroundColor: colors.surfaceRaised,
+        backgroundColor: glyph && accent ? withAlpha(accent, 0.18) : colors.surfaceRaised,
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      <Image source={source} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+      {glyph ? (
+        <Ionicons name={glyph} size={Math.round(size * 0.5)} color={accent ?? colors.text} />
+      ) : (
+        <Image source={source as number} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+      )}
     </View>
   );
 }

@@ -1,7 +1,8 @@
 import type { Language } from "../lib/i18n";
+import type { GameArtwork } from "../ui/components";
 import { gameAccents } from "../ui/theme";
 
-export type GameId = "memematch" | "mafia" | "imposter" | "chicago" | "musicQuiz" | "trivia";
+export type GameId = "memematch" | "mafia" | "imposter" | "chicago" | "musicQuiz" | "trivia" | "mostLikely" | "estimate" | "charades";
 
 type Localized<T> = Record<Language, T>;
 
@@ -11,7 +12,7 @@ export type GameInfo = {
   href: string;
   title: string;
   accent: string;
-  icon: number;
+  icon: GameArtwork;
   players: string;
   tagline: Localized<string>;
   /** Three short steps shown on the entry screen. */
@@ -289,6 +290,138 @@ export const GAMES: Record<GameId, GameInfo> = {
     keywords: ["trivia game", "multiplayer trivia", "quiz game for friends", "room code quiz"],
     related: ["musicQuiz", "mafia"],
   },
+  mostLikely: {
+    id: "mostLikely",
+    href: "/most-likely",
+    title: "Most Likely",
+    accent: gameAccents.mostLikely,
+    icon: { glyph: "hand-left" },
+    players: "3–20",
+    tagline: {
+      en: "Who's most likely to…? Vote for a friend and see who the group picked.",
+      sv: "Vem är mest trolig att…? Rösta på en kompis och se vem gruppen valde.",
+    },
+    howTo: {
+      en: [
+        "A statement appears: \"Who's most likely to…\"",
+        "Everyone secretly votes for a player in the group.",
+        "Vote with the majority to score. Who collects the most titles?",
+      ],
+      sv: [
+        "Ett påstående dyker upp: \"Vem är mest trolig att…\"",
+        "Alla röstar i hemlighet på någon i gruppen.",
+        "Rösta som majoriteten för att få poäng. Vem samlar flest titlar?",
+      ],
+    },
+    about: {
+      en: [
+        "Most Likely is the quickest way to get a group talking: one statement, everyone votes for the friend who fits it best, and the reveal shows who the group picked. Votes stay secret until everyone has voted.",
+        "Play with a room code on everyone's phone, or pass one phone around and point on the count of three.",
+      ],
+      sv: [
+        "Most Likely är det snabbaste sättet att få igång ett gäng: ett påstående, alla röstar på kompisen som passar bäst, och avslöjandet visar vem gruppen valde. Rösterna är hemliga tills alla har röstat.",
+        "Spela med rumskod i allas mobiler, eller skicka runt en telefon och peka på tre.",
+      ],
+    },
+    seoTitle: {
+      en: "Most Likely | \"Who's Most Likely To\" Party Game Online",
+      sv: "Most Likely | \"Vem är mest trolig att\" – partyspel online",
+    },
+    seoDescription: {
+      en: "Play Most Likely on Picklo: \"who's most likely to\" questions, secret votes on your phones or one shared phone, and a scoreboard for the group.",
+      sv: "Spela Most Likely på Picklo: \"vem är mest trolig att\"-frågor, hemliga röster i mobilerna eller på en delad telefon och en poängtavla för gänget.",
+    },
+    keywords: ["who's most likely to", "most likely to questions", "party voting game", "group game for friends"],
+    related: ["imposter", "estimate"],
+  },
+  estimate: {
+    id: "estimate",
+    href: "/closest-wins",
+    title: "Closest Wins",
+    accent: gameAccents.estimate,
+    icon: { glyph: "speedometer" },
+    players: "2–20",
+    tagline: {
+      en: "Nobody knows the exact answer. Guess the number, closest wins.",
+      sv: "Ingen kan svaret exakt. Gissa talet, närmast vinner.",
+    },
+    howTo: {
+      en: [
+        "A question with a number answer appears.",
+        "Everyone types a guess. Nobody sees the others' guesses until all are in.",
+        "The closest three score 3, 2 and 1 points.",
+      ],
+      sv: [
+        "En fråga med ett tal som svar dyker upp.",
+        "Alla skriver en gissning. Ingen ser de andras förrän alla har svarat.",
+        "De tre närmaste får 3, 2 och 1 poäng.",
+      ],
+    },
+    about: {
+      en: [
+        "Closest Wins is a quiz where knowing isn't enough: how tall is it, how many are there, what year was it? Everyone guesses, and the closest guess takes the points.",
+        "Questions about nature, geography, history, science, sport, food and everyday life, in English and Swedish. Play on everyone's phone or on one phone with the answers said out loud.",
+      ],
+      sv: [
+        "Closest Wins är ett quiz där det inte räcker att kunna: hur högt, hur många, vilket år? Alla gissar och närmaste gissning tar poängen.",
+        "Frågor om natur, geografi, historia, vetenskap, sport, mat och vardag, på svenska och engelska. Spela i allas mobiler eller på en telefon med svaren högt.",
+      ],
+    },
+    seoTitle: {
+      en: "Closest Wins | Estimation Quiz Game for Groups",
+      sv: "Closest Wins | Gissningsquiz för gruppen",
+    },
+    seoDescription: {
+      en: "Play Closest Wins on Picklo: guess the number, the closest guess scores. A multiplayer estimation quiz with room codes or one shared phone.",
+      sv: "Spela Closest Wins på Picklo: gissa talet, närmaste gissning får poäng. Ett gissningsquiz för flera spelare med rumskod eller en delad telefon.",
+    },
+    keywords: ["estimation quiz", "guess the number game", "closest guess wins", "quiz game for groups"],
+    related: ["trivia", "mostLikely"],
+  },
+  charades: {
+    id: "charades",
+    href: "/charades",
+    title: "Charades",
+    accent: gameAccents.charades,
+    icon: { glyph: "body" },
+    players: "4–20",
+    tagline: {
+      en: "Act it out, no talking. One phone, two teams, a ticking clock.",
+      sv: "Spela upp det utan att prata. En telefon, två lag och en klocka som tickar.",
+    },
+    howTo: {
+      en: [
+        "Split into two teams and pick categories.",
+        "The actor sees a word and acts it out without talking; the team guesses.",
+        "Tap \"Got it\" or \"Skip\" before time runs out, then pass the phone.",
+      ],
+      sv: [
+        "Dela upp er i två lag och välj kategorier.",
+        "Den som spelar ser ett ord och spelar upp det utan att prata; laget gissar.",
+        "Tryck \"Rätt\" eller \"Hoppa över\" innan tiden tar slut och skicka sedan telefonen vidare.",
+      ],
+    },
+    about: {
+      en: [
+        "Charades on Picklo needs just one phone: it picks the words, runs the timer and keeps score for both teams, so you can focus on flapping your arms like an elephant.",
+        "Animals, actions, jobs, things, sports and places, in English and Swedish. Works offline once the page has loaded.",
+      ],
+      sv: [
+        "Charader på Picklo behöver bara en telefon: den väljer orden, sköter klockan och håller poängen för båda lagen, så att ni kan fokusera på att vifta med armarna som en elefant.",
+        "Djur, handlingar, yrken, saker, sport och platser, på svenska och engelska. Fungerar utan internet när sidan väl har laddats.",
+      ],
+    },
+    seoTitle: {
+      en: "Charades | Free Charades Game on One Phone",
+      sv: "Charader | Gratis charadspel på en telefon",
+    },
+    seoDescription: {
+      en: "Play Charades on Picklo: one phone, two teams, random words in six categories, a timer and automatic scoring. Free and in English and Swedish.",
+      sv: "Spela charader på Picklo: en telefon, två lag, slumpade ord i sex kategorier, timer och automatisk poäng. Gratis, på svenska och engelska.",
+    },
+    keywords: ["charades game", "charades words", "acting game for parties", "one phone party game"],
+    related: ["mostLikely", "imposter"],
+  },
 };
 
-export const GAME_ORDER: GameId[] = ["imposter", "memematch", "mafia", "chicago", "musicQuiz", "trivia"];
+export const GAME_ORDER: GameId[] = ["imposter", "mostLikely", "memematch", "mafia", "estimate", "charades", "chicago", "musicQuiz", "trivia"];

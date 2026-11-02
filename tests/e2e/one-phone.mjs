@@ -299,6 +299,83 @@ try {
   await shot(page, "mafia-mafia-wins");
 
   // -------------------------------------------------------------------------
+  // Most Likely (the remembered group: Anna, Bo, Cleo, Dani)
+  // -------------------------------------------------------------------------
+  await openLocal(page, "/most-likely", "/most-likely-local");
+  await tap(page, "5");
+  await tap(page, "Starta spelet");
+  for (let i = 1; i <= 5; i++) {
+    await waitForText(page, new RegExp(`${i}/5`));
+    R.ok(/Vem är mest trolig att/i.test(await text(page)), `most likely: statement ${i} shown`);
+    if (i <= 3) {
+      await tap(page, "Anna");
+      await tap(page, "Anna får titeln");
+    } else {
+      await tap(page, "Det blev lika – hoppa över");
+    }
+  }
+  await waitForText(page, /Det var alla påståenden/);
+  R.ok(/Flest titlar: Anna/.test(await text(page)), "most likely: Anna collects the most titles");
+  await shot(page, "most-likely-ended");
+
+  // -------------------------------------------------------------------------
+  // Closest Wins
+  // -------------------------------------------------------------------------
+  const { ESTIMATE_QUESTIONS } = await import("../../src/games/estimate/data.ts");
+  await openLocal(page, "/closest-wins", "/closest-wins-local");
+  await tap(page, "5");
+  await tap(page, "Starta spelet");
+  for (let i = 1; i <= 5; i++) {
+    await waitForText(page, new RegExp(`Fråga ${i}/5`));
+    const shown = await text(page);
+    const question = ESTIMATE_QUESTIONS.find((q) => shown.includes(q.sv));
+    R.ok(!/Rätt svar/i.test(shown), `closest wins: answer hidden before reveal (q${i})`);
+    await tap(page, "Visa svaret");
+    await waitForText(page, /Rätt svar/i);
+    const digits = (await text(page)).replace(/[\s ]/g, "");
+    R.ok(!!question && digits.includes(question.answer.toLocaleString("sv-SE").replace(/[\s ]/g, "")), `closest wins: the right answer is shown (q${i})`, question ? `${question.id} ${question.answer}` : "unknown question");
+    await tap(page, "Bo");
+    await tap(page, i === 5 ? "Avsluta spelet" : "Nästa fråga");
+  }
+  await waitForText(page, /Spelet är slut/);
+  R.ok(/Vinnare: Bo/.test(await text(page)), "closest wins: Bo wins with 5 points");
+
+  // -------------------------------------------------------------------------
+  // Charades (one phone only; the clock is moved forward instead of waiting 30 s)
+  // -------------------------------------------------------------------------
+  await page.goto(`${BASE}/charades`, { waitUntil: "load" });
+  await waitForText(page, /Ni behöver bara en telefon/);
+  R.ok(!/Skapa rum/.test(await text(page)), "charades: no room code option (one phone only)");
+  await tap(page, "Spela");
+  await page.waitForFunction(() => location.pathname === "/charades-local", { timeout: 20000 });
+  await tap(page, "30");
+  await tap(page, "Starta spelet");
+  for (let turn = 1; turn <= 6; turn++) {
+    await waitForText(page, new RegExp(`Tur ${turn}/6`));
+    await tap(page, "Starta");
+    await waitForText(page, /Tid kvar/i);
+    const right = turn % 2 === 1 ? 2 : 1; // Lag 1 gets 2 per turn, Lag 2 gets 1
+    for (let k = 0; k < right + 1; k++) {
+      await tap(page, k < right ? "Rätt" : "Hoppa över");
+      await wait(150);
+    }
+    // Time's up: move the saved clock into the past and reload (also checks resuming).
+    await page.evaluate(() => {
+      const key = "picklo_local_game_charades";
+      const g = JSON.parse(localStorage.getItem(key));
+      g.endsAt = Date.now() - 1000;
+      localStorage.setItem(key, JSON.stringify(g));
+    });
+    await page.reload({ waitUntil: "load" });
+    await waitForText(page, /Tiden är slut/);
+    R.ok(new RegExp(`fick ${right} rätt`).test(await text(page)), `charades: turn ${turn} counted ${right} right`);
+    await tap(page, turn === 6 ? "Visa resultatet" : "Nästa lag");
+  }
+  await waitForText(page, /Spelet är slut/);
+  R.ok(/Lag 1 vinner/.test(await text(page)), "charades: Lag 1 wins 6–3");
+  await shot(page, "charades-ended");
+
+  // -------------------------------------------------------------------------
   // English UI
   // -------------------------------------------------------------------------
   const en = await phone(browser, "english-phone", { language: "en" });

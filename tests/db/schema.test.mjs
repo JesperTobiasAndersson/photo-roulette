@@ -480,6 +480,83 @@ ok(!!(await as(B, () => fails(q(`insert into music_quiz_library (spotify_url, ca
   ok((await as(B, () => q(`select count(*)::int n from chicago_cards_played c join chicago_tricks t on t.id = c.trick_id join chicago_rounds r on r.id = t.round_id where r.room_id = $1`, [room.id])))[0].n === 10, "chicago: played cards are visible to the room");
 }
 
+// --- Most Likely / Closest Wins: server-run rounds, answers private until the reveal ---
+{
+  const users = [A, B, C];
+  const create = async (game) => as(A, async () => (await q(`select party_create_room($1, 'Alice') as r`, [game]))[0].r);
+  const join = async (u, game, code, name) => as(u, async () => (await q(`select party_join_room($1, $2, $3) as r`, [game, code, name]))[0].r);
+
+  // Most Likely
+  const ml = await create("most_likely");
+  ok(/^[A-Z2-9]{4}$/.test(ml.code), "party: a room gets a 4-character code");
+  const mlB = await join(B, "most_likely", ml.code.toLowerCase(), "Bob");
+  ok((await join(B, "most_likely", ml.code, "Bob again")).player_id === mlB.player_id, "party: re-joining from the same phone keeps the seat");
+  ok(/ROOM_NOT_FOUND/.test(await as(C, () => fails(q(`select party_join_room('estimate', $1, 'Cy')`, [ml.code])))), "party: a code only works on its own game's page");
+  ok(/At least 3 players/.test(await as(A, () => fails(q(`select party_start($1, 5)`, [ml.room_id])))), "party: Most Likely needs 3 players");
+  const mlC = await join(C, "most_likely", ml.code, "Cy");
+  ok(/Only the host/.test(await as(B, () => fails(q(`select party_start($1, 5)`, [ml.room_id])))), "party: only the host starts");
+  await as(A, () => q(`select party_start($1, 5)`, [ml.room_id]));
+  ok(/GAME_ALREADY_STARTED/.test(await as(D, () => fails(q(`select party_join_room('most_likely', $1, 'Late')`, [ml.code])))), "party: can't join a game in progress");
+  const rounds = await as(B, () => q(`select * from party_rounds where room_id = $1 order by round_number`, [ml.room_id]));
+  ok(rounds.length === 5 && new Set(rounds.map((r) => r.prompt_id)).size === 5, "party: five different statements are dealt");
+  ok(!!(await as(B, () => fails(q(`update party_players set score = 99 where id = $1`, [mlB.player_id]).then(async () => {
+    if ((await q(`select score from party_players where id = $1`, [mlB.player_id]))[0].score !== 0) return;
+    throw new Error("unchanged");
+  })))), "party: a player can't change their score");
+  ok((await as(D, () => q(`select * from party_rounds where room_id = $1`, [ml.room_id]))).length === 0, "party: outsiders can't read the room");
+
+  // Round 1: A and B vote for C, C votes for A.
+  await as(A, () => q(`select party_answer($1, $2, null)`, [ml.room_id, mlC.player_id]));
+  await as(B, () => q(`select party_answer($1, $2, null)`, [ml.room_id, mlC.player_id]));
+  ok((await as(C, () => q(`select * from party_answers where round_id = $1`, [rounds[0].id]))).length === 0, "party: votes stay secret until the reveal");
+  ok((await as(A, () => q(`select * from party_answers where round_id = $1`, [rounds[0].id]))).length === 1, "party: a player sees their own vote");
+  ok((await as(A, () => q(`select answered_round from party_players where id = $1`, [mlB.player_id])))[0].answered_round === 1, "party: who has answered is public");
+  await as(C, () => q(`select party_answer($1, $2, null)`, [ml.room_id, ml.player_id]));
+  const afterVote = await as(C, () => q(`select state from party_rooms where id = $1`, [ml.room_id]));
+  ok(afterVote[0].state === "reveal", "party: the last vote reveals the round automatically");
+  ok((await as(C, () => q(`select * from party_answers where round_id = $1`, [rounds[0].id]))).length === 3, "party: all votes are visible after the reveal");
+  const scores = Object.fromEntries((await as(A, () => q(`select id, score, titles from party_players where room_id = $1`, [ml.room_id]))).map((p) => [p.id, p]));
+  ok(scores[ml.player_id].score === 1 && scores[mlB.player_id].score === 1 && scores[mlC.player_id].score === 0 && scores[mlC.player_id].titles === 1,
+    `party: voting with the majority scores, the chosen player gets the title ${JSON.stringify(Object.values(scores))}`);
+  ok(/Answers are closed/.test(await as(A, () => fails(q(`select party_answer($1, $2, null)`, [ml.room_id, mlB.player_id])))), "party: no answers after the reveal");
+  ok(/Only the host/.test(await as(B, () => fails(q(`select party_next($1)`, [ml.room_id])))), "party: only the host moves on");
+  await as(A, () => q(`select party_next($1)`, [ml.room_id]));
+  ok((await as(B, () => q(`select current_round, state from party_rooms where id = $1`, [ml.room_id])))[0].current_round === 2, "party: next round");
+  await as(A, () => q(`select party_reveal($1)`, [ml.room_id]));
+  ok((await as(B, () => q(`select state from party_rooms where id = $1`, [ml.room_id])))[0].state === "reveal", "party: the host can reveal without waiting");
+  for (let i = 0; i < 3; i++) {
+    await as(A, () => q(`select party_next($1)`, [ml.room_id]));
+    await as(A, () => q(`select party_reveal($1)`, [ml.room_id]));
+  }
+  await as(A, () => q(`select party_next($1)`, [ml.room_id]));
+  ok((await as(B, () => q(`select state from party_rooms where id = $1`, [ml.room_id])))[0].state === "ended", "party: the game ends after the last round");
+  await as(A, () => q(`select party_reset($1)`, [ml.room_id]));
+  const reset = await as(B, () => q(`select r.state, sum(p.score)::int total, count(*)::int n from party_rooms r join party_players p on p.room_id = r.id where r.id = $1 group by r.state`, [ml.room_id]));
+  ok(reset[0].state === "lobby" && reset[0].total === 0 && reset[0].n === 3, "party: play again keeps the players and clears the scores");
+
+  // Closest Wins
+  const es = await create("estimate");
+  const esB = await join(B, "estimate", es.code, "Bob");
+  const esC = await join(C, "estimate", es.code, "Cy");
+  await as(A, () => q(`select party_start($1, 3)`, [es.room_id]));
+  const [r1] = await as(A, () => q(`select * from party_rounds where room_id = $1 and round_number = 1`, [es.room_id]));
+  ok(r1.answer === null, "party: the right answer is hidden during the round");
+  const right = Number((await q(`select answer from party_prompts where id = $1`, [r1.prompt_id]))[0].answer);
+  ok((await as(A, () => q(`select * from party_prompts`))).length === 0, "party: the question bank is unreadable");
+  ok(/Enter a number/.test(await as(A, () => fails(q(`select party_answer($1, null, null)`, [es.room_id])))), "party: a guess must be a number");
+  await as(A, () => q(`select party_answer($1, null, $2)`, [es.room_id, right]));
+  await as(B, () => q(`select party_answer($1, null, $2)`, [es.room_id, right + 10]));
+  await as(C, () => q(`select party_answer($1, null, $2)`, [es.room_id, right - 10]));
+  const [r1after] = await as(B, () => q(`select * from party_rounds where id = $1`, [r1.id]));
+  ok(r1after.revealed && Number(r1after.answer) === right, "party: the answer is shown after the reveal");
+  const pts = Object.fromEntries((await as(B, () => q(`select player_id, points from party_answers where round_id = $1`, [r1.id]))).map((a) => [a.player_id, a.points]));
+  ok(pts[es.player_id] === 3 && pts[esB.player_id] === 2 && pts[esC.player_id] === 2, `party: closest gets 3, equal distances share 2 ${JSON.stringify(pts)}`);
+
+  // Leaving: the host role passes on.
+  await as(A, () => q(`select party_leave($1)`, [es.room_id]));
+  ok((await as(B, () => q(`select host_player_id from party_rooms where id = $1`, [es.room_id])))[0].host_player_id === esB.player_id, "party: when the host leaves, the next player becomes host");
+}
+
 // --- Housekeeping --------------------------------------------------------------
 ok(!!(await as(A, () => fails(q(`select picklo_cleanup()`)))), "players cannot call cleanup");
 await db.exec(`alter table rooms disable trigger rooms_updated_at; update rooms set created_at = now() - interval '2 days', updated_at = now() - interval '2 days'; alter table rooms enable trigger rooms_updated_at;`);

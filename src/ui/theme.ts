@@ -26,6 +26,9 @@ export const gameAccents = {
   chicago: "#A78BFA",
   musicQuiz: "#22C55E",
   trivia: "#F97316",
+  mostLikely: "#EC4899",
+  estimate: "#14B8A6",
+  charades: "#84CC16",
 } as const;
 
 export const radius = {

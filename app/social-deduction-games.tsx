@@ -61,7 +61,7 @@ export default function SocialDeductionGamesPage() {
           exploreTitle: "Hitta mer att spela",
           topics: [
             { href: "/party-games", title: "Partyspel", description: "Alla spel på Picklo samlade på ett ställe.", accentColor: colors.brand },
-            { href: "/quiz-games", title: "Quizspel", description: "Trivia och Music Quiz när ni vill tävla om poäng.", accentColor: gameAccents.musicQuiz },
+            { href: "/quiz-games", title: "Quizspel", description: "Trivia, Closest Wins och Music Quiz när ni vill tävla om poäng.", accentColor: gameAccents.musicQuiz },
           ],
         }
       : {
@@ -107,7 +107,7 @@ export default function SocialDeductionGamesPage() {
           exploreTitle: "Find more to play",
           topics: [
             { href: "/party-games", title: "Party Games", description: "Every game on Picklo in one place.", accentColor: colors.brand },
-            { href: "/quiz-games", title: "Quiz Games", description: "Trivia and Music Quiz for when you want to compete for points.", accentColor: gameAccents.musicQuiz },
+            { href: "/quiz-games", title: "Quiz Games", description: "Trivia, Closest Wins and Music Quiz for when you want to compete for points.", accentColor: gameAccents.musicQuiz },
           ],
         };
 

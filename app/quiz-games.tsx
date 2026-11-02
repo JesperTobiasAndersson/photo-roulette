@@ -12,7 +12,7 @@ import { siteUrl } from "../src/lib/site";
 
 const PATH = "/quiz-games";
 const ACCENT = gameAccents.musicQuiz;
-const TOPIC_GAMES: GameId[] = ["trivia", "musicQuiz"];
+const TOPIC_GAMES: GameId[] = ["trivia", "estimate", "musicQuiz"];
 
 export default function QuizGamesPage() {
   const { language } = useI18n();

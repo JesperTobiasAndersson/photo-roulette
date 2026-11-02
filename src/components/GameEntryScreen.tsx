@@ -16,8 +16,9 @@ type RoomTarget = { pathname: string; params: Record<string, string> };
 
 type GameEntryScreenProps = {
   gameId: GameId;
-  createRoom: (name: string) => Promise<RoomTarget>;
-  joinRoom: (code: string, name: string) => Promise<RoomTarget>;
+  /** Omitted for one-phone-only games (then `localHref` is required). */
+  createRoom?: (name: string) => Promise<RoomTarget>;
+  joinRoom?: (code: string, name: string) => Promise<RoomTarget>;
   /** Small print under the form (e.g. image-usage consent). */
   notice?: string;
   /** Route of the one-phone ("pass the phone") version, for games that support it. */
@@ -89,6 +90,7 @@ export function GameEntryScreen({ gameId, createRoom, joinRoom, notice, localHre
     setError(null);
     setLoading(true);
     try {
+      if (!createRoom || !joinRoom) return;
       await ensureSession();
       const target = mode === "create" ? await createRoom(trimmedName) : await joinRoom(trimmedCode, trimmedName);
       rememberName();
@@ -135,83 +137,98 @@ export function GameEntryScreen({ gameId, createRoom, joinRoom, notice, localHre
       </View>
       <Text style={[type.body, { color: colors.textSecondary, marginTop: -space.xs }]}>{game.tagline[language]}</Text>
 
+      {/* Play on one phone (games without online rooms) */}
+      {!createRoom && localHref ? (
+        <Card accent={accent} style={{ gap: space.md }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+            <Ionicons name="phone-portrait-outline" size={24} color={accent} />
+            <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 15, lineHeight: 21 }}>
+              {language === "sv" ? "Ni behöver bara en telefon. Ingen rumskod och ingen inloggning." : "All you need is one phone. No room code, no sign-in."}
+            </Text>
+          </View>
+          <Button label={language === "sv" ? "Spela" : "Play"} icon="play" accent={accent} onPress={() => router.push(localHref as any)} />
+        </Card>
+      ) : null}
+
       {/* Create / join */}
-      <Card accent={accent}>
-        <SegmentedControl
-          value={mode}
-          onChange={(next) => {
-            setMode(next);
-            setError(null);
-          }}
-          accent={accent}
-          disabled={loading}
-          options={[
-            { value: "create", label: t("common.new_room") },
-            { value: "join", label: t("common.join_room") },
-          ]}
-        />
+      {createRoom ? (
+        <Card accent={accent}>
+          <SegmentedControl
+            value={mode}
+            onChange={(next) => {
+              setMode(next);
+              setError(null);
+            }}
+            accent={accent}
+            disabled={loading}
+            options={[
+              { value: "create", label: t("common.new_room") },
+              { value: "join", label: t("common.join_room") },
+            ]}
+          />
 
-        <TextField
-          label={t("common.name")}
-          value={name}
-          onChangeText={(value) => {
-            setName(value);
-            if (error) setError(null);
-          }}
-          placeholder={t("common.name_placeholder")}
-          autoComplete="nickname"
-          maxLength={24}
-          returnKeyType={mode === "join" ? "next" : "go"}
-          onSubmitEditing={mode === "create" ? submit : undefined}
-          accent={accent}
-        />
-
-        {mode === "join" ? (
           <TextField
-            code
-            label={t("common.room_code")}
-            value={code}
+            label={t("common.name")}
+            value={name}
             onChangeText={(value) => {
-              setCode(value.toUpperCase());
+              setName(value);
               if (error) setError(null);
             }}
-            placeholder="ABCD"
-            returnKeyType="go"
-            onSubmitEditing={submit}
+            placeholder={t("common.name_placeholder")}
+            autoComplete="nickname"
+            maxLength={24}
+            returnKeyType={mode === "join" ? "next" : "go"}
+            onSubmitEditing={mode === "create" ? submit : undefined}
             accent={accent}
           />
-        ) : null}
 
-        {error ? (
-          <View
-            accessibilityRole="alert"
-            style={{
-              flexDirection: "row",
-              gap: space.sm,
-              padding: space.md,
-              borderRadius: radius.md,
-              backgroundColor: withAlpha(colors.danger, 0.12),
-            }}
-          >
-            <Ionicons name="alert-circle" size={20} color={colors.danger} />
-            <Text style={{ color: colors.danger, flex: 1, fontSize: 15, lineHeight: 21, fontWeight: "600" }}>{error}</Text>
-          </View>
-        ) : null}
+          {mode === "join" ? (
+            <TextField
+              code
+              label={t("common.room_code")}
+              value={code}
+              onChangeText={(value) => {
+                setCode(value.toUpperCase());
+                if (error) setError(null);
+              }}
+              placeholder="ABCD"
+              returnKeyType="go"
+              onSubmitEditing={submit}
+              accent={accent}
+            />
+          ) : null}
 
-        <Button
-          label={mode === "create" ? t("common.create_room") : t("common.join_room")}
-          icon={mode === "create" ? "add-circle" : "enter"}
-          accent={accent}
-          loading={loading}
-          disabled={!trimmedName || (mode === "join" && !trimmedCode)}
-          onPress={submit}
-        />
+          {error ? (
+            <View
+              accessibilityRole="alert"
+              style={{
+                flexDirection: "row",
+                gap: space.sm,
+                padding: space.md,
+                borderRadius: radius.md,
+                backgroundColor: withAlpha(colors.danger, 0.12),
+              }}
+            >
+              <Ionicons name="alert-circle" size={20} color={colors.danger} />
+              <Text style={{ color: colors.danger, flex: 1, fontSize: 15, lineHeight: 21, fontWeight: "600" }}>{error}</Text>
+            </View>
+          ) : null}
 
-        {notice ? <Text style={{ color: colors.textSubtle, fontSize: 13, lineHeight: 18, textAlign: "center" }}>{notice}</Text> : null}
-      </Card>
+          <Button
+            label={mode === "create" ? t("common.create_room") : t("common.join_room")}
+            icon={mode === "create" ? "add-circle" : "enter"}
+            accent={accent}
+            loading={loading}
+            disabled={!trimmedName || (mode === "join" && !trimmedCode)}
+            onPress={submit}
+          />
+
+          {notice ? <Text style={{ color: colors.textSubtle, fontSize: 13, lineHeight: 18, textAlign: "center" }}>{notice}</Text> : null}
+        </Card>
+      ) : null}
 
       {/* One phone for the whole group */}
-      {localHref ? (
+      {createRoom && localHref ? (
         <Card>
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
             <View

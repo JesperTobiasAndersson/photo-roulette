@@ -64,7 +64,7 @@ export default function PartyGamesPage() {
           exploreTitle: "Hitta mer att spela",
           topics: [
             { href: "/social-deduction-games", title: "Bluffspel", description: "Mafia och Imposter: dolda roller, bluff och misstankar.", accentColor: gameAccents.mafia },
-            { href: "/quiz-games", title: "Quizspel", description: "Trivia och Music Quiz: frågor, låtar och poängjakt.", accentColor: gameAccents.musicQuiz },
+            { href: "/quiz-games", title: "Quizspel", description: "Trivia, Closest Wins och Music Quiz: frågor, gissningar, låtar och poängjakt.", accentColor: gameAccents.musicQuiz },
           ],
         }
       : {
@@ -114,7 +114,7 @@ export default function PartyGamesPage() {
           exploreTitle: "Find more to play",
           topics: [
             { href: "/social-deduction-games", title: "Social Deduction Games", description: "Mafia and Imposter: hidden roles, bluffing and suspicion.", accentColor: gameAccents.mafia },
-            { href: "/quiz-games", title: "Quiz Games", description: "Trivia and Music Quiz: questions, songs and points.", accentColor: gameAccents.musicQuiz },
+            { href: "/quiz-games", title: "Quiz Games", description: "Trivia, Closest Wins and Music Quiz: questions, guesses, songs and points.", accentColor: gameAccents.musicQuiz },
           ],
         };
 
