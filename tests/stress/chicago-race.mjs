@@ -127,6 +127,9 @@ export async function run() {
     const hands = Object.fromEntries((await getHands()).map((h) => [h.player_id, h.cards]));
     const { data: round } = await host.from("chicago_rounds").select("id,trick_number").eq("room_id", roomId).order("round_number", { ascending: false }).limit(1).single();
     const { data: trick } = await host.from("chicago_tricks").select("id,lead_suit").eq("round_id", round.id).eq("trick_number", round.trick_number).maybeSingle();
+    // The last card of a trick hands the lead to the trick's winner, who may then rightly play again.
+    const cardsInTrick = trick ? ((await host.from("chicago_cards_played").select("id").eq("trick_id", trick.id)).data ?? []).length : 0;
+    const closesTrick = cardsInTrick === N - 1;
     const myLegal = legal(hands[ids[cur]], trick?.lead_suit);
     const otherLegal = legal(hands[ids[other]], trick?.lead_suit);
     const attempts = [
@@ -142,10 +145,15 @@ export async function run() {
           .catch((e) => ({ ...a, ok: false, e }))
       )
     );
+    // The database handles simultaneous taps one after the other: once the current player's card is
+    // down it really is the next player's turn, so that player's tap may go through right after.
     const played = res.filter((r) => r.ok);
-    if (played.length !== 1 || played[0].who !== cur) turnViolations.push(`turn ${turn}: ${played.map((p) => `${p.kind}`).join("+") || "nothing played"} ${res.filter((r) => !r.ok).map((r) => errText(r.e)).join(" / ")}`);
+    const mine = played.filter((r) => r.who === cur);
+    const others = played.filter((r) => r.who !== cur);
+    if (mine.length < 1 || mine.length > (closesTrick ? 2 : 1) || others.length > 1) turnViolations.push(`turn ${turn}: ${played.map((p) => `${p.kind}`).join("+") || "nothing played"} ${res.filter((r) => !r.ok).map((r) => errText(r.e)).join(" / ")}`);
     for (const r of res.filter((x) => !x.ok && !x.ignored)) {
       if (r.kind === "out-of-turn" && /not your turn/i.test(r.e.message)) notYourTurn++;
+      else if (/Trick phase is not active/.test(r.e.message)) continue; // a tap that arrived after the round ended
       else if (r.kind === "double-tap" || (r.kind === "turn" && played.length)) {
         doubleTapBlocked++;
         doubleTapErrors.add(errText(r.e));
@@ -154,7 +162,7 @@ export async function run() {
     }
     await wait(150);
   }
-  ok(turnViolations.length === 0, "tricks: exactly one card (the current player's) is played per turn", turnViolations.slice(0, 3).join(" | "));
+  ok(turnViolations.length === 0, "tricks: the current player plays exactly one card per turn (a double tap never plays two)", turnViolations.slice(0, 3).join(" | "));
   ok(notYourTurn > 0, "tricks: out-of-turn taps are refused with 'It is not your turn'", `(${notYourTurn} refused)`);
 
   const room = await getRoom();

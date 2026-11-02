@@ -13,9 +13,9 @@ touches the database, so it also runs against a dev server started without a rea
 Stress and e2e tests create rooms in the live database; the daily cleanup removes them after 24 h
 of inactivity. Screenshots from e2e runs land in `tests/artifacts/` (git-ignored).
 
-## Known, accepted failures
+## Secrets inside a room
 
-`test:stress` → `abuse` reports 4 failures on purpose: players who use browser developer tools can
-read secret game data inside their own room (Mafia roles, the Imposter word, Chicago hands) and set
-their own Chicago score. Normal play never shows it; fixing it means moving those games' rules into
-database functions. Outsiders can't see anything.
+Imposter words, Mafia roles and night actions, and Chicago hands and the deck are dealt and
+resolved by database functions (`supabase/migrations/20261102*`); each phone can only read its own
+secrets, and scores, turns and results only change on the server. `test:stress` → `abuse` checks
+this against the live project, and the e2e tests read the database the same way a phone does.

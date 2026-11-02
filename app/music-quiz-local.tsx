@@ -7,7 +7,8 @@ import { LocalScoreboard, LocalTopBar, PlayerNamesEditor, useRememberedPlayerNam
 import { localPlayerId, useLocalGame } from "../src/games/local/useLocalGame";
 import { loadMusicQuizLibrary } from "../src/games/music-quiz/api";
 import type { MusicQuizLibraryEntry } from "../src/games/music-quiz/data";
-import { loadSpotifyTrackPreview, openSpotifyTrack } from "../src/games/music-quiz/spotify";
+import { openSpotifyTrack } from "../src/games/music-quiz/openSpotify";
+import { loadSpotifyTrackPreview } from "../src/games/music-quiz/spotify";
 import type { MusicQuizPromptType, MusicQuizSongPool } from "../src/games/music-quiz/types";
 import { useI18n } from "../src/lib/i18n";
 import { showAlert } from "../src/lib/notify";

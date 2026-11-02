@@ -104,7 +104,7 @@ export function declareChicago(roomId: string, _playerId: string) {
 
 /** A double tap is harmless: the database ignores a card that was already played. */
 export function playChicagoCard(roomId: string, _playerId: string, card: ChicagoCard) {
-  return call("chicago_play_card", { p_room: roomId, p_card: card });
+  return call("chicago_play_card", { p_room: roomId, p_card: card ?? null });
 }
 
 export async function getChicagoPublicState(roomId: string) {
