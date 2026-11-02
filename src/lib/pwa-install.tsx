@@ -152,7 +152,7 @@ export const PWAInstall: React.FC<PWAInstallProps> = ({ children }) => {
           gap: space.md,
         }}
       >
-        <Image source={require("../../assets/icon.png")} style={{ width: 44, height: 44, borderRadius: 12 }} />
+        <Image source={require("../../assets/logo.webp")} style={{ width: 44, height: 44, borderRadius: 12 }} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={{ color: colors.text, fontSize: 15, fontWeight: "800" }}>{t("pwa.title")}</Text>
           <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>

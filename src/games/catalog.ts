@@ -30,7 +30,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     href: "/picklo",
     title: "MemeMatch",
     accent: gameAccents.memematch,
-    icon: require("../../assets/Memematch.png"),
+    icon: require("../../assets/Memematch.webp"),
     players: "3–12",
     tagline: {
       en: "Match the funniest photo to the statement.",
@@ -74,7 +74,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     href: "/mafia",
     title: "Mafia",
     accent: gameAccents.mafia,
-    icon: require("../../assets/mafia.png"),
+    icon: require("../../assets/mafia.webp"),
     players: "5–20",
     tagline: {
       en: "Secret roles, night kills and day votes. No narrator needed.",
@@ -118,7 +118,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     href: "/imposter",
     title: "Imposter",
     accent: gameAccents.imposter,
-    icon: require("../../assets/imposter.png"),
+    icon: require("../../assets/imposter.webp"),
     players: "4–12",
     tagline: {
       en: "Everyone shares a secret word, except the imposter.",
@@ -162,7 +162,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     href: "/chicago",
     title: "Chicago",
     accent: gameAccents.chicago,
-    icon: require("../../assets/chicago.png"),
+    icon: require("../../assets/chicago.webp"),
     players: "2–6",
     tagline: {
       en: "The Swedish card classic: poker hands, tricks and a bold final call.",
@@ -206,7 +206,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     href: "/music-quiz",
     title: "Music Quiz",
     accent: gameAccents.musicQuiz,
-    icon: require("../../assets/musicquiz.png"),
+    icon: require("../../assets/musicquiz.webp"),
     players: "2–20",
     tagline: {
       en: "Guess the song. The host plays it on Spotify.",
@@ -250,7 +250,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     href: "/trivia",
     title: "Trivia",
     accent: gameAccents.trivia,
-    icon: require("../../assets/trivia.png"),
+    icon: require("../../assets/trivia.webp"),
     players: "2–12",
     tagline: {
       en: "Pick a category, answer out loud, let the host judge.",

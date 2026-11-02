@@ -106,7 +106,7 @@ export default function GameLibraryHome() {
 
       {/* Brand bar */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-        <Image source={require("../assets/icon.png")} style={{ width: 40, height: 40, borderRadius: 12 }} />
+        <Image source={require("../assets/logo.webp")} style={{ width: 40, height: 40, borderRadius: 12 }} />
         <Text style={{ color: colors.text, fontSize: 22, fontWeight: "900", flex: 1 }}>Picklo</Text>
         <LanguageSwitch />
       </View>
