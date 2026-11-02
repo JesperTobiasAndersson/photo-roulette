@@ -1,8 +1,10 @@
 # Running Picklo (free)
 
 Picklo is a static web app (Expo / React Native Web) backed by Supabase.
-Everything below fits in free tiers: **Supabase Free**, **Vercel Hobby** (fine now that
-the site has no ads) and **GitHub Actions**. The only optional cost is a custom domain.
+Everything below fits in free tiers: **Supabase Free** and **GitHub Actions**. Hosting is
+static: Vercel Hobby is for non-commercial sites only, so with AdSense on the site it needs
+**Vercel Pro** (or a host that allows commercial use on its free tier). The only other
+optional cost is a custom domain.
 
 ## 1. Supabase project (≈10 min)
 
