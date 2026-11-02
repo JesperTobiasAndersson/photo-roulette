@@ -43,8 +43,8 @@ export function useMafiaRoom(roomId: string, playerId: string): MafiaRoomState {
     }
     const [{ data: roomData }, { data: publicPlayers }, { data: selfPlayer }] = await Promise.all([
       supabase.from("mafia_rooms").select("*").eq("id", roomId).single(),
-      supabase.from("mafia_room_players").select("id,room_id,display_name,seat_order,status,role_reveal_ready,discussion_ready").eq("room_id", roomId).order("seat_order"),
-      supabase.from("mafia_room_players").select("id,room_id,display_name,seat_order,status,role_reveal_ready,discussion_ready").eq("room_id", roomId).eq("id", playerId).single(),
+      supabase.from("mafia_room_players").select("id,room_id,display_name,seat_order,status,role_reveal_ready,discussion_ready,night_action_confirmed").eq("room_id", roomId).order("seat_order"),
+      supabase.from("mafia_room_players").select("id,room_id,display_name,seat_order,status,role_reveal_ready,discussion_ready,night_action_confirmed").eq("room_id", roomId).eq("id", playerId).single(),
     ]);
     if (stale()) return newer();
 

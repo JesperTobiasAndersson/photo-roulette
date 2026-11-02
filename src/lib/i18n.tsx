@@ -357,6 +357,7 @@ const SERVER_MESSAGES_SV: Record<string, string> = {
   "Chicago requires 2 to 6 active players": "Chicago kräver 2 till 6 aktiva spelare",
   "No active round": "Ingen aktiv runda",
   "Choose cards that are actually in your hand": "Välj kort som faktiskt finns i din hand",
+  "You already exchanged cards this time": "Du har redan bytt kort den här gången",
   "Not enough cards left in the deck": "Det finns inte tillräckligt med kort kvar i leken",
   "No hands found": "Inga händer hittades",
   "Could not determine poker winner": "Kunde inte avgöra vem som vann pokerhanden",

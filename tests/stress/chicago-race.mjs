@@ -1,8 +1,8 @@
 // Scenario 5 — Chicago concurrent actions (5 phones, the app's own chicago/api.ts).
-// - All phones press "Exchange" at the same instant in each of the 3 draw phases. The api serialises
-//   draws with a lock on chicago_rooms.phase_ends_at (8 tries × 120 ms); phones that lose get an error
-//   and (like a real player) tap again. We count how many first taps fail and check the cards stay
-//   consistent (no duplicates, 5 cards each, nothing lost).
+// - All phones press "Exchange" at the same instant in each of the 3 draw phases. The database queues
+//   the exchanges (row lock on the room); no tap may fail, and the cards must stay consistent (no card
+//   in two places, 5 cards each). Each phone can only read its own hand and exchanges, so the check
+//   combines what every phone sees; the deck itself is unreadable.
 // - Every phone fires advanceChicagoPokerScore at once (the app auto-schedules it on every phone):
 //   points must be awarded exactly once.
 // - Tricks: on every turn the current player AND another player tap a card at the same time, and the
@@ -32,18 +32,20 @@ export async function run() {
 
   await timed("chicago: startChicagoRound", () => as(0, () => api.startChicagoRound(roomId, ids[0])));
 
-  const getHands = async () => (await host.from("chicago_player_hands").select("player_id,cards").eq("room_id", roomId)).data ?? [];
+  // Every phone reads its own hand (the others' are private).
+  const getHands = async () =>
+    (await Promise.all(phones.map(async (p) => (await p.from("chicago_player_hands").select("player_id,cards").eq("room_id", roomId).maybeSingle()).data))).filter(Boolean);
   const getRoom = async () => (await host.from("chicago_rooms").select("*").eq("id", roomId).single()).data;
   const getScores = async () =>
     Object.fromEntries(((await host.from("chicago_room_players").select("id,score").eq("room_id", roomId)).data ?? []).map((p) => [p.id, p.score]));
 
   async function checkCards(label) {
     const hands = await getHands();
-    const { data: round } = await host.from("chicago_rounds").select("id,deck").eq("room_id", roomId).order("round_number", { ascending: false }).limit(1).single();
-    const { data: draws } = await host.from("chicago_draw_actions").select("discarded_cards").eq("round_id", round.id);
-    const all = [...hands.flatMap((h) => h.cards), ...round.deck, ...(draws ?? []).flatMap((d) => d.discarded_cards)].map(logic.cardId);
+    const { data: round } = await host.from("chicago_rounds").select("id").eq("room_id", roomId).order("round_number", { ascending: false }).limit(1).single();
+    const draws = (await Promise.all(phones.map(async (p) => (await p.from("chicago_draw_actions").select("discarded_cards").eq("round_id", round.id)).data ?? []))).flat();
+    const all = [...hands.flatMap((h) => h.cards), ...draws.flatMap((d) => d.discarded_cards)].map(logic.cardId);
     ok(hands.length === N && hands.every((h) => h.cards.length === 5), `${label}: every hand has 5 cards`, hands.map((h) => h.cards.length).join(","));
-    ok(all.length === 52 && new Set(all).size === 52, `${label}: 52 unique cards across hands, deck and discards`, `(total ${all.length}, unique ${new Set(all).size})`);
+    ok(new Set(all).size === all.length, `${label}: no card is in two places (hands and thrown cards)`, `(total ${all.length}, unique ${new Set(all).size})`);
   }
 
   async function drawPhase(n, nextState, discards) {
@@ -169,14 +171,10 @@ export async function run() {
   const last = tricks?.[tricks.length - 1];
   const byPlayer = new Map();
   (cards ?? []).forEach((c) => byPlayer.set(c.player_id, [...(byPlayer.get(c.player_id) ?? []), c.card]));
-  let best = null;
-  for (const [pid, cs] of byPlayer) {
-    const ev = logic.evaluatePokerHand(cs);
-    if (!best || logic.comparePokerEvaluations(ev, best.ev) > 0) best = { pid, ev };
-  }
+  const { winner: best, tied } = logic.getPokerWinnerWithTie([...byPlayer].map(([playerId, cs]) => ({ playerId, cards: cs })));
   const expected = Object.fromEntries(ids.map((id) => [id, 0]));
   if (last?.winner_player_id) expected[last.winner_player_id] += 5;
-  if (best && best.ev.points > 0) expected[best.pid] += best.ev.points;
+  if (best && !tied && best.evaluation.points > 0) expected[best.playerId] += best.evaluation.points;
   const after = await getScores();
   const deltas = ids.map((id) => after[id] - scoresBeforeTricks[id]);
   ok(ids.every((id, k) => deltas[k] === expected[id]), "tricks: round scoring applied exactly once", `(expected ${ids.map((id) => expected[id]).join(",")} got ${deltas.join(",")})`);

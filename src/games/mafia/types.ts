@@ -30,6 +30,8 @@ export type MafiaPlayerDto = {
   status: "alive" | "eliminated";
   role_reveal_ready: boolean;
   discussion_ready: boolean;
+  /** Confirmed tonight's (possibly dummy) action. Public: it says nothing about the role. */
+  night_action_confirmed: boolean;
 };
 
 export type MafiaRoleDto = {

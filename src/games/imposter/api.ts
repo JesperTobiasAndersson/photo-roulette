@@ -1,6 +1,5 @@
 import { joinRoomByCode, supabase } from "../../lib/supabase";
-import { assignImposterRoles, getWinnerAfterElimination, pickPromptForCategory, resolveVotes } from "./logic";
-import type { ImposterPlayerDto, ImposterRoleDto, ImposterRoomDto, ImposterVoteDto } from "./types";
+import type { ImposterPlayerDto, ImposterRoomDto } from "./types";
 
 function makeRoomCode(length = 4) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -71,79 +70,16 @@ export async function updateImposterCategory(roomId: string, playerId: string, c
 }
 
 /** "Play again": same room and players back in the lobby; a new word is dealt on start. */
-export async function returnImposterToLobby(roomId: string, playerId: string) {
-  const room = await requireHost(roomId, playerId);
-  const { error: roomError } = await supabase
-    .from("imposter_rooms")
-    .update({
-      state: "lobby",
-      winner: null,
-      phase_ends_at: null,
-      phase_number: room.phase_number + 1,
-      public_message: "Waiting for players to join.",
-    })
-    .eq("id", roomId);
-  if (roomError) throw roomError;
-  const { error: playersError } = await supabase
-    .from("imposter_room_players")
-    .update({ status: "alive", role_reveal_ready: false, discussion_ready: false })
-    .eq("room_id", roomId);
-  if (playersError) throw playersError;
-  // The previous game's cards and votes go now, so no phone can show an old card in the next game.
-  // (secret_prompt stays on the room until the next start, which uses it to deal a different word.)
-  const { error: clearRolesError } = await supabase.from("imposter_player_roles").delete().eq("room_id", roomId);
-  if (clearRolesError) throw clearRolesError;
-  const { error: clearVotesError } = await supabase.from("imposter_votes").delete().eq("room_id", roomId);
-  if (clearVotesError) throw clearVotesError;
+export async function returnImposterToLobby(roomId: string, _playerId: string) {
+  const { error } = await supabase.rpc("imposter_return_to_lobby", { p_room: roomId });
+  if (error) throw error;
 }
 
-export async function startImposterGame(roomId: string, playerId: string) {
-  const room = await requireHost(roomId, playerId);
-  const players = await getRoomPlayers(roomId);
-  if (players.length < 3) throw new Error("At least 3 players are required");
-  if (!room.category_id) throw new Error("Choose a category first");
-
-  // Don't deal the same word twice in a row (the room still holds the previous game's word).
-  const prompt = pickPromptForCategory(room.category_id, room.secret_prompt);
-  const { roles } = assignImposterRoles(
-    players.map((player) => player.id),
-    prompt
-  );
-
-  const { error: clearRolesError } = await supabase.from("imposter_player_roles").delete().eq("room_id", roomId);
-  if (clearRolesError) throw clearRolesError;
-  const { error: clearVotesError } = await supabase.from("imposter_votes").delete().eq("room_id", roomId);
-  if (clearVotesError) throw clearVotesError;
-
-  const { error: rolesError } = await supabase.from("imposter_player_roles").insert(
-    players.map((player) => ({
-      player_id: player.id,
-      room_id: roomId,
-      role: roles[player.id].role,
-      prompt: roles[player.id].prompt,
-      revealed_at: null,
-    }))
-  );
-  if (rolesError) throw rolesError;
-
-  const { error: playersResetError } = await supabase
-    .from("imposter_room_players")
-    .update({ status: "alive", role_reveal_ready: false, discussion_ready: false })
-    .eq("room_id", roomId);
-  if (playersResetError) throw playersResetError;
-
-  const { error: roomError } = await supabase
-    .from("imposter_rooms")
-    .update({
-      state: "role_reveal",
-      secret_prompt: prompt,
-      phase_number: room.phase_number + 1,
-      phase_ends_at: null,
-      winner: null,
-      public_message: "Roles assigned. Reveal your card privately.",
-    })
-    .eq("id", roomId);
-  if (roomError) throw roomError;
+// The database picks the word and the imposter, so no phone (not even the host's) knows
+// anyone else's card. It also checks the host, the player count and the category.
+export async function startImposterGame(roomId: string, _playerId: string) {
+  const { error } = await supabase.rpc("imposter_start_game", { p_room: roomId });
+  if (error) throw error;
 }
 
 export async function finishImposterReveal(roomId: string, playerId: string) {
@@ -246,65 +182,8 @@ export async function submitImposterVote(roomId: string, playerId: string, targe
   if (error) throw error;
 }
 
-export async function resolveImposterVoting(roomId: string, playerId: string) {
-  const room = await requireHost(roomId, playerId);
-  if (room.state !== "voting") throw new Error("Voting is not active");
-
-  const [{ data: votes, error: votesError }, { data: roles, error: rolesError }, { data: players, error: playersError }] = await Promise.all([
-    supabase.from("imposter_votes").select("*").eq("room_id", roomId).eq("phase_number", room.phase_number),
-    supabase.from("imposter_player_roles").select("*").eq("room_id", roomId),
-    supabase.from("imposter_room_players").select("*").eq("room_id", roomId).order("seat_order"),
-  ]);
-  if (votesError) throw votesError;
-  if (rolesError) throw rolesError;
-  if (playersError) throw playersError;
-
-  const result = resolveVotes((votes as ImposterVoteDto[]) ?? [], (roles as ImposterRoleDto[]) ?? []);
-  const playerRows = (players as ImposterPlayerDto[]) ?? [];
-  const winner = getWinnerAfterElimination(playerRows, (roles as ImposterRoleDto[]) ?? [], result.eliminatedPlayerId);
-
-  if (result.eliminatedPlayerId) {
-    const { error: eliminateError } = await supabase
-      .from("imposter_room_players")
-      .update({ status: "eliminated" })
-      .eq("id", result.eliminatedPlayerId)
-      .eq("room_id", roomId);
-    if (eliminateError) throw eliminateError;
-  }
-
-  if (winner) {
-    const { error } = await supabase
-      .from("imposter_rooms")
-      .update({
-        state: "ended",
-        winner,
-        phase_number: room.phase_number + 1,
-        phase_ends_at: null,
-        public_message: winner === "crew" ? result.summary : "Only two players remain. The imposter takes the win.",
-      })
-      .eq("id", roomId);
-    if (error) throw error;
-    return;
-  }
-
-  const { error: resetReadyError } = await supabase
-    .from("imposter_room_players")
-    .update({ discussion_ready: false })
-    .eq("room_id", roomId)
-    .eq("status", "alive");
-  if (resetReadyError) throw resetReadyError;
-
-  const { error } = await supabase
-    .from("imposter_rooms")
-    .update({
-      state: "discussion",
-      winner: null,
-      phase_number: room.phase_number + 1,
-      phase_ends_at: futureIso(DISCUSSION_MS),
-      public_message: result.eliminatedPlayerId
-        ? "The group voted out the wrong player. The game continues."
-        : "Nobody was eliminated. Keep discussing.",
-    })
-    .eq("id", roomId);
+// Counted by the database, which is the only place that knows who the imposter is.
+export async function resolveImposterVoting(roomId: string, _playerId: string) {
+  const { error } = await supabase.rpc("imposter_resolve_voting", { p_room: roomId });
   if (error) throw error;
 }

@@ -259,16 +259,11 @@ ok(/GAME_ALREADY_STARTED/.test(await as(C, () => fails(q(`select join_room('mafi
 ok(!!(await as(B, async () => (await q(`select join_room('mafia', 'MAFI', 'Bob')`)).length)), "…but an existing player can rejoin it");
 ok((await as(C, () => q(`select * from mafia_player_roles`))).length === 0, "outsider cannot read mafia roles");
 
-// --- Chicago: nested tables resolve membership via round / trick -------------
-const chi = await as(A, async () => {
+// --- Chicago: join limit; game state is only written by the server ----------------
+await as(A, async () => {
   const [r] = await q(`insert into chicago_rooms (code) values ('CHIC') returning *`);
-  const [p] = await q(`insert into chicago_room_players (room_id, display_name, seat_order) values ($1, 'Alice', 1) returning *`, [r.id]);
-  const [rd] = await q(`insert into chicago_rounds (room_id, round_number, dealer_player_id, active_phase) values ($1, 1, $2, 'trick_phase') returning *`, [r.id, p.id]);
-  const [t] = await q(`insert into chicago_tricks (round_id, trick_number) values ($1, 1) returning *`, [rd.id]);
-  await q(`insert into chicago_cards_played (trick_id, player_id, card, play_order) values ($1, $2, '{"r":14,"s":"S"}', 1)`, [t.id, p.id]);
-  return { room: r, trick: t };
+  await q(`insert into chicago_room_players (room_id, display_name, seat_order) values ($1, 'Alice', 1)`, [r.id]);
 });
-ok((await as(A, () => q(`select * from chicago_cards_played where trick_id = $1`, [chi.trick.id]))).length === 1, "chicago member reads played cards");
 ok((await as(C, () => q(`select * from chicago_cards_played`))).length === 0, "outsider cannot read chicago cards");
 for (let i = 0; i < 5; i++) {
   const u = `00000000-0000-0000-0000-0000000001${String(i).padStart(2, "0")}`;
@@ -292,6 +287,198 @@ for (const [game, roomsTbl, playersTbl, code] of [
 }
 ok((await as(B, () => q(`select count(*)::int n from music_quiz_library`)))[0].n > 0, "music library readable by players");
 ok(!!(await as(B, () => fails(q(`insert into music_quiz_library (spotify_url, category) values ('x', 'hits')`)))), "music library is read-only");
+
+// --- Imposter: the server deals the word; phones only read their own card ---------
+{
+  const users = [A, B, C, D];
+  const room = await as(A, async () => {
+    const [r] = await q(`insert into imposter_rooms (code, category_id) values ('IMSE', 'celebrities') returning *`);
+    const [p] = await q(`insert into imposter_room_players (room_id, display_name, seat_order, auth_user_id) values ($1, 'Alice', 1, $2) returning *`, [r.id, A]);
+    await q(`update imposter_rooms set host_player_id = $1 where id = $2`, [p.id, r.id]);
+    return r;
+  });
+  for (const [i, u] of users.slice(1).entries()) await as(u, () => q(`select join_room('imposter', 'IMSE', $1)`, [`P${i}`]));
+  const me = async (u) => (await as(u, () => q(`select id from imposter_room_players where room_id = $1 and auth_user_id = $2`, [room.id, u])))[0].id;
+  const ids = Object.fromEntries(await Promise.all(users.map(async (u) => [u, await me(u)])));
+
+  ok(/Only the host/.test(await as(B, () => fails(q(`select imposter_start_game($1)`, [room.id])))), "imposter: only the host can start");
+  await as(A, () => q(`select imposter_start_game($1)`, [room.id]));
+  const cards = {};
+  for (const u of users) {
+    const seen = await as(u, () => q(`select player_id, role, prompt from imposter_player_roles where room_id = $1`, [room.id]));
+    ok(seen.length === 1 && seen[0].player_id === ids[u], `imposter: player ${u.slice(-1)} reads only their own card`);
+    cards[u] = seen[0];
+  }
+  const word = Object.values(cards).find((c) => c.role === "crew").prompt;
+  ok(Object.values(cards).filter((c) => c.role === "imposter").length === 1, "imposter: exactly one imposter is dealt");
+  ok(Object.values(cards).every((c) => (c.role === "imposter" ? c.prompt === null : c.prompt === word)), "imposter: crew share one word, the imposter gets none");
+  const imp = users.find((u) => cards[u].role === "imposter");
+  ok((await as(imp, () => q(`select secret_prompt from imposter_rooms where id = $1`, [room.id])))[0].secret_prompt === null, "imposter: the word is not on the room during the game");
+  ok((await as(imp, () => q(`select * from imposter_secrets`))).length === 0, "imposter: the word table is unreadable");
+  ok((await as(imp, () => q(`select * from imposter_words`))).length === 0, "imposter: the word lists are unreadable");
+  ok(/ONLY_SERVER/.test(await as(imp, () => fails(q(`update imposter_rooms set state = 'ended' where id = $1`, [room.id])))), "imposter: a phone can't fake 'game over' to see the cards");
+  ok(/ONLY_SERVER/.test(await as(B, () => fails(q(`update imposter_room_players set status = 'eliminated' where id = $1`, [ids[B]])))), "imposter: a phone can't change who is out");
+  await as(B, () => q(`update imposter_room_players set role_reveal_ready = true where id = $1`, [ids[C]]));
+  ok(!(await as(A, () => q(`select role_reveal_ready from imposter_room_players where id = $1`, [ids[C]])))[0].role_reveal_ready, "imposter: a player can't change another player's row");
+
+  await as(A, () => q(`update imposter_rooms set state = 'voting' where id = $1`, [room.id]));
+  const phase = (await as(A, () => q(`select phase_number from imposter_rooms where id = $1`, [room.id])))[0].phase_number;
+  ok(!!(await as(B, () => fails(q(`insert into imposter_votes (room_id, phase_number, voter_player_id, target_player_id) values ($1, $2, $3, $4)`, [room.id, phase, ids[C], ids[imp]])))), "imposter: can't vote as someone else");
+  for (const u of users.filter((x) => x !== imp)) {
+    await as(u, () => q(`insert into imposter_votes (room_id, phase_number, voter_player_id, target_player_id) values ($1, $2, $3, $4)`, [room.id, phase, ids[u], ids[imp]]));
+  }
+  ok(/Only the host/.test(await as(B, () => fails(q(`select imposter_resolve_voting($1)`, [room.id])))), "imposter: only the host resolves the vote");
+  await as(A, () => q(`select imposter_resolve_voting($1)`, [room.id]));
+  const end = (await as(B, () => q(`select state, winner, secret_prompt from imposter_rooms where id = $1`, [room.id])))[0];
+  ok(end.state === "ended" && end.winner === "crew" && end.secret_prompt === word, `imposter: voting out the imposter ends the game and reveals the word ${JSON.stringify(end)}`);
+  ok((await as(B, () => q(`select * from imposter_player_roles where room_id = $1`, [room.id]))).length === 4, "imposter: everyone's card is visible after the game");
+
+  await as(A, () => q(`select imposter_return_to_lobby($1)`, [room.id]));
+  await as(A, () => q(`select imposter_start_game($1)`, [room.id]));
+  const word2 = (await as(A, () => q(`select prompt from imposter_secrets where room_id = $1`, [room.id]).catch(() => []))).length;
+  const next = await q(`select prompt from imposter_secrets where room_id = $1`, [room.id]);
+  ok(word2 === 0 && next[0].prompt !== word, "imposter: play again deals a new word");
+}
+
+// --- Mafia: the server deals roles and resolves nights; phones see only their own ---
+{
+  const users = [A, B, C, D];
+  const room = await as(A, async () => {
+    const [r] = await q(`insert into mafia_rooms (code) values ('MASE') returning *`);
+    const [p] = await q(`insert into mafia_room_players (room_id, display_name, seat_order, auth_user_id) values ($1, 'Alice', 1, $2) returning *`, [r.id, A]);
+    await q(`update mafia_rooms set host_player_id = $1 where id = $2`, [p.id, r.id]);
+    return r;
+  });
+  for (const [i, u] of users.slice(1).entries()) await as(u, () => q(`select join_room('mafia', 'MASE', $1)`, [`P${i}`]));
+  const ids = {};
+  for (const u of users) ids[u] = (await as(u, () => q(`select id from mafia_room_players where room_id = $1 and auth_user_id = $2`, [room.id, u])))[0].id;
+
+  ok(/Only the host/.test(await as(B, () => fails(q(`select mafia_start_game($1)`, [room.id])))), "mafia: only the host can start");
+  await as(A, () => q(`select mafia_start_game($1)`, [room.id]));
+  const role = {};
+  for (const u of users) {
+    const seen = await as(u, () => q(`select player_id, role from mafia_player_roles where room_id = $1`, [room.id]));
+    ok(seen.length === 1 && seen[0].player_id === ids[u], `mafia: player ${u.slice(-1)} reads only their own role`);
+    role[u] = seen[0].role;
+  }
+  ok(JSON.stringify(Object.values(role).sort()) === JSON.stringify(["doctor", "mafia", "police", "villager"]), "mafia: 4 players get mafia, doctor, police, villager");
+  const by = (r) => users.find((u) => role[u] === r);
+  const [maf, doc, pol, vil] = ["mafia", "doctor", "police", "villager"].map(by);
+
+  await as(A, () => q(`update mafia_rooms set state = 'night' where id = $1`, [room.id]));
+  ok(!!(await as(vil, () => fails(q(`insert into mafia_night_actions (room_id, phase_number, actor_player_id, actor_role, target_player_id, confirmed) values ($1, 0, $2, 'mafia', $3, true)`, [room.id, ids[vil], ids[doc]])))), "mafia: a villager can't post a mafia kill directly");
+  await as(maf, () => q(`select mafia_submit_night_action($1, $2, true)`, [room.id, ids[vil]]));
+  await as(doc, () => q(`select mafia_submit_night_action($1, $2, true)`, [room.id, ids[vil]]));
+  await as(pol, () => q(`select mafia_submit_night_action($1, $2, true)`, [room.id, ids[maf]]));
+  await as(vil, () => q(`select mafia_submit_night_action($1, $2, true)`, [room.id, ids[doc]]));
+  for (const u of users) ok((await as(u, () => q(`select * from mafia_night_actions where room_id = $1`, [room.id]))).length === 1, `mafia: player ${u.slice(-1)} sees only their own night action`);
+  ok((await as(B, () => q(`select count(*)::int n from mafia_room_players where room_id = $1 and night_action_confirmed`, [room.id])))[0].n === 4, "mafia: 'has confirmed' is public for every player");
+  ok(/ONLY_SERVER/.test(await as(vil, () => fails(q(`update mafia_rooms set state = 'ended' where id = $1`, [room.id])))), "mafia: a phone can't fake 'game over' to see the roles");
+  ok(/ONLY_SERVER/.test(await as(A, () => fails(q(`update mafia_room_players set status = 'eliminated' where id = $1`, [ids[vil]])))), "mafia: even the host can't change who is out directly");
+
+  await as(A, () => q(`select mafia_resolve_night($1)`, [room.id]));
+  const night = (await as(B, () => q(`select r.state, e.payload from mafia_rooms r join mafia_game_events e on e.room_id = r.id where r.id = $1`, [room.id])))[0];
+  ok(night.state === "night_result" && night.payload.doctorSaved === true && night.payload.eliminatedPlayerId === null, `mafia: the doctor's save stops the kill ${JSON.stringify(night)}`);
+  const reports = {};
+  for (const u of users) reports[u] = await as(u, () => q(`select result_alignment from mafia_police_reports where room_id = $1`, [room.id]));
+  ok(reports[pol].length === 1 && reports[pol][0].result_alignment === "mafia", "mafia: the police learns the target is mafia");
+  ok(users.filter((u) => u !== pol).every((u) => reports[u].length === 0), "mafia: nobody else sees the police result");
+
+  await as(A, () => q(`update mafia_rooms set state = 'day_voting' where id = $1`, [room.id]));
+  const ph = (await as(A, () => q(`select phase_number from mafia_rooms where id = $1`, [room.id])))[0].phase_number;
+  ok(!!(await as(vil, () => fails(q(`insert into mafia_day_votes (room_id, phase_number, voter_player_id, target_player_id) values ($1, $2, $3, $4)`, [room.id, ph, ids[doc], ids[vil]])))), "mafia: can't vote as someone else");
+  for (const u of [doc, pol, vil]) await as(u, () => q(`insert into mafia_day_votes (room_id, phase_number, voter_player_id, target_player_id) values ($1, $2, $3, $4)`, [room.id, ph, ids[u], ids[maf]]));
+  await as(A, () => q(`select mafia_resolve_day_vote($1)`, [room.id]));
+  const end = (await as(B, () => q(`select state, winner from mafia_rooms where id = $1`, [room.id])))[0];
+  ok(end.state === "ended" && end.winner === "village", `mafia: voting out the only mafia wins it for the village ${JSON.stringify(end)}`);
+  ok((await as(vil, () => q(`select * from mafia_player_roles where room_id = $1`, [room.id]))).length === 4, "mafia: every role is visible after the game");
+}
+
+// --- Chicago: dealing, scoring and turns run on the server; phones see only their own hand ---
+{
+  const { evaluatePokerHand } = await import("../../src/games/chicago/logic.ts");
+  const ranks = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+  const suits = ["clubs", "diamonds", "hearts", "spades"];
+  const deck = suits.flatMap((suit) => ranks.map((rank) => ({ rank, suit })));
+  const fixed = [
+    [["10", "hearts"], ["J", "hearts"], ["Q", "hearts"], ["K", "hearts"], ["A", "hearts"]],
+    [["A", "clubs"], ["2", "hearts"], ["3", "spades"], ["4", "clubs"], ["5", "diamonds"]],
+    [["9", "clubs"], ["9", "hearts"], ["4", "spades"], ["4", "clubs"], ["K", "diamonds"]],
+    [["7", "clubs"], ["7", "hearts"], ["7", "spades"], ["2", "clubs"], ["2", "diamonds"]],
+  ].map((h) => h.map(([rank, suit]) => ({ rank, suit })));
+  const hands = [...fixed];
+  for (let i = 0; i < 2000; i++) hands.push([...deck].sort(() => Math.random() - 0.5).slice(0, 5));
+  const rows = await q(`select (chicago_evaluate(h)).* from jsonb_array_elements($1::jsonb) with ordinality t(h, i) order by i`, [JSON.stringify(hands)]);
+  const mismatch = hands.findIndex((h, i) => {
+    const ts = evaluatePokerHand(h);
+    return ts.name !== rows[i].name || ts.points !== rows[i].points || JSON.stringify(ts.tiebreak) !== JSON.stringify(rows[i].tiebreak);
+  });
+  ok(mismatch === -1, "chicago: database poker scoring matches the app on 2004 hands", mismatch === -1 ? "" : JSON.stringify({ hand: hands[mismatch], ts: evaluatePokerHand(hands[mismatch]), db: rows[mismatch] }));
+
+  const room = await as(A, async () => {
+    const [r] = await q(`insert into chicago_rooms (code) values ('CHSE') returning *`);
+    const [p] = await q(`insert into chicago_room_players (room_id, display_name, seat_order, score, auth_user_id) values ($1, 'Alice', 1, 51, $2) returning *`, [r.id, A]);
+    await q(`update chicago_rooms set host_player_id = $1 where id = $2`, [p.id, r.id]);
+    return r;
+  });
+  await as(B, () => q(`select join_room('chicago', 'CHSE', 'Bob')`));
+  const ids = {};
+  for (const u of [A, B]) ids[u] = (await as(u, () => q(`select id, score from chicago_room_players where room_id = $1 and auth_user_id = $2`, [room.id, u])))[0];
+  ok(ids[A].score === 0, "chicago: a new player always starts on 0 points");
+
+  ok(/Only the host/.test(await as(B, () => fails(q(`select chicago_start_round($1)`, [room.id])))), "chicago: only the host deals");
+  await as(A, () => q(`select chicago_start_round($1)`, [room.id]));
+  const handOf = async (u) => (await as(u, () => q(`select player_id, cards from chicago_player_hands where room_id = $1`, [room.id])));
+  const ha = await handOf(A);
+  const hb = await handOf(B);
+  ok(ha.length === 1 && hb.length === 1 && ha[0].player_id === ids[A].id && hb[0].player_id === ids[B].id, "chicago: each player reads only their own hand");
+  ok(ha[0].cards.length === 5 && hb[0].cards.length === 5, "chicago: five cards each");
+  ok((await as(B, () => q(`select * from chicago_decks`))).length === 0, "chicago: the deck is unreadable");
+  ok((await as(B, () => q(`select deck from chicago_rounds where room_id = $1`, [room.id])))[0].deck.length === 0, "chicago: the round row holds no deck");
+  ok(/ONLY_SERVER/.test(await as(B, () => fails(q(`update chicago_room_players set score = 51 where id = $1`, [ids[B].id])))), "chicago: a player can't set their own score");
+  ok(/ONLY_SERVER/.test(await as(B, () => fails(q(`update chicago_rooms set current_turn_player_id = $1 where id = $2`, [ids[B].id, room.id])))), "chicago: a player can't take the turn");
+  ok(!!(await as(B, () => fails(q(`update chicago_player_hands set cards = '[]' where player_id = $1`, [ids[B].id]).then(async () => {
+    if ((await handOf(B))[0].cards.length === 5) throw new Error("unchanged");
+  })))), "chicago: a player can't edit their hand");
+  ok(/actually in your hand/.test(await as(B, () => fails(q(`select chicago_submit_draw($1, $2)`, [room.id, JSON.stringify([ha[0].cards[0]])])))), "chicago: can't throw a card you don't have");
+
+  const state = async () => (await as(A, () => q(`select state, current_turn_player_id from chicago_rooms where id = $1`, [room.id])))[0];
+  await as(A, () => q(`select chicago_submit_draw($1, $2)`, [room.id, JSON.stringify(ha[0].cards.slice(0, 2))]));
+  ok(/already exchanged/.test(await as(A, () => fails(q(`select chicago_submit_draw($1, '[]')`, [room.id])))), "chicago: one exchange per player per draw");
+  await as(B, () => q(`select chicago_submit_draw($1, '[]')`, [room.id]));
+  const afterDraw = (await handOf(A))[0].cards;
+  ok(afterDraw.length === 5 && !afterDraw.some((c) => ha[0].cards.slice(0, 2).some((d) => d.rank === c.rank && d.suit === c.suit)), "chicago: thrown cards are replaced from the deck");
+  ok((await state()).state === "poker_score_1", "chicago: everyone exchanged → first poker scoring");
+  await as(B, () => q(`select chicago_score_poker($1)`, [room.id]));
+  await as(A, () => q(`select chicago_score_poker($1)`, [room.id]));
+  ok((await state()).state === "draw_phase_2", "chicago: scoring moves on once (a second request does nothing)");
+  for (const phase of ["poker_score_2", "draw_phase_3", "trick_phase"]) {
+    const s = (await state()).state;
+    if (s.startsWith("draw")) { for (const u of [A, B]) await as(u, () => q(`select chicago_submit_draw($1, '[]')`, [room.id])); }
+    else await as(A, () => q(`select chicago_score_poker($1)`, [room.id]));
+    ok((await state()).state === phase, `chicago: on to ${phase}`);
+  }
+
+  const byId = { [ids[A].id]: A, [ids[B].id]: B };
+  let lead = null;
+  for (let n = 0; n < 10; n++) {
+    const s = await state();
+    const u = byId[s.current_turn_player_id];
+    const other = u === A ? B : A;
+    if (n === 0) {
+      const otherCard = JSON.stringify((await handOf(other))[0].cards[0]);
+      ok(/not your turn/.test(await as(other, () => fails(q(`select chicago_play_card($1, $2)`, [room.id, otherCard])))), "chicago: can't play out of turn");
+    }
+    const cards = (await handOf(u))[0].cards;
+    const follow = lead && cards.find((c) => c.suit === lead.suit);
+    const card = follow ?? cards[0];
+    await as(u, () => q(`select chicago_play_card($1, $2)`, [room.id, JSON.stringify(card)]));
+    lead = n % 2 === 0 ? card : null;
+  }
+  const end = (await as(B, () => q(`select r.state, sum(p.score)::int total from chicago_rooms r join chicago_room_players p on p.room_id = r.id where r.id = $1 group by r.state`, [room.id])))[0];
+  ok(end.state === "result" && end.total >= 5, `chicago: five tricks end the round and the last trick scores ${JSON.stringify(end)}`);
+  ok((await as(B, () => q(`select count(*)::int n from chicago_cards_played c join chicago_tricks t on t.id = c.trick_id join chicago_rounds r on r.id = t.round_id where r.room_id = $1`, [room.id])))[0].n === 10, "chicago: played cards are visible to the room");
+}
 
 // --- Housekeeping --------------------------------------------------------------
 ok(!!(await as(A, () => fails(q(`select picklo_cleanup()`)))), "players cannot call cleanup");

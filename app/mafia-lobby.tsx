@@ -433,7 +433,7 @@ export default function MafiaRoomScreen() {
   const [showEndgameRevealModal, setShowEndgameRevealModal] = useState(false);
   const [hasNavigatedToResults, setHasNavigatedToResults] = useState(false);
   const [shownEndgameRevealKey, setShownEndgameRevealKey] = useState<string | null>(null);
-  const { room, players, myPlayer, myRole, myNightAction, currentNightActions, mafiaNightActions, myPoliceReports, myDayVote, currentDayVotes, events, loading, refresh } =
+  const { room, players, myPlayer, myRole, myNightAction, mafiaNightActions, myPoliceReports, myDayVote, currentDayVotes, events, loading, refresh } =
     useMafiaRoom(roomId, playerId);
   const nightResultOpacity = useRef(new Animated.Value(0)).current;
   const nightResultScale = useRef(new Animated.Value(0.9)).current;
@@ -467,13 +467,8 @@ export default function MafiaRoomScreen() {
   const role = myRole?.role ?? "villager";
   const roleInstructionTheme = getRoleInstructionTheme(role, language);
   const privateReadsKey = `mafia-private-reads:${roomId}:${playerId}`;
-  const aliveNightActions = useMemo(
-    () => currentNightActions.filter((action) => alivePlayers.some((player) => player.id === action.actor_player_id)),
-    [alivePlayers, currentNightActions]
-  );
-  const allAlivePlayersLockedNightAction =
-    alivePlayers.length > 0 &&
-    alivePlayers.every((player) => aliveNightActions.some((action) => action.actor_player_id === player.id && action.confirmed));
+  // Each player's own night action is private; the public "has confirmed" flag is enough here.
+  const allAlivePlayersLockedNightAction = alivePlayers.length > 0 && alivePlayers.every((player) => player.night_action_confirmed);
   const nightContinueCount = useMemo(() => alivePlayers.filter((player) => player.discussion_ready).length, [alivePlayers]);
   const hasPressedNightContinue = !!myPlayer?.discussion_ready;
   const villagerReadTargets = useMemo(() => alivePlayers.filter((player) => player.id !== myPlayer?.id), [alivePlayers, myPlayer?.id]);

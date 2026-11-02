@@ -163,11 +163,12 @@ async function snap(G) {
     if (error) throw new Error(error.message);
     return data;
   };
+  // Each phone may only read its own hand, so the full picture combines every phone's view.
   const [room, players, round, hands] = await Promise.all([
     q(db.from("chicago_rooms").select("*").eq("id", G.roomId).single()),
     q(db.from("chicago_room_players").select("*").eq("room_id", G.roomId).order("seat_order")),
     q(db.from("chicago_rounds").select("*").eq("room_id", G.roomId).order("round_number", { ascending: false }).limit(1).maybeSingle()),
-    q(db.from("chicago_player_hands").select("*").eq("room_id", G.roomId)),
+    Promise.all(G.phones.map(async (p) => q((await phoneDb(p)).from("chicago_player_hands").select("*").eq("room_id", G.roomId)))).then((all) => all.flat()),
   ]);
   let trick = null;
   let played = [];
@@ -467,22 +468,6 @@ async function playTricks(G, s0, opts) {
   const candidate = opts.declare?.(s);
   if (candidate) {
     const p = G.byId[candidate.id];
-    if (candidate.rig) {
-      // Give the caller the top-5 cards among all hands (each then beats every same-suit card elsewhere).
-      const pool = s.hands.flatMap((h) => h.cards.map((c) => ({ c, owner: h.player_id })));
-      pool.sort((a, b) => RV[b.c.rank] - RV[a.c.rank]);
-      const top = pool.slice(0, 5).map((x) => x.c);
-      const mineOld = s.hand[p.pid].filter((c) => !top.some((t) => cid(t) === cid(c)));
-      const db = await phoneDb(p);
-      for (const h of s.hands) {
-        if (h.player_id === p.pid) continue;
-        const cards = h.cards.map((c) => (top.some((t) => cid(t) === cid(c)) ? mineOld.shift() : c));
-        await db.from("chicago_player_hands").update({ cards }).eq("player_id", h.player_id);
-      }
-      await db.from("chicago_player_hands").update({ cards: top }).eq("player_id", p.pid);
-      s = await snap(G);
-      log(`rigged ${p.name}'s hand for a CHICAGO: ${show(s.hand[p.pid])}`);
-    }
     await p.evaluate(() => {
       window.__confirms = [];
       window.confirm = (m) => {
@@ -785,7 +770,6 @@ async function scenario(browser, n) {
   // Anna is the favourite (greedy exchanges, plays high); the others mix keeping and random exchanges.
   G.phones.forEach((p, i) => (p.style = i === 0 ? "high" : i % 2 ? "low" : "random"));
   let triedFail = false;
-  let triedRig = false;
   G.drawPlan = (r, k) => (p, hand, kk, s) => {
     if (n === 4 && r === 0) return greedyDiscards(hand).length >= 3 ? greedyDiscards(hand) : hand.slice(0, 4); // heavy swapping: the deck runs dry
     if (p === G.host) return greedyDiscards(hand);
@@ -805,28 +789,7 @@ async function scenario(browser, n) {
         return { id: weak.pid };
       }
     }
-    // A successful call is rare with random cards: in the 3-player game rig one (reported).
-    if (n === 3 && !triedRig && r >= 2 && G.stats.chicagoWon === 0) {
-      triedRig = true;
-      return { id: G.phones[1].pid, rig: true };
-    }
     return null;
-  };
-  // Buy stop: if nobody lands on 46-51 naturally, set one player there (3-player game only, reported).
-  G.afterRound = async (r, s) => {
-    if (n !== 3 || G.forcedBuyStop || s.room.state !== "result" || G.checks.buyStop > 0 || r < 3) return;
-    const target = G.phones[2];
-    if (s.score[target.pid] >= 46) return;
-    G.forcedBuyStop = true;
-    const db = await phoneDb(target);
-    await db.from("chicago_room_players").update({ score: 46 }).eq("id", target.pid);
-    log(`set ${target.name}'s score to 46 to exercise buy stop`);
-    const popped = await waitFor("buy-stop pop-up", async () => {
-      for (const p of G.phones) if (!/Köpstopp aktiverat/i.test(await text(p))) return false;
-      return true;
-    }, 10000, 250).catch(() => false);
-    ok(popped, `${n}p every phone shows "Köpstopp aktiverat" when ${target.name} reaches 46`);
-    await shot(G, "buy-stop-popup");
   };
 
   try {

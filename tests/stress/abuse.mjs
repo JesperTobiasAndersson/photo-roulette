@@ -164,9 +164,10 @@ export async function run() {
   await asPlayer(host, () => imposter.updateImposterCategory(im.roomId, im.playerId, "celebrities"));
   await asPlayer(host, () => imposter.startImposterGame(im.roomId, im.playerId));
   const phones = [host, a, b, c];
-  const { data: impRoles } = await host.from("imposter_player_roles").select("player_id,role").eq("room_id", im.roomId);
-  const impIdx = ip.indexOf((impRoles ?? []).find((r) => r.role === "imposter")?.player_id);
-  const impPhone = phones[impIdx];
+  // Each phone can read only its own card: find the imposter by asking every phone.
+  const ownCards = await Promise.all(phones.map(async (p) => (await p.from("imposter_player_roles").select("player_id,role").eq("room_id", im.roomId)).data ?? []));
+  ok(ownCards.every((rows, i) => rows.length === 1 && rows[0].player_id === ip[i]), "Imposter: every player reads only their OWN card", ownCards.map((r) => r.length).join(","));
+  const impPhone = phones[ownCards.findIndex((rows) => rows[0]?.role === "imposter")];
   const { data: impRoom } = await impPhone.from("imposter_rooms").select("secret_prompt").eq("id", im.roomId).single();
   const { data: impSeen } = await impPhone.from("imposter_player_roles").select("prompt").eq("room_id", im.roomId);
   const leaked = impRoom?.secret_prompt || (impSeen ?? []).find((r) => r.prompt)?.prompt;
