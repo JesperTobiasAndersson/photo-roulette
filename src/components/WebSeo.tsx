@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import Head from "expo-router/head";
 import { Platform } from "react-native";
+import { siteUrl } from "../lib/site";
 
 type WebSeoProps = {
   title: string;
@@ -16,87 +17,45 @@ type WebSeoProps = {
 const DEFAULT_SITE_NAME = "Picklo";
 const DEFAULT_IMAGE = "/apple-touch-icon.png";
 
-function ensureMeta(name: string, content: string, attribute: "name" | "property" = "name") {
-  let element = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${name}"]`);
-  if (!element) {
-    element = document.createElement("meta");
-    element.setAttribute(attribute, name);
-    document.head.appendChild(element);
-  }
-  element.setAttribute("content", content);
-}
-
-function ensureLink(rel: string, href: string) {
-  let element = document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
-  if (!element) {
-    element = document.createElement("link");
-    element.rel = rel;
-    document.head.appendChild(element);
-  }
-  element.href = href;
-}
-
-function ensureJsonLd(id: string, payload: string) {
-  let element = document.head.querySelector<HTMLScriptElement>(`script[data-seo-id="${id}"]`);
-  if (!element) {
-    element = document.createElement("script");
-    element.type = "application/ld+json";
-    element.dataset.seoId = id;
-    document.head.appendChild(element);
-  }
-  element.textContent = payload;
-}
-
+/**
+ * Title, description, social cards and canonical link. Rendered into the pre-built HTML of
+ * every page (so search engines and link previews see them without running the app) and kept
+ * up to date in the browser by expo-router's Head. The page language is set by LanguageProvider.
+ */
 export function WebSeo({
   title,
   description,
   path = "/",
   image = DEFAULT_IMAGE,
-  lang,
   keywords,
   type = "website",
   robots = "index,follow",
   structuredData,
 }: WebSeoProps) {
-  useEffect(() => {
-    if (Platform.OS !== "web" || typeof document === "undefined" || typeof window === "undefined") {
-      return;
-    }
+  if (Platform.OS !== "web") return null;
 
-    const origin =
-      process.env.EXPO_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-      window.location.origin.replace(/\/$/, "");
-    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    const canonicalUrl = `${origin}${normalizedPath === "/" ? "" : normalizedPath}`;
-    const imageUrl = image.startsWith("http") ? image : `${origin}${image}`;
+  const canonicalUrl = path === "/" ? siteUrl("/").replace(/\/$/, "") : siteUrl(path);
+  const imageUrl = image.startsWith("http") ? image : siteUrl(image);
 
-    document.title = title;
-    document.documentElement.lang = lang || "en";
-
-    ensureMeta("description", description);
-    ensureMeta("robots", robots);
-    ensureMeta("application-name", DEFAULT_SITE_NAME);
-    ensureMeta("apple-mobile-web-app-title", DEFAULT_SITE_NAME);
-    ensureMeta("og:title", title, "property");
-    ensureMeta("og:description", description, "property");
-    ensureMeta("og:type", type, "property");
-    ensureMeta("og:url", canonicalUrl, "property");
-    ensureMeta("og:site_name", DEFAULT_SITE_NAME, "property");
-    ensureMeta("og:image", imageUrl, "property");
-    ensureMeta("twitter:card", "summary_large_image");
-    ensureMeta("twitter:title", title);
-    ensureMeta("twitter:description", description);
-    ensureMeta("twitter:image", imageUrl);
-    if (keywords?.length) {
-      ensureMeta("keywords", keywords.join(", "));
-    }
-    ensureLink("canonical", canonicalUrl);
-
-    if (structuredData) {
-      const payload = JSON.stringify(structuredData);
-      ensureJsonLd("picklo-structured-data", payload);
-    }
-  }, [description, image, keywords, lang, path, robots, structuredData, title, type]);
-
-  return null;
+  return (
+    <Head>
+      <title>{title}</title>
+      <meta name="description" content={description} />
+      <meta name="robots" content={robots} />
+      <meta name="application-name" content={DEFAULT_SITE_NAME} />
+      {keywords?.length ? <meta name="keywords" content={keywords.join(", ")} /> : null}
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={description} />
+      <meta property="og:type" content={type} />
+      <meta property="og:url" content={canonicalUrl} />
+      <meta property="og:site_name" content={DEFAULT_SITE_NAME} />
+      <meta property="og:image" content={imageUrl} />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={title} />
+      <meta name="twitter:description" content={description} />
+      <meta name="twitter:image" content={imageUrl} />
+      <link rel="canonical" href={canonicalUrl} />
+      {structuredData ? <script type="application/ld+json">{JSON.stringify(structuredData)}</script> : null}
+    </Head>
+  );
 }

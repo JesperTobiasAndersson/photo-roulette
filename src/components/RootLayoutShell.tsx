@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import Head from "expo-router/head";
 import { Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PWAInstall } from "../lib/pwa-install";
@@ -7,7 +8,7 @@ import { inject } from "@vercel/analytics";
 
 // Anonymous visitor statistics (Vercel Web Analytics): no cookies, no personal data, so it needs
 // no consent. Room and player ids are stripped from the tracked addresses. (Ad consent for
-// AdSense is handled by Google's own consent message, loaded with the script in index.html.)
+// AdSense is handled by Google's own consent message, loaded with the script in app/+html.tsx.)
 if (Platform.OS === "web" && typeof window !== "undefined") {
   inject({
     beforeSend: (event) => ({ ...event, url: event.url.split("?")[0] }),
@@ -19,6 +20,14 @@ export function RootLayoutShell() {
     <SafeAreaProvider>
       <LanguageProvider>
         <View style={{ flex: 1, backgroundColor: "#070B14" }}>
+          {/* Defaults for in-game screens (room pages are useless in search results); the public
+              pages override both through WebSeo. */}
+          {Platform.OS === "web" ? (
+            <Head>
+              <title>Picklo</title>
+              <meta name="robots" content="noindex" />
+            </Head>
+          ) : null}
           <PWAInstall>
             <Stack
               screenOptions={{

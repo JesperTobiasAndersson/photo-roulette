@@ -60,10 +60,20 @@
             "purpose": "any"
           }
         ]
-      }
+      },
+      "output": "static"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": "production",
+            "default": "development"
+          },
+          "sitemap": false
+        }
+      ],
       "expo-font"
     ],
     "extra": {

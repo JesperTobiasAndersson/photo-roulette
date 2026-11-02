@@ -431,6 +431,8 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>("en");
 
+  const [resolved, setResolved] = useState(false);
+
   useEffect(() => {
     AsyncStorage.getItem(LANGUAGE_STORAGE_KEY)
       .then((value) => {
@@ -440,8 +442,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           setLanguageState("sv");
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setResolved(true));
   }, []);
+
+  // Pre-rendered pages are English; app/+html.tsx hides them for Swedish visitors until the
+  // Swedish text is on screen (this effect runs after that render).
+  useEffect(() => {
+    if (!resolved || typeof document === "undefined") return;
+    document.documentElement.classList.remove("picklo-lang-pending");
+    document.documentElement.lang = language;
+  }, [language, resolved]);
 
   const setLanguage = async (nextLanguage: Language) => {
     setLanguageState(nextLanguage);
